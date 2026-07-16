@@ -1,0 +1,166 @@
+<div class="admin">
+  <header class="admin-head">
+    <h1>Administración</h1>
+    <button mat-stroked-button (click)="recargar()" [disabled]="cargando()">
+      <mat-icon>refresh</mat-icon> Recargar
+    </button>
+  </header>
+
+  <mat-tab-group>
+    <!-- ── Regionales ── -->
+    <mat-tab label="Regionales">
+      <div class="tab-body">
+        <div class="tab-actions">
+          <button mat-flat-button color="primary" (click)="nuevaRegional()">
+            <mat-icon>add</mat-icon> Nueva regional
+          </button>
+        </div>
+        <table class="grid">
+          <thead><tr>
+            <th class="sortable" (click)="ordenarPor('reg', 'codigo')">Código{{ flecha('reg', 'codigo') }}</th>
+            <th class="sortable" (click)="ordenarPor('reg', 'nombre')">Nombre{{ flecha('reg', 'nombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('reg', 'activo')">Activo{{ flecha('reg', 'activo') }}</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            @for (r of regionalesOrd(); track r.id) {
+              <tr [class.fila-inactiva]="!r.activo">
+                <td>{{ r.codigo }}</td><td>{{ r.nombre }}</td><td>{{ r.activo ? 'Sí' : 'No' }}</td>
+                <td class="acciones acciones-2">
+                  <button mat-icon-button (click)="editarRegional(r)" title="Editar regional" aria-label="Editar regional">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="quitarRegional(r)" title="Eliminar regional" aria-label="Eliminar regional">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+
+    <!-- ── Equipos ── -->
+    <mat-tab label="Equipos">
+      <div class="tab-body">
+        <div class="tab-actions">
+          <button mat-flat-button color="primary" (click)="nuevoEquipo()">
+            <mat-icon>add</mat-icon> Nuevo equipo
+          </button>
+        </div>
+        <table class="grid">
+          <thead><tr>
+            <th class="sortable" (click)="ordenarPor('eq', 'codigo')">Código{{ flecha('eq', 'codigo') }}</th>
+            <th class="sortable" (click)="ordenarPor('eq', 'nombre')">Nombre{{ flecha('eq', 'nombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('eq', 'regionalNombre')">Regional{{ flecha('eq', 'regionalNombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('eq', 'responsableNombre')">Responsable{{ flecha('eq', 'responsableNombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('eq', 'activo')">Activo{{ flecha('eq', 'activo') }}</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            @for (e of equiposOrd(); track e.id) {
+              <tr [class.fila-inactiva]="!e.activo">
+                <td>{{ e.codigo }}</td><td>{{ e.nombre }}</td><td>{{ e.regionalNombre }}</td>
+                <td>{{ e.responsableNombre || '—' }}</td><td>{{ e.activo ? 'Sí' : 'No' }}</td>
+                <td class="acciones">
+                  <button mat-icon-button (click)="editarEquipo(e)" title="Editar equipo" aria-label="Editar equipo">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+
+    <!-- ── Clientes ── -->
+    <mat-tab label="Clientes">
+      <div class="tab-body">
+        <div class="tab-actions">
+          <button mat-flat-button color="primary" (click)="nuevoCliente()">
+            <mat-icon>add</mat-icon> Nuevo cliente
+          </button>
+        </div>
+        <table class="grid">
+          <thead><tr>
+            <th class="sortable" (click)="ordenarPor('cli', 'codigo')">Código{{ flecha('cli', 'codigo') }}</th>
+            <th class="sortable" (click)="ordenarPor('cli', 'nombre')">Nombre{{ flecha('cli', 'nombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('cli', 'helpdeskClientId')">ID HD{{ flecha('cli', 'helpdeskClientId') }}</th>
+            <th class="sortable" (click)="ordenarPor('cli', 'equipoResponsableNombre')">Equipo responsable{{ flecha('cli', 'equipoResponsableNombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('cli', 'activo')">Activo{{ flecha('cli', 'activo') }}</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            @for (c of clientesOrd(); track c.id) {
+              <tr>
+                <td>{{ c.codigo }}</td><td>{{ c.nombre }}</td>
+                <td>{{ c.helpdeskClientId || '—' }}</td>
+                <td>{{ c.equipoResponsableNombre }}</td>
+                <td>{{ c.activo ? 'Sí' : 'No' }}</td>
+                <td class="acciones">
+                  <button mat-icon-button color="warn" (click)="quitarCliente(c)" title="Quitar cliente" aria-label="Quitar cliente">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+
+    <!-- ── Asignaciones ── -->
+    <mat-tab label="Asignaciones">
+      <div class="tab-body">
+        <div class="tab-actions">
+          <div class="buscador">
+            <mat-icon>search</mat-icon>
+            <input type="search" placeholder="Buscar por nombre, código del API, rol o alcance…"
+                   [value]="asigBuscar()" (input)="asigBuscar.set($any($event.target).value)" />
+          </div>
+          @if (asigBuscar().trim()) {
+            <span class="muted">{{ asignacionesFiltradas().length }} de {{ asignaciones().length }}</span>
+          }
+          <button mat-flat-button color="primary" (click)="nuevaAsignacion()">
+            <mat-icon>add</mat-icon> Nueva asignación
+          </button>
+        </div>
+        <table class="grid">
+          <thead><tr>
+            <th class="sortable" (click)="ordenarPor('asig', 'usuarioNombre')">Usuario{{ flecha('asig', 'usuarioNombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('asig', 'helpdeskUserId')">ID API{{ flecha('asig', 'helpdeskUserId') }}</th>
+            <th class="sortable" (click)="ordenarPor('asig', 'rolCodigo')">Rol{{ flecha('asig', 'rolCodigo') }}</th>
+            <th class="sortable" (click)="ordenarPor('asig', 'alcanceTipo')">Alcance{{ flecha('asig', 'alcanceTipo') }}</th>
+            <th class="sortable" (click)="ordenarPor('asig', 'alcanceNombre')">Objetivo{{ flecha('asig', 'alcanceNombre') }}</th>
+            <th class="sortable" (click)="ordenarPor('asig', 'vigenteDesde')">Desde{{ flecha('asig', 'vigenteDesde') }}</th>
+            <th>Hasta</th>
+            <th></th>
+          </tr></thead>
+          <tbody>
+            @for (a of asignacionesOrd(); track a.id) {
+              <tr>
+                <td>{{ a.usuarioNombre }}</td>
+                <td>{{ a.helpdeskUserId || '—' }}</td>
+                <td>{{ a.rolNombre }}</td>
+                <td>{{ a.alcanceTipo }}</td>
+                <td>{{ a.alcanceNombre }}</td>
+                <td>{{ a.vigenteDesde }}</td>
+                <td>{{ a.vigenteHasta || '—' }}</td>
+                <td class="acciones acciones-2">
+                  <button mat-icon-button (click)="editarAsignacion(a)" title="Editar asignación" aria-label="Editar asignación">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button color="warn" (click)="quitarAsignacion(a)" title="Quitar asignación" aria-label="Quitar asignación">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>

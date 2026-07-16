@@ -1,0 +1,219 @@
+.admin {
+  padding: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  h1 { margin: 0; font-size: 1.4rem; }
+}
+
+.tab-body {
+  padding: 16px 4px;
+}
+
+.tab-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+// Buscador de tabla (a la izquierda, empuja lo demás a la derecha).
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 20px;
+  background: #fff;
+  min-width: 260px;
+
+  mat-icon { color: rgba(0, 0, 0, 0.4); font-size: 20px; width: 20px; height: 20px; }
+  input {
+    flex: 1;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 14px;
+  }
+}
+
+.crear {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  mat-form-field { width: 180px; }
+  mat-form-field.ancho { width: 300px; }
+  button { height: 48px; }
+}
+
+.opt-buscar {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  outline: none;
+  padding: 6px 4px;
+  font: inherit;
+  background: transparent;
+}
+
+.acciones {
+  width: 48px;
+  text-align: center;
+
+  &.acciones-2 { width: 96px; white-space: nowrap; }
+}
+
+.rolchips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: rgba(63, 81, 181, 0.12);
+  color: #303f9f;
+  font-size: 0.78rem;
+  white-space: nowrap;
+
+  .chip-txt { cursor: pointer; }
+  .chip-txt:hover { text-decoration: underline; }
+
+  .chip-x {
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 2px;
+    border-radius: 999px;
+    opacity: 0.6;
+  }
+  .chip-x:hover { opacity: 1; background: rgba(0, 0, 0, 0.1); }
+}
+
+.muted { color: rgba(0, 0, 0, 0.4); font-style: italic; }
+
+// Formulario dentro de los modales de alta/edición. Layout flexible que envuelve y
+// se ajusta al ancho del diálogo (sin scroll horizontal). `min-width: 0` deja que los
+// campos encojan; `flex: 1 1 200px` los reparte en filas y crecen para llenar.
+.dialog-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 8px;
+  box-sizing: border-box;
+
+  mat-form-field {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+  mat-form-field.full { flex: 1 1 100%; }
+}
+
+mat-dialog-content { overflow-x: hidden; }
+
+// Selector de color por paleta (+ personalizado).
+.color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &.full { width: 100%; }
+}
+
+.color-label {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  &.sel {
+    border-color: rgba(0, 0, 0, 0.85);
+    box-shadow: 0 0 0 2px #fff inset;
+  }
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: rgba(0, 0, 0, 0.55);
+  }
+
+  &.custom {
+    overflow: hidden;
+    background: repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 12px 12px;
+    input[type='color'] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+    }
+  }
+
+  &.clear { background: #fff; }
+}
+
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  th {
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+
+    &.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    &.sortable:hover { color: rgba(0, 0, 0, 0.85); }
+  }
+  tbody tr:hover { background: rgba(0, 0, 0, 0.03); }
+  // Fila de una entidad inactiva (baja lógica): visible pero atenuada.
+  tbody tr.fila-inactiva td { color: rgba(0, 0, 0, 0.38); font-style: italic; }
+}

@@ -1,0 +1,562 @@
+:host {
+  display: block;
+  padding: 16px;
+  min-height: 100%;
+  box-sizing: border-box;
+
+  // Fondo tipo pizarra / papel cuadriculado (estética affinity board).
+  background-color: #efeadf;
+  background-image:
+    linear-gradient(rgba(43, 43, 58, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43, 43, 58, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+// ── Barra de sprint ────────────────────────────────────────────────
+.sprint-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(43, 43, 58, 0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(2px);
+
+  .sprint-select {
+    width: 180px;
+  }
+
+  // Acciones (Tarea / Borrar Board) empujadas a la derecha.
+  .spacer { flex: 1 1 auto; }
+  .danger { color: var(--mat-sys-error); }
+}
+
+.sprint-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 8px;
+  font-size: 13px;
+  color: #2b2b3a;
+
+  .sb-name { font-weight: 700; }
+  .sb-goal { color: var(--mat-sys-on-surface-variant); }
+  .sb-sep { color: var(--mat-sys-outline); }
+  .sb-dates,
+  .sb-cap { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
+
+  .sb-status {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1px 8px;
+    border-radius: 9px;
+    color: #fff;
+
+    &.st-active { background: #27ae60; }
+    &.st-completed { background: #8a8a9a; }
+    &.st-planned { background: var(--brand); }
+  }
+}
+
+// ── Panel de filtros (se publica al drawer del shell; layout vertical) ──
+.board-filters-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+
+  // En el drawer (angosto) todo va a ancho completo.
+  mat-form-field,
+  .prio-filter,
+  .assignee-select,
+  .client-select,
+  .ticket-search { width: 100%; }
+
+  .clear-filters {
+    mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 2px; }
+  }
+
+  // Atajos "Asignados a mí" / "Mi equipo": resaltados cuando están activos.
+  .mine-toggle {
+    --mat-icon-size: 18px;
+    justify-content: flex-start;
+    mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 2px; }
+
+    &.active {
+      background: var(--brand, #048abf);
+      color: #fff;
+      border-color: var(--brand, #048abf);
+    }
+  }
+
+  // Filtros de asignado/cliente: apilar label + select + chips en vertical.
+  .assignee-filter,
+  .client-filter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.assignee-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  .filter-label {
+    font-size: 12px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.assignee-select {
+  width: 200px;
+}
+
+.assignee-chips {
+  display: flex;
+}
+
+// Globo [Nombre Apellido |x] en color pastel por empleado.
+.achip {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #3a3a4a; // texto oscuro legible sobre pastel
+  min-height: 26px;
+
+  button[matChipRemove] {
+    color: #3a3a4a;
+    opacity: 0.7;
+    &:hover { opacity: 1; }
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+.client-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-select {
+  width: 200px;
+}
+
+.ticket-search {
+  width: 150px;
+}
+
+// Globo de cliente: nombres largos → acotar con ellipsis.
+.cchip {
+  max-width: 200px;
+
+  ::ng-deep .mdc-evolution-chip__text-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+// ── Kanban ─────────────────────────────────────────────────────────
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.kanban-col {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(43, 43, 58, 0.06);
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 140px;
+}
+
+// Cabecera tipo etiqueta de sección (affinity): título + subrayado de color.
+.col-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 8px;
+  margin-bottom: 6px;
+  border-bottom: 2px solid var(--mat-sys-outline-variant);
+
+  .col-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #2b2b3a;
+  }
+
+  .col-count {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2b2b3a;
+    background: #fff;
+    border: 1px solid rgba(43, 43, 58, 0.12);
+    border-radius: 10px;
+    padding: 1px 8px;
+  }
+
+  &.head-todo { border-bottom-color: #8a8a9a; }
+  &.head-in_progress { border-bottom-color: var(--brand); }
+  &.head-review { border-bottom-color: var(--accent); }
+  &.head-done { border-bottom-color: #27ae60; }
+}
+
+.col-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  &.dot-todo { background: #8a8a9a; }
+  &.dot-in_progress { background: var(--brand); }
+  &.dot-review { background: var(--accent); }
+  &.dot-done { background: #27ae60; }
+}
+
+.col-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 60px;
+  padding: 4px 2px;
+}
+
+.empty-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 24px 0;
+  color: rgba(43, 43, 58, 0.35);
+  font-size: 12px;
+}
+
+// ── Cards (post-it) ────────────────────────────────────────────────
+.story-card {
+  --shadow: 0 4px 10px rgba(43, 43, 58, 0.16), 0 1px 2px rgba(43, 43, 58, 0.1);
+  position: relative;
+  padding: 11px 12px 10px;
+  border: none;
+  border-top: 3px solid var(--accent);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  user-select: none;
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+
+  &:hover {
+    transform: rotate(0deg) translateY(-3px) scale(1.015);
+    box-shadow: 0 10px 22px rgba(43, 43, 58, 0.22), 0 2px 4px rgba(43, 43, 58, 0.12);
+    z-index: 2;
+  }
+
+  &.not-mine {
+    cursor: default;
+    filter: saturate(0.85);
+  }
+
+  &.overdue {
+    box-shadow: var(--shadow), 0 0 0 2px #e74c3c;
+  }
+  &.soon {
+    box-shadow: var(--shadow), 0 0 0 2px #f29e3b;
+  }
+
+  &.cdk-drag-dragging {
+    transform: rotate(0deg);
+    box-shadow: 0 14px 30px rgba(43, 43, 58, 0.28);
+  }
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+
+  .grow { flex: 1; }
+
+  .card-ticket {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #2b2b3a;
+  }
+
+  .card-copy {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-left: -4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #6d6d75;
+    cursor: pointer;
+    border-radius: 50%;
+
+    mat-icon {
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
+    }
+
+    &:hover { background: rgba(0, 0, 0, 0.08); color: #2b2b3a; }
+  }
+
+  .del-btn {
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    color: rgba(43, 43, 58, 0.55);
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  }
+}
+
+// Badge de prioridad (colores fijos, no del cliente)
+.prio-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 9px;
+  color: #fff;
+
+  &.prio-alta { background: #e74c3c; }
+  &.prio-media { background: #f2811d; }
+  &.prio-baja { background: rgba(43, 43, 58, 0.45); }
+}
+
+/* Badge del equipo dueño en una tarjeta FORÁNEA (de otro tablero, asignada a mí). */
+.team-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 7px 1px 5px;
+  border-radius: 9px;
+  color: #fff;
+  background: #6c5ce7;
+  white-space: nowrap;
+
+  mat-icon {
+    font-size: 13px;
+    height: 13px;
+    width: 13px;
+  }
+}
+
+.client-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #2b2b3a;
+  margin-bottom: 4px;
+
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+}
+
+.card-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #2b2b3a;
+  margin-bottom: 8px;
+}
+
+.soon-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #b5560e;
+  margin-bottom: 8px;
+}
+
+// Estado del ticket en el Helpdesk (badge informativo en la card).
+.hd-estatus {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #2b2b3a;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  padding: 1px 8px;
+  margin-bottom: 8px;
+}
+
+.prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  mat-progress-bar {
+    flex: 1;
+    border-radius: 4px;
+  }
+
+  input {
+    width: 48px;
+    padding: 3px 5px;
+    border: 1px solid rgba(43, 43, 58, 0.2);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.7);
+    color: #2b2b3a;
+    font: inherit;
+    font-size: 12px;
+    text-align: right;
+  }
+}
+
+.wait-btn {
+  width: 100%;
+  border: 1px solid rgba(43, 43, 58, 0.18);
+  background: rgba(255, 255, 255, 0.55);
+  color: #2b2b3a;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 8px;
+
+  &.active {
+    background: #fef5e7;
+    border-color: #f29e3b;
+    color: #b9770e;
+  }
+
+  &.alert {
+    background: #fdedec;
+    border-color: #e74c3c;
+    color: #c0392b;
+    font-weight: 600;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.card-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #2b2b3a;
+}
+
+// El texto va fuera del mat-checkbox: clickear "Certificado" NO marca el check
+// (solo el cuadro), para evitar certificaciones accidentales.
+.check-text {
+  cursor: default;
+}
+
+.card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.card-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: rgba(43, 43, 58, 0.6);
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+
+  &.overdue { color: #c0392b; font-weight: 700; }
+  &.soon { color: #b5560e; }
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+
+  &.unassigned {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    border: 1.5px dashed rgba(43, 43, 58, 0.4);
+    box-shadow: none;
+  }
+}
+
+// CDK drag placeholder / preview
+.cdk-drag-preview {
+  border-radius: 3px;
+  box-shadow: 0 14px 30px rgba(43, 43, 58, 0.3);
+}
+.cdk-drag-placeholder {
+  opacity: 0.3;
+}
+.col-cards.cdk-drop-list-dragging .story-card:not(.cdk-drag-placeholder) {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+// ── Responsive ─────────────────────────────────────────────────────
+@media (max-width: 1024px) {
+  .kanban {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .kanban {
+    grid-template-columns: 1fr;
+  }
+  .client-select {
+    width: 100%;
+  }
+}

@@ -1,0 +1,28 @@
+# Backend FitDesk (Quarkus, JVM) — build self-contained en 2 etapas.
+# No requiere `./mvnw package` previo: compila dentro de la imagen.
+#   docker build -f src/main/docker/Dockerfile.multistage -t fitdesk-backend .
+# (En el docker-compose de la raíz se construye solo.)
+
+# ── Etapa 1: build con Maven (Java 21) ───────────────────────────────
+# La imagen base ya trae `mvn`; se usa ese (no el wrapper ./mvnw, que intenta
+# descargar y validar su propia distribución y falla dentro del contenedor).
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /build
+# Cache de dependencias: primero el pom, luego el código.
+COPY pom.xml ./
+RUN mvn -q -B -DskipTests dependency:go-offline || true
+COPY src src
+RUN mvn -q -B -DskipTests package
+
+# ── Etapa 2: runtime JVM liviano ─────────────────────────────────────
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+# El formato quarkus-app (fast-jar): quarkus-run.jar + lib/ + app/ + quarkus/.
+COPY --from=build /build/target/quarkus-app/ /app/
+EXPOSE 8080
+# La URL/credenciales de la BD y el CORS se inyectan por variables de entorno
+# (QUARKUS_DATASOURCE_JDBC_URL, QUARKUS_HTTP_CORS_ORIGINS, …) desde el compose.
+ENV QUARKUS_HTTP_HOST=0.0.0.0
+# MaxRAMPercentage acota el heap al contenedor (p.ej. plan free de 512 MB de Render);
+# el JVM detecta el límite del cgroup y deja margen para off-heap/metaspace.
+CMD ["java", "-XX:MaxRAMPercentage=65.0", "-jar", "quarkus-run.jar"]

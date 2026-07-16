@@ -1,0 +1,73 @@
+<h2 mat-dialog-title>Nuevo cliente</h2>
+
+<mat-dialog-content>
+  <div class="dialog-form">
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Tomar del HelpDesk</mat-label>
+      <mat-select [value]="form.helpdeskClientId" (selectionChange)="elegirHdCliente($event.value)"
+                  placeholder="Buscar cliente del API…">
+        <div class="opt-buscar-wrap" (click)="$event.stopPropagation()">
+          <input class="opt-buscar" placeholder="Buscar…" [ngModel]="hdBuscar()"
+                 [ngModelOptions]="{ standalone: true }"
+                 (ngModelChange)="hdBuscar.set($event)"
+                 (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" />
+        </div>
+        @for (h of hdFiltrados(); track h.id) {
+          <mat-option [value]="h.id">#{{ h.id }} · {{ h.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Código (slug)</mat-label>
+      <input matInput [(ngModel)]="form.codigo" name="cc" placeholder="visandes" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre</mat-label>
+      <input matInput [(ngModel)]="form.nombre" name="cn" placeholder="VISANDES" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Equipo responsable (define la regional)</mat-label>
+      <mat-select [(ngModel)]="form.equipoResponsableId" name="ce">
+        @for (e of equipos; track e.id) {
+          <mat-option [value]="e.id">{{ e.nombre }} · {{ e.regionalNombre }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>ID HelpDesk</mat-label>
+      <input matInput [(ngModel)]="form.helpdeskClientId" name="ch" placeholder="15" />
+    </mat-form-field>
+
+    <div class="color-field full">
+      <span class="color-label">Color</span>
+      <div class="swatches">
+        @for (col of palette; track col) {
+          <button type="button" class="swatch" [style.background]="col"
+                  [class.sel]="mismoColor(form.color, col)"
+                  (click)="elegirColor(col)" [title]="col" [attr.aria-label]="'Color ' + col"></button>
+        }
+        <label class="swatch custom" [style.background]="form.color || 'transparent'" title="Color personalizado">
+          <mat-icon>colorize</mat-icon>
+          <input type="color" [ngModel]="form.color || '#888888'" name="colp"
+                 [ngModelOptions]="{ standalone: true }" (ngModelChange)="elegirColor($event)" />
+        </label>
+        @if (form.color) {
+          <button type="button" class="swatch clear" title="Sin color" (click)="elegirColor('')">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancelar()">Cancelar</button>
+  <button mat-flat-button color="primary" (click)="crear()" [disabled]="guardando()">
+    <mat-icon>add</mat-icon> Crear cliente
+  </button>
+</mat-dialog-actions>

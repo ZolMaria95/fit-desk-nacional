@@ -1,0 +1,74 @@
+<div class="pend-header">
+  <h2>Pendientes</h2>
+  <span class="pend-count">{{ items().length }}</span>
+</div>
+
+@if (items().length) {
+  <div class="pend-table-wrap">
+    <table class="pend-table">
+      <thead>
+        <tr><th>Ticket</th><th>Asunto</th><th>Recordatorio</th><th></th></tr>
+      </thead>
+      <tbody>
+        @for (g of itemsPorEquipo(); track g.equipo) {
+          <tr class="pend-group-head">
+            <td colspan="4">
+              <mat-icon class="grp-icon">groups</mat-icon>
+              <span class="pend-group-name">{{ g.equipo }}</span>
+              <span class="pend-group-count">{{ g.items.length }}</span>
+            </td>
+          </tr>
+          @for (it of g.items; track it.ticket + '·' + (it.owner || '')) {
+          <tr [class.due]="isDue(it)" [class.resaltado]="esResaltado(it.ticket)" [class.ajena]="!it.mine">
+            <td>
+              <button class="pend-ticket" (click)="openConversation(it.ticket)" matTooltip="Ver información del ticket">#{{ it.ticket }}</button>
+            </td>
+            <td class="asunto-cell">
+              <div class="asunto" [matTooltip]="it.asunto || ''">{{ trunc(it.asunto, 60) }}</div>
+              <div class="pend-sub">
+                @if (it.clienteRaw) { <span class="pend-cliente">{{ trunc(it.clienteRaw, 32) }}</span> }
+                @if (!it.mine && it.ownerName) { <span class="pend-owner"><mat-icon>person</mat-icon>{{ it.ownerName }}</span> }
+              </div>
+              @if (it.nota) {
+                <div class="pend-nota" [matTooltip]="it.nota"><mat-icon>sticky_note_2</mat-icon>{{ trunc(it.nota, 60) }}</div>
+              }
+            </td>
+            <td class="recordatorio">
+              <span class="fecha">{{ fmtDateTime(it) }}</span>
+              @switch (estado(it)) {
+                @case ('vencido') { <span class="badge vencido">⏰ Recordar</span> }
+                @case ('pausado') { <span class="badge pausado">⏸ Pausado</span> }
+                @case ('programado') { <span class="badge programado">Programado</span> }
+                @default { <span class="badge sinfecha">Sin fecha</span> }
+              }
+            </td>
+            <td class="acciones">
+              @if (it.mine) {
+                <button mat-stroked-button class="quitar" (click)="remove(it.ticket)"
+                        matTooltip="Quitar de pendientes" aria-label="Quitar de pendientes">
+                  <mat-icon>delete</mat-icon> Quitar
+                </button>
+                <button mat-icon-button [matMenuTriggerFor]="menu" matTooltip="Más acciones" aria-label="Más acciones">
+                  <mat-icon>more_vert</mat-icon>
+                </button>
+                <mat-menu #menu="matMenu">
+                  <button mat-menu-item (click)="postergar(it)"><mat-icon>event</mat-icon> Postergar / fecha</button>
+                  @if (it.paused) {
+                    <button mat-menu-item (click)="reanudar(it)"><mat-icon>play_arrow</mat-icon> Reanudar alerta</button>
+                  } @else if (it.dueDate) {
+                    <button mat-menu-item (click)="pausar(it)"><mat-icon>pause</mat-icon> Pausar alerta</button>
+                  }
+                </mat-menu>
+              } @else {
+                <span class="pend-readonly" matTooltip="Solo el dueño puede editarlo">Solo lectura</span>
+              }
+            </td>
+          </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+} @else {
+  <div class="pend-empty">No hay tickets pendientes.</div>
+}

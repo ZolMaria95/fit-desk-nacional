@@ -1,0 +1,184 @@
+:host {
+  display: block;
+}
+
+.pend-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+
+  h2 { margin: 0; font-size: 20px; color: var(--mat-sys-on-surface); }
+  .pend-count {
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--mat-sys-surface-container-high);
+    border-radius: 10px;
+    padding: 1px 10px;
+  }
+}
+
+.pend-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 12px;
+}
+
+.pend-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #fff;
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--mat-sys-on-surface-variant);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant, #e6e6ea);
+    white-space: nowrap;
+  }
+  td { padding: 6px 12px; border-bottom: 1px solid #eef1f5; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #f6f9fc; }
+
+  .b { font-weight: 600; }
+  .asunto-cell { max-width: 340px; }
+  .asunto { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pend-nota {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+    font-size: 11.5px;
+    color: var(--mat-sys-on-surface-variant);
+
+    mat-icon { font-size: 14px; width: 14px; height: 14px; flex: none; }
+  }
+  .acciones {
+    width: 1%; // se ajusta al contenido
+    white-space: nowrap;
+    text-align: right;
+
+    .quitar {
+      --mdc-outlined-button-container-height: 32px;
+      min-height: 32px;
+      line-height: 32px;
+      font-size: 12px;
+      color: var(--mat-sys-error, #d32f2f);
+      border-color: color-mix(in srgb, var(--mat-sys-error, #d32f2f) 40%, transparent);
+      margin-right: 4px;
+
+      mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; }
+    }
+  }
+
+  // Encabezado de grupo por cliente.
+  tr.pend-group-head td {
+    background: var(--mat-sys-surface-container-high, #e8eef5);
+    padding: 7px 12px;
+    border-top: 2px solid var(--mat-sys-outline-variant, #dde3ea);
+  }
+  tr.pend-group-head:first-child td { border-top: none; }
+  tr.pend-group-head:hover td { background: var(--mat-sys-surface-container-high, #e8eef5); }
+  .pend-group-name {
+    font-weight: 800;
+    font-size: 12.5px;
+    letter-spacing: 0.3px;
+    color: var(--brand-dark, #0390bc);
+  }
+  .pend-group-count {
+    margin-left: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--mat-sys-on-surface-variant);
+    background: #fff;
+    border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+    border-radius: 10px;
+    padding: 1px 8px;
+  }
+
+  tr.due { background: #fff4f4; }
+  tr.due:hover { background: #ffecec; }
+
+  // Fila resaltada al venir desde la alerta de recordatorio (pulsa y luego se queda
+  // marcada en ámbar hasta que el resaltado se desvanece solo).
+  tr.resaltado td { background: #fff4e0; animation: pend-resaltar 1s ease-in-out 3; }
+  tr.resaltado:hover td { background: #ffe9c2; }
+}
+
+@keyframes pend-resaltar {
+  0%, 100% { background: #fff4e0; }
+  50% { background: #ffce7a; }
+}
+
+.recordatorio {
+  white-space: nowrap;
+
+  .fecha { font-size: 12px; color: var(--mat-sys-on-surface); margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+  }
+  .vencido { background: #c0392b18; color: #c0392b; }
+  .pausado { background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); }
+  .programado { background: #e3effb; color: #0c447c; }
+  .sinfecha { background: #f0e2a8; color: #6a5a00; }
+}
+
+.pend-ticket {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--brand, #048abf);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  &:hover { text-decoration: underline; }
+}
+
+.pend-empty {
+  padding: 32px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+/* ── Clasificación por equipo + dueño (visibilidad por rol) ── */
+.grp-icon {
+  font-size: 16px;
+  height: 16px;
+  width: 16px;
+  vertical-align: middle;
+  margin-right: 4px;
+  opacity: .7;
+}
+.pend-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant, #666);
+}
+.pend-cliente { font-weight: 600; }
+.pend-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-high, #eceff3);
+  mat-icon { font-size: 13px; height: 13px; width: 13px; }
+}
+tr.ajena { opacity: .82; }
+.pend-readonly {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--mat-sys-on-surface-variant, #888);
+}

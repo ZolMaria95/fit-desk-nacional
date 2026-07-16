@@ -1,0 +1,76 @@
+<div class="pg-header">
+  <div>
+    <h2>Progreso</h2>
+    <p class="pg-sub">Registro de avances por historia del sprint</p>
+  </div>
+  <span class="grow"></span>
+  <button mat-flat-button color="primary" (click)="toggleForm()">
+    <mat-icon>{{ showForm() ? 'close' : 'add' }}</mat-icon>
+    {{ showForm() ? 'Cancelar' : 'Nuevo registro' }}
+  </button>
+</div>
+
+@if (showForm()) {
+  <form class="pg-form" (submit)="$event.preventDefault(); save()">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Historia</mat-label>
+      <mat-select [(ngModel)]="form.storyId" name="storyId">
+        @for (s of sprintStories(); track s.id) { <mat-option [value]="s.id">{{ s.id }} — {{ s.title }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Autor</mat-label>
+      <mat-select [(ngModel)]="form.author" name="author">
+        @for (m of team(); track m.id) { <mat-option [value]="m.id">{{ m.name }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="pg-hours">
+      <mat-label>Horas</mat-label>
+      <input matInput type="number" min="0.5" step="0.5" [(ngModel)]="form.hoursLogged" name="hours" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="pg-notes">
+      <mat-label>Avance</mat-label>
+      <textarea matInput rows="2" [(ngModel)]="form.notes" name="notes" placeholder="¿Qué se avanzó?"></textarea>
+    </mat-form-field>
+    <button mat-flat-button color="primary" type="submit" [disabled]="!canSave()">Guardar</button>
+  </form>
+}
+
+<div class="pg-filters">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Historia</mat-label>
+    <mat-select [value]="filterStory()" (selectionChange)="filterStory.set($event.value)">
+      <mat-option value="">Todas las historias</mat-option>
+      @for (s of sprintStories(); track s.id) { <mat-option [value]="s.id">{{ s.id }} — {{ s.title }}</mat-option> }
+    </mat-select>
+  </mat-form-field>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Miembro</mat-label>
+    <mat-select [value]="filterAuthor()" (selectionChange)="filterAuthor.set($event.value)">
+      <mat-option value="">Todos los miembros</mat-option>
+      @for (m of team(); track m.id) { <mat-option [value]="m.id">{{ m.name }}</mat-option> }
+    </mat-select>
+  </mat-form-field>
+</div>
+
+@if (rows().length) {
+  <div class="pg-list">
+    @for (e of rows(); track e.id) {
+      <div class="pg-entry">
+        <div class="pg-avatar" [style.background]="memberColor(e.author)">{{ e.author }}</div>
+        <div class="pg-body">
+          <div class="pg-meta">
+            <span class="pg-story-id">{{ e.storyId }}</span>
+            <span class="pg-author">{{ memberName(e.author) }}</span>
+            <span class="pg-date">{{ fmtDate(e.date) }}</span>
+          </div>
+          @if (storyOf(e.storyId); as s) { <div class="pg-story-title">{{ s.title }}</div> }
+          <div class="pg-notes">{{ e.notes }}</div>
+        </div>
+        <div class="pg-hours-badge">{{ e.hoursLogged }}h</div>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="pg-empty">No hay registros de progreso aún.</div>
+}

@@ -1,0 +1,25 @@
+<h2 mat-dialog-title>{{ editando ? 'Editar regional' : 'Nueva regional' }}</h2>
+
+<mat-dialog-content>
+  <div class="dialog-form">
+    <mat-form-field appearance="outline">
+      <mat-label>Código</mat-label>
+      <input matInput [(ngModel)]="form.codigo" name="rc" placeholder="QUITO" />
+      <mat-hint>Se guarda en MAYÚSCULAS. Debe ser único.</mat-hint>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre</mat-label>
+      <input matInput [(ngModel)]="form.nombre" name="rn" placeholder="Quito" />
+    </mat-form-field>
+    @if (editando) {
+      <mat-slide-toggle [(ngModel)]="form.activo" name="ra">Activa</mat-slide-toggle>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancelar()">Cancelar</button>
+  <button mat-flat-button color="primary" (click)="crear()" [disabled]="guardando()">
+    <mat-icon>{{ editando ? 'save' : 'add' }}</mat-icon> {{ editando ? 'Guardar' : 'Crear regional' }}
+  </button>
+</mat-dialog-actions>

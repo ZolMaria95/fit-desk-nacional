@@ -1,0 +1,106 @@
+<div class="cs-header">
+  <div>
+    <h2>Consultas</h2>
+    <p class="cs-sub">Consultas y bloqueos del equipo</p>
+  </div>
+  <span class="grow"></span>
+  <button mat-flat-button color="primary" (click)="toggleForm()">
+    <mat-icon>{{ showForm() ? 'close' : 'add' }}</mat-icon>
+    {{ showForm() ? 'Cancelar' : 'Nueva consulta' }}
+  </button>
+</div>
+
+@if (showForm()) {
+  <form class="cs-form" (submit)="$event.preventDefault(); save()">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w100">
+      <mat-label>Título</mat-label>
+      <input matInput [(ngModel)]="form.title" name="title" />
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w100">
+      <mat-label>Descripción</mat-label>
+      <textarea matInput rows="2" [(ngModel)]="form.description" name="desc"></textarea>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Historia (opcional)</mat-label>
+      <mat-select [(ngModel)]="form.storyId" name="story">
+        <mat-option value="">Sin historia relacionada</mat-option>
+        @for (s of sprintStories(); track s.id) { <mat-option [value]="s.id">{{ s.id }} — {{ s.title }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Prioridad</mat-label>
+      <mat-select [(ngModel)]="form.priority" name="prio">
+        <mat-option value="alta">Alta</mat-option>
+        <mat-option value="media">Media</mat-option>
+        <mat-option value="baja">Baja</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Autor</mat-label>
+      <mat-select [(ngModel)]="form.author" name="author">
+        @for (m of team(); track m.id) { <mat-option [value]="m.id">{{ m.name }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <button mat-flat-button color="primary" type="submit" [disabled]="!canSave()">Guardar</button>
+  </form>
+}
+
+<div class="cs-tabs">
+  <button class="cs-tab" [class.active]="filter() === 'all'" (click)="filter.set('all')">Todas <span>{{ counts().all }}</span></button>
+  <button class="cs-tab" [class.active]="filter() === 'open'" (click)="filter.set('open')">Abiertas <span>{{ counts().open }}</span></button>
+  <button class="cs-tab" [class.active]="filter() === 'resolved'" (click)="filter.set('resolved')">Resueltas <span>{{ counts().resolved }}</span></button>
+</div>
+
+@if (rows().length) {
+  <div class="cs-list">
+    @for (q of rows(); track q.id) {
+      <div class="cs-card" [class.resolved]="q.status === 'resolved'">
+        <div class="cs-top">
+          <span class="cs-id">{{ q.id }}</span>
+          <span class="cs-title">{{ q.title }}</span>
+          <span class="cs-badge" [class]="'prio-' + q.priority">{{ q.priority }}</span>
+          <span class="cs-badge" [class]="'st-' + q.status">{{ q.status === 'open' ? 'Abierta' : 'Resuelta' }}</span>
+        </div>
+        <div class="cs-desc">{{ q.description }}</div>
+
+        @if (q.response) {
+          <div class="cs-response">
+            <div class="cs-response-label">Respuesta — {{ memberName(q.respondedBy) }}</div>
+            {{ q.response }}
+          </div>
+        } @else if (resolvingId() === q.id) {
+          <div class="cs-resolve">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" class="w100">
+              <mat-label>Respuesta</mat-label>
+              <textarea matInput rows="2" [(ngModel)]="resolveDraft.response" name="resp"></textarea>
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Resuelta por</mat-label>
+              <mat-select [(ngModel)]="resolveDraft.respondedBy" name="by">
+                @for (m of team(); track m.id) { <mat-option [value]="m.id">{{ m.name }}</mat-option> }
+              </mat-select>
+            </mat-form-field>
+            <div class="cs-resolve-actions">
+              <button mat-flat-button color="primary" (click)="confirmResolve(q)">Guardar</button>
+              <button mat-button (click)="cancelResolve()">Cancelar</button>
+            </div>
+          </div>
+        } @else {
+          <button mat-stroked-button class="cs-resolve-btn" (click)="startResolve(q)">Marcar como resuelta</button>
+        }
+
+        <div class="cs-footer">
+          <span>Por <strong>{{ memberName(q.author) }}</strong> · {{ fmtDate(q.date) }}</span>
+          @if (storyOf(q.storyId); as s) { <span class="cs-story-ref">→ {{ s.id }}</span> }
+          <span class="cs-spacer"></span>
+          <button mat-icon-button color="warn" class="cs-delete" (click)="remove(q)"
+                  matTooltip="Eliminar consulta" aria-label="Eliminar consulta">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="cs-empty">No hay consultas registradas.</div>
+}

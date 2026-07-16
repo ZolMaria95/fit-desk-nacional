@@ -1,0 +1,42 @@
+<h2 mat-dialog-title>Asignar ticket #{{ ticket.ticket }}</h2>
+
+<mat-dialog-content class="assign-body">
+  @if (ticket.estatus) {
+    <div class="actual">
+      Estado:
+      <span class="estado-badge" [style.background]="estadoStyle(ticket.estatus).badgeBg" [style.color]="estadoStyle(ticket.estatus).badgeText">{{ ticket.estatus }}</span>
+    </div>
+  }
+  <div class="actual">
+    Asignado actual: <strong>{{ ticket.nombreAsignado || ticket.usuarioAsignado || '— Sin asignar —' }}</strong>
+  </div>
+
+  <mat-form-field appearance="outline" class="search">
+    <mat-label>Buscar consultor</mat-label>
+    <input matInput [ngModel]="filtro()" (ngModelChange)="filtro.set($event)" placeholder="Nombre o código…" autocomplete="off" />
+    <mat-icon matSuffix>search</mat-icon>
+  </mat-form-field>
+
+  <div class="emp-list">
+    @for (e of filtrados(); track e.id) {
+      <button class="emp" [class.current]="e.id === ticket.usuarioAsignado" [disabled]="!!busy()" (click)="asignar(e)">
+        <span class="emp-main">
+          <span class="emp-name">{{ e.name }}</span>
+          @if (e.role) { <span class="emp-role">{{ e.role }}</span> }
+        </span>
+        <span class="emp-id">{{ e.id }}</span>
+        @if (busy() === e.id) {
+          <mat-spinner diameter="18"></mat-spinner>
+        } @else if (e.id === ticket.usuarioAsignado) {
+          <mat-icon class="check">check</mat-icon>
+        }
+      </button>
+    } @empty {
+      <div class="empty">Sin coincidencias</div>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cerrar</button>
+</mat-dialog-actions>

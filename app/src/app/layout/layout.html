@@ -1,0 +1,72 @@
+<mat-sidenav-container class="shell">
+  <mat-sidenav
+    class="drawer"
+    [mode]="mode()"
+    [opened]="opened()"
+    (openedChange)="drawerOpen.set($event)"
+    [disableClose]="fixed()">
+    <div class="drawer-brand">Fit-Desk</div>
+
+    @if (shell.filters(); as tpl) {
+      <div class="drawer-filters">
+        <ng-container *ngTemplateOutlet="tpl"></ng-container>
+      </div>
+    }
+
+    <mat-nav-list class="drawer-nav" (click)="drawerOpen.set(false)">
+      <h3 matSubheader>Scrum</h3>
+      <a mat-list-item routerLink="/board" routerLinkActive="active">Board</a>
+      <a mat-list-item routerLink="/burndown" routerLinkActive="active">Burndown</a>
+      <a mat-list-item routerLink="/progreso" routerLinkActive="active">Progreso</a>
+      <a mat-list-item routerLink="/consultas" routerLinkActive="active">Consultas</a>
+
+      <h3 matSubheader>Helpdesk</h3>
+      <a mat-list-item routerLink="/tickets" routerLinkActive="active">Tickets</a>
+      <a mat-list-item routerLink="/semanal" routerLinkActive="active">HelpDesk Semanal</a>
+      @if (puedeVerMiPanel()) {
+        <a mat-list-item routerLink="/mi-panel" routerLinkActive="active">Mi Panel</a>
+      }
+      <a mat-list-item routerLink="/pendientes" routerLinkActive="active">Pendientes</a>
+
+      @if (mostrarBandeja()) {
+        <a mat-list-item routerLink="/bandeja" routerLinkActive="active">Bandeja</a>
+      }
+
+      @if (mostrarAdmin()) {
+        <h3 matSubheader>Administración</h3>
+        <a mat-list-item routerLink="/admin" routerLinkActive="active">Administración</a>
+      }
+    </mat-nav-list>
+
+    <span class="drawer-spacer"></span>
+
+    @if (session(); as s) {
+      <div class="drawer-user">
+        <span class="user-chip" [style.background]="s.color">{{ s.id }}</span>
+        <span class="user-name">{{ s.name }}</span>
+        <button mat-icon-button (click)="logout()" title="Cerrar sesión" aria-label="Cerrar sesión">
+          <mat-icon>logout</mat-icon>
+        </button>
+      </div>
+    }
+  </mat-sidenav>
+
+  <mat-sidenav-content #shellContent class="shell-content">
+    @if (!fixed()) {
+      <mat-toolbar color="primary" class="topbar">
+        <button mat-icon-button (click)="drawerOpen.set(!opened())" aria-label="Abrir menú">
+          <mat-icon>menu</mat-icon>
+        </button>
+        <span class="brand">Fit-Desk</span>
+        <span class="spacer"></span>
+        @if (session(); as s) {
+          <span class="user-chip" [style.background]="s.color">{{ s.id }}</span>
+        }
+      </mat-toolbar>
+    }
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

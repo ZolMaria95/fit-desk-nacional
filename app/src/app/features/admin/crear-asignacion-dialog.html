@@ -1,0 +1,66 @@
+<h2 mat-dialog-title>{{ editando ? 'Editar asignación' : 'Nueva asignación' }}</h2>
+
+<mat-dialog-content>
+  <div class="dialog-form">
+    @if (editando) {
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Usuario</mat-label>
+        <input matInput [value]="data.asignacion?.usuarioNombre || ''" disabled />
+      </mat-form-field>
+    } @else {
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Usuario (empleado del HelpDesk)</mat-label>
+        <mat-select [(ngModel)]="form.usuarioHid" name="u">
+          <div class="opt-buscar-wrap" (click)="$event.stopPropagation()">
+            <input class="opt-buscar" placeholder="Buscar empleado…" [ngModel]="hdBuscar()"
+                   [ngModelOptions]="{ standalone: true }" (ngModelChange)="hdBuscar.set($event)"
+                   (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" />
+          </div>
+          @for (u of hdFiltrados(); track u.id) {
+            <mat-option [value]="u.id">{{ u.name }} ({{ u.id }})</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <mat-form-field appearance="outline">
+      <mat-label>Rol</mat-label>
+      <mat-select [(ngModel)]="form.rolId" name="r">
+        @for (r of rolesVisibles(); track r.id) { <mat-option [value]="r.id">{{ r.nombre }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Alcance</mat-label>
+      <mat-select [value]="tipo()" (selectionChange)="onTipoChange($event.value)" name="t">
+        @for (t of tipos; track t) { <mat-option [value]="t">{{ t }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+
+    @if (tipo() !== 'GLOBAL') {
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>{{ tipo() === 'EQUIPO' ? 'Equipo' : tipo() === 'CLIENTE' ? 'Cliente' : 'Regional' }}</mat-label>
+        <mat-select [(ngModel)]="form.objetivoId" name="o">
+          @for (o of objetivos(); track o.id) { <mat-option [value]="o.id">{{ o.label }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <mat-form-field appearance="outline">
+      <mat-label>Vigente desde</mat-label>
+      <input matInput type="date" [(ngModel)]="form.vigenteDesde" name="vd" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Vigente hasta (opcional)</mat-label>
+      <input matInput type="date" [(ngModel)]="form.vigenteHasta" name="vh" />
+    </mat-form-field>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancelar()">Cancelar</button>
+  <button mat-flat-button color="primary" (click)="crear()" [disabled]="guardando()">
+    <mat-icon>{{ editando ? 'save' : 'add' }}</mat-icon> {{ editando ? 'Guardar' : 'Crear asignación' }}
+  </button>
+</mat-dialog-actions>

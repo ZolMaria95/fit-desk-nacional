@@ -1,0 +1,386 @@
+:host {
+  display: block;
+}
+
+.ticket-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 12px;
+  // Sin overflow:hidden: recortaba el pie (⏸ pendiente). El encabezado de color
+  // redondea sus esquinas superiores por sí mismo (ver .tc-head).
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+
+  &:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+  }
+
+  &.is-accion {
+    border-left: 4px solid #ff8c00;
+  }
+  &.is-pendiente {
+    border-left: 4px solid #9c27b0;
+  }
+}
+
+// ── Cabecera (coloreada por cliente) ──
+.tc-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-left: 4px solid transparent;
+  border-radius: 12px 12px 0 0; // redondea el tope (antes lo hacía overflow:hidden de la tarjeta)
+}
+
+.tc-head-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tc-cliente-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 0;
+
+  .tc-cliente-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .tc-cliente-txt {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.tc-id {
+  font-weight: 700;
+  font-size: 13px;
+  color: #2b2b3a;
+}
+
+// Botón copiar número de ticket (junto al #id).
+.tc-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #5c5c68;
+  cursor: pointer;
+  border-radius: 50%;
+
+  mat-icon {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+  }
+
+  &:hover { background: rgba(0, 0, 0, 0.08); color: #2b2b3a; }
+}
+
+// Badge de días sin movimiento (Mi Panel). Ámbar normal, rojo si ≥ 7 días.
+.tc-dias {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #fef0d9;
+  color: #9a5b00;
+
+  &.alto {
+    background: #fde2e0;
+    color: #b3261e;
+  }
+}
+
+.tc-crear {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: rgba(255, 255, 255, 0.6);
+  color: #2b2b3a;
+  border-radius: 12px;
+  padding: 1px 8px 1px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  mat-icon {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+  }
+  &:hover {
+    background: #fff;
+  }
+}
+
+.tc-en-board {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #1b7a43;
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.tc-spacer {
+  flex: 1 1 auto;
+}
+
+// ── Cuerpo ──
+.tc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  flex: 1;
+}
+
+.tc-subject {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--mat-sys-on-surface, #1a1a1a);
+}
+
+.tc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+
+  .tc-badge {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.tc-fechas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--mat-sys-outline-variant, #ececec);
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant, #666);
+
+  div {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.tc-nota-area {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 11px;
+  color: #6a5a00;
+  background: #fff7d6;
+  border: 1px solid #f0e2a8;
+  border-radius: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+
+  span {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    flex: none;
+  }
+  &.empty {
+    color: #9a8f66;
+    background: transparent;
+    border-style: dashed;
+  }
+  &:hover {
+    border-color: #d9c45e;
+  }
+}
+
+.tc-nota-edit {
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 12px;
+    border: 1px solid var(--mat-sys-outline, #bdbdbd);
+    border-radius: 6px;
+    padding: 4px 6px;
+    resize: vertical;
+  }
+  .tc-nota-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+// ── Pie ──
+.tc-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap; // puede envolver sin problema: la tarjeta ya no recorta (sin overflow:hidden)
+  gap: 4px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--mat-sys-outline-variant, #ececec);
+}
+
+.tc-foot-spacer { flex: 1 1 auto; }
+
+// Asignado: punto de color + nombre y apellido (en vez de iniciales).
+.tc-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 140px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 12px;
+  background: var(--mat-sys-surface-container-high, #eceff3);
+
+  .tc-assignee-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .tc-assignee-name {
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--mat-sys-on-surface, #2b2b3a);
+  }
+
+  &.unassigned .tc-assignee-name {
+    font-weight: 500;
+    color: var(--mat-sys-on-surface-variant, #6b6b78);
+  }
+}
+
+// Toggles ⚑ acción / ⏸ pendiente (siempre visibles).
+.tc-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  color: #9aa0a6;
+  cursor: pointer;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  &:hover { background: #00000010; }
+  &.on { color: #c0392b; }
+  &.pend.on { color: #9c27b0; }
+}
+
+.tc-ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  min-width: 0;
+  justify-content: center;
+  border: 1px solid var(--brand, #048abf);
+  background: transparent;
+  color: var(--brand, #048abf);
+  border-radius: 16px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+  .tc-ver-txt {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  &:hover {
+    background: color-mix(in srgb, var(--brand, #048abf) 10%, transparent);
+  }
+}
+
+.tc-menu {
+  flex: none;
+  width: 32px;
+  height: 32px;
+}
+
+// En móvil (2 col), el botón muestra solo el icono para ahorrar espacio.
+@media (max-width: 539px) {
+  .tc-crear .tc-crear-txt,
+  .tc-ver .tc-ver-txt {
+    display: none;
+  }
+  .tc-ver {
+    flex: none;
+    width: 32px;
+    padding: 4px;
+  }
+}

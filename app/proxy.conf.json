@@ -1,0 +1,7 @@
+{
+  "/api": {
+    "target": "https://helpdesk-api.fit-bank.com",
+    "secure": true,
+    "changeOrigin": true
+  }
+}

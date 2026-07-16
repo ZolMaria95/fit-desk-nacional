@@ -1,0 +1,23 @@
+# PostgreSQL local para FitDesk (Fase 1). Solo desarrollo.
+# En AWS este contenedor se sustituye por RDS PostgreSQL y las credenciales
+# salen de Secrets Manager (no se hardcodean).
+services:
+  fitdesk-db:
+    image: postgres:16
+    container_name: fitdesk-db
+    environment:
+      POSTGRES_DB: fitdesk
+      POSTGRES_USER: fitdesk
+      POSTGRES_PASSWORD: fitdesk_local   # solo local
+    ports:
+      - "5432:5432"
+    volumes:
+      - fitdesk_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitdesk -d fitdesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  fitdesk_pgdata:

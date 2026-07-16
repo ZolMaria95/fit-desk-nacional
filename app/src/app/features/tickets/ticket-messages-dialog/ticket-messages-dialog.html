@@ -1,0 +1,145 @@
+<div class="conv-head" mat-dialog-title>
+  <span class="ticket-id">#{{ ticketId }}</span>
+  <span class="cliente">{{ header().cliente }}</span>
+  @if (header().tipo; as tipo) {
+    <span class="tipo">{{ tipo }}</span>
+  }
+  @if (header().estatus; as est) {
+    <span class="estatus" [style.background]="estadoStyle(est).badgeBg" [style.color]="estadoStyle(est).badgeText">{{ est }}</span>
+  }
+  <span class="spacer"></span>
+  <button mat-icon-button mat-dialog-close aria-label="Cerrar"><mat-icon>close</mat-icon></button>
+</div>
+
+<div class="asunto">{{ header().asunto }}</div>
+
+@if (ticketAttachments().length) {
+  <div class="ticket-attach">
+    <span class="ticket-attach-label">Adjunto del ticket:</span>
+    @for (id of ticketAttachments(); track id; let i = $index) {
+      <button mat-stroked-button (click)="openAttachment(id, 'adjunto-general_' + ticketId + (ticketAttachments().length > 1 ? '_' + (i + 1) : ''))">
+        <mat-icon>attach_file</mat-icon> Descargar{{ ticketAttachments().length > 1 ? ' ' + (i + 1) : '' }}
+      </button>
+    }
+  </div>
+}
+
+<mat-dialog-content class="conv-body" (click)="onConvClick($event)">
+  @if (sessionExpired()) {
+    <div class="conv-expired">
+      <mat-icon>lock</mat-icon>
+      <p>Tu sesión expiró. Inicia sesión nuevamente para ver la conversación del ticket.</p>
+      <button mat-flat-button color="primary" (click)="goToLogin()">Iniciar sesión</button>
+    </div>
+  } @else if (loading()) {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    <div class="conv-loading">Cargando mensajes y adjuntos…</div>
+  } @else if (!messages().length) {
+    <div class="conv-empty">Sin mensajes registrados.</div>
+  } @else {
+    @if (hasOlder()) {
+      <div class="conv-older">
+        <button mat-stroked-button (click)="loadOlder()" [disabled]="loadingOlder()">
+          <mat-icon>expand_less</mat-icon> Ver mensajes anteriores
+        </button>
+      </div>
+    }
+    @for (m of messages(); track $index) {
+      <div class="conv-msg" [class]="'conv-' + m.tipo">
+        <div class="conv-meta">
+          <span class="conv-user">{{ m.autor }}</span>
+          <span class="conv-date">{{ m.fecha }}</span>
+          @if (m.canEdit && m.id) {
+            <button class="conv-edit" matTooltip="Editar mensaje" aria-label="Editar mensaje"
+                    (click)="startEdit(m)" [disabled]="sending()">
+              <mat-icon>edit</mat-icon>
+            </button>
+          }
+        </div>
+        @if (m.html) {
+          <div class="conv-text" [innerHTML]="m.html"></div>
+        }
+        @if (m.adjuntos.length) {
+          <div class="conv-attach-row">
+            @for (a of m.adjuntos; track a.id) {
+              <button class="conv-attach" (click)="openAttachment(a.id, a.nombre)">
+                <mat-icon>attach_file</mat-icon> {{ a.nombre }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+</mat-dialog-content>
+
+@if (!sessionExpired()) {
+<div class="composer" [class.drag-over]="dragOver()"
+     (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+  <div class="composer-drop-hint">
+    <mat-icon>upload_file</mat-icon>
+    <span>Suelta los archivos para adjuntarlos</span>
+  </div>
+  @if (editingId()) {
+    <div class="composer-editing">
+      <mat-icon>edit</mat-icon>
+      <span>Editando tu mensaje</span>
+      <span class="spacer"></span>
+      <button mat-button (click)="cancelEdit()" [disabled]="sending()">Cancelar</button>
+    </div>
+  }
+  <div class="composer-toolbar">
+    <button mat-icon-button matTooltip="Negrita" (mousedown)="$event.preventDefault()" (click)="format('bold')" [disabled]="sending()">
+      <mat-icon>format_bold</mat-icon>
+    </button>
+    <button mat-icon-button matTooltip="Cursiva" (mousedown)="$event.preventDefault()" (click)="format('italic')" [disabled]="sending()">
+      <mat-icon>format_italic</mat-icon>
+    </button>
+    <button mat-icon-button matTooltip="Subrayado" (mousedown)="$event.preventDefault()" (click)="format('underline')" [disabled]="sending()">
+      <mat-icon>format_underlined</mat-icon>
+    </button>
+    <button mat-icon-button matTooltip="Bloque de código" (mousedown)="$event.preventDefault()" (click)="codeBlock()" [disabled]="sending()">
+      <mat-icon>code</mat-icon>
+    </button>
+    <span class="spacer"></span>
+    <button mat-icon-button matTooltip="Abrir editor ampliado" (click)="openComposer()" [disabled]="sending()">
+      <mat-icon>open_in_full</mat-icon>
+    </button>
+  </div>
+  <div #composerInput class="composer-input" contenteditable="true" role="textbox" aria-multiline="true"
+       aria-label="Escribir mensaje" data-placeholder="Escribir mensaje…" (paste)="onPaste($event)"
+       [attr.contenteditable]="sending() ? 'false' : 'true'"></div>
+  <div class="composer-actions">
+    @if (!editingId()) {
+      <label class="attach-label" matTooltip="Adjuntar archivo">
+        <mat-icon>attach_file</mat-icon>
+        <input type="file" multiple hidden (change)="onFiles($event)" />
+      </label>
+      @if (composerFiles.length) {
+        <div class="files">
+          @for (f of composerFiles; track $index) {
+            <span class="file-chip">
+              <mat-icon>insert_drive_file</mat-icon>
+              <span class="file-name">{{ f.name }}</span>
+              <button type="button" class="file-remove" aria-label="Quitar adjunto"
+                      (click)="removeFile(f)" [disabled]="sending()">✕</button>
+            </span>
+          }
+        </div>
+      }
+    }
+    <span class="spacer"></span>
+    <span class="send-status">{{ sendStatus() }}</span>
+    <button mat-flat-button color="primary" (click)="send()" [disabled]="sending()">
+      {{ editingId() ? 'Guardar cambios' : 'Enviar' }}
+    </button>
+  </div>
+</div>
+}
+
+@if (lightbox(); as url) {
+  <div class="lightbox" (click)="lightbox.set(null)">
+    <button class="lightbox-close" (click)="lightbox.set(null)">✕</button>
+    <img [src]="url" alt="" />
+  </div>
+}

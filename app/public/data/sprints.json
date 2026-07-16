@@ -1,0 +1,14 @@
+{
+  "active": "SP-01",
+  "sprints": [
+    {
+      "id": "SP-01",
+      "name": "Sprint 1",
+      "start": "2026-05-19",
+      "end": "2026-05-30",
+      "capacity": 0,
+      "status": "active",
+      "goal": "Primer sprint del equipo Fit-Daily"
+    }
+  ]
+}

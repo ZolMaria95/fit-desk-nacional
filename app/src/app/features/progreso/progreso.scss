@@ -1,0 +1,100 @@
+:host {
+  display: block;
+  padding: 16px;
+  max-width: 920px;
+}
+
+.pg-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h2 { margin: 0; font-size: 20px; }
+  .pg-sub { margin: 2px 0 0; color: var(--mat-sys-on-surface-variant, #5c5c68); font-size: 13px; }
+  .grow { flex: 1; }
+}
+
+.pg-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 10px;
+  background: var(--mat-sys-surface-container-low, #f4f6f9);
+
+  mat-form-field { flex: 1 1 180px; }
+  .pg-hours { flex: 0 0 110px; }
+  .pg-notes { flex: 1 1 100%; }
+  button { margin-top: 4px; }
+}
+
+.pg-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+
+  mat-form-field { flex: 1 1 220px; }
+}
+
+.pg-list { display: flex; flex-direction: column; gap: 8px; }
+
+.pg-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 10px;
+  background: var(--mat-sys-surface, #fff);
+}
+
+.pg-avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pg-body { flex: 1; min-width: 0; }
+
+.pg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+
+  .pg-story-id { font-weight: 700; color: var(--brand-dark, #0390bc); }
+  .pg-author { font-weight: 600; }
+  .pg-date { color: var(--mat-sys-on-surface-variant, #8a8a9a); }
+}
+
+.pg-story-title { font-size: 13px; font-weight: 600; margin: 2px 0; }
+.pg-notes { font-size: 13px; color: var(--mat-sys-on-surface, #333); white-space: pre-wrap; }
+
+.pg-hours-badge {
+  flex: none;
+  align-self: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--brand-dark, #0390bc);
+}
+
+.pg-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant, #8a8a9a);
+  border: 1px dashed var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 10px;
+}

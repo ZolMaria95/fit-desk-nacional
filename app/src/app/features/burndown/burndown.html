@@ -1,0 +1,46 @@
+<div class="bd-header">
+  <h2>Burndown</h2>
+  @if (sprint(); as sp) { <span class="bd-sprint">{{ sp.name }}</span> }
+</div>
+
+@if (sprint()) {
+  <!-- Métricas -->
+  <div class="bd-metrics">
+    @for (m of metrics(); track m.label) {
+      <div class="bd-metric">
+        <div class="bd-metric-label">{{ m.label }}</div>
+        <div class="bd-metric-value" [class]="m.cls">{{ m.value }}</div>
+        <div class="bd-metric-sub">{{ m.sub }}</div>
+      </div>
+    }
+  </div>
+
+  <!-- Gráfico -->
+  <div class="bd-chart-card">
+    <div class="bd-chart-title">
+      Tareas restantes
+      <span class="bd-legend"><i class="ideal"></i> Ideal &nbsp; <i class="real"></i> Real (aprox.)</span>
+    </div>
+    <canvas #chart [width]="cw" [height]="ch" class="bd-chart"></canvas>
+  </div>
+
+  <!-- Velocidad -->
+  <div class="bd-vel-card">
+    <div class="bd-chart-title">Velocidad del equipo <span class="bd-vel-sub">tareas finalizadas por sprint</span></div>
+    @if (velocity().length) {
+      <div class="bd-vel-bars">
+        @for (b of velocity(); track b.name) {
+          <div class="bd-vel-wrap">
+            <div class="bd-vel-pts">{{ b.count }}{{ b.current ? '…' : '' }}</div>
+            <div class="bd-vel-bar" [class.current]="b.current" [style.height.%]="b.count / velMax() * 100 || 4"></div>
+            <div class="bd-vel-label">{{ b.name }}</div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="bd-empty">Aún no hay sprints con datos de velocidad.</div>
+    }
+  </div>
+} @else {
+  <div class="bd-empty">No hay un sprint activo.</div>
+}

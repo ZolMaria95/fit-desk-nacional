@@ -1,0 +1,207 @@
+<div class="mp-header">
+  <div>
+    <h2>Mi Panel</h2>
+    <p class="mp-sub">Seguimiento diario — Scrum Master</p>
+  </div>
+  <span class="grow"></span>
+  <button mat-icon-button (click)="refresh()" [disabled]="loading()" matTooltip="Actualizar" aria-label="Actualizar">
+    <mat-icon>refresh</mat-icon>
+  </button>
+</div>
+
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+
+<!-- KPIs -->
+<div class="mp-kpis">
+  <div class="mp-kpi crimson">
+    <div class="mp-kpi-num">{{ acciones().length }}</div>
+    <div class="mp-kpi-label">Acciones pendientes</div>
+    <div class="mp-kpi-desc">Tickets marcados con Acción</div>
+  </div>
+  <div class="mp-kpi amber">
+    <div class="mp-kpi-num">{{ clientePendiente().length }}</div>
+    <div class="mp-kpi-label">Esperando cliente</div>
+    <div class="mp-kpi-desc">3 o más días sin respuesta</div>
+  </div>
+  <div class="mp-kpi red">
+    <div class="mp-kpi-num">{{ soon().length }}</div>
+    <div class="mp-kpi-label">Próximos a vencer</div>
+    <div class="mp-kpi-desc">Vencen en 3 días o menos</div>
+  </div>
+  <div class="mp-kpi blue">
+    <div class="mp-kpi-num">{{ porAsignar().length }}</div>
+    <div class="mp-kpi-label">Por asignar</div>
+    <div class="mp-kpi-desc">Tareas en To Do sin asignar</div>
+  </div>
+</div>
+
+<!-- Bloque: Acciones pendientes -->
+<section class="mp-block crimson">
+  <div class="mp-block-head">
+    <span class="mp-block-icon">🔴</span>
+    <div class="mp-block-titles">
+      <span class="mp-block-title">ACCIONES PENDIENTES</span>
+      <span class="mp-block-sub">Tickets marcados con Acción en Helpdesk — "Realizado ✓" los quita</span>
+    </div>
+    <span class="mp-count">{{ acciones().length }}</span>
+  </div>
+
+  @if (acciones().length) {
+    <div class="mp-ticket-grid">
+      @for (t of acciones(); track t.ticket) {
+        <app-ticket-card
+          [ticket]="t"
+          [statusOptions]="statusOptions()"
+          [nota]="noteOf(t)"
+          [esAccion]="isAction(t)"
+          [esPendiente]="isPending(t)"
+          [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
+          [mostrarDias]="true"
+          (verConversacion)="openConversation(t)"
+          (crearTarea)="openTicketTask(t)"
+          (asignar)="openAssign(t)"
+          (cambiarEstado)="changeStatus(t, $event)"
+          (guardarNota)="onGuardarNota(t, $event)"
+          (toggleAccion)="toggleAction(t)"
+          (togglePendiente)="togglePending(t)" />
+      }
+    </div>
+  } @else {
+    <div class="mp-empty">✓ Sin acciones pendientes.</div>
+  }
+</section>
+
+<!-- Bloque: Notificar al cliente -->
+<section class="mp-block amber">
+  <div class="mp-block-head">
+    <span class="mp-block-icon">📣</span>
+    <div class="mp-block-titles">
+      <span class="mp-block-title">NOTIFICAR AL CLIENTE</span>
+      <span class="mp-block-sub">Tickets con 3 o más días sin respuesta — registrar nota de seguimiento</span>
+    </div>
+    <span class="mp-count">{{ clientePendiente().length }}</span>
+  </div>
+
+  @if (clientePendiente().length) {
+    @for (g of clientePendientePorCliente(); track g.cliente) {
+      <div class="mp-cli-group">
+        <div class="mp-cli-group-head">
+          <span class="mp-cli-group-name">{{ g.cliente }}</span>
+          <span class="mp-cli-group-count">{{ g.tickets.length }}</span>
+          <button mat-stroked-button class="copy-btn" (click)="copiarTicketsGrupo(g.cliente, g.tickets)"
+                  matTooltip="Copiar los N° de ticket separados por coma para notificar al cliente">
+            <mat-icon>content_copy</mat-icon>
+            {{ copiadoGrupo() === g.cliente ? 'Copiado ✓' : 'Copiar N° tickets' }}
+          </button>
+        </div>
+        <div class="mp-ticket-grid">
+          @for (t of g.tickets; track t.ticket) {
+            <app-ticket-card
+              [ticket]="t"
+              [statusOptions]="statusOptions()"
+              [nota]="noteOf(t)"
+              [esAccion]="isAction(t)"
+              [esPendiente]="isPending(t)"
+              [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
+              [mostrarDias]="true"
+              (verConversacion)="openConversation(t)"
+              (crearTarea)="openTicketTask(t)"
+              (asignar)="openAssign(t)"
+              (cambiarEstado)="changeStatus(t, $event)"
+              (guardarNota)="onGuardarNota(t, $event)"
+              (toggleAccion)="toggleAction(t)"
+              (togglePendiente)="togglePending(t)" />
+          }
+        </div>
+      </div>
+    }
+  } @else {
+    <div class="mp-empty">✓ Sin tickets pendientes de notificación al cliente.</div>
+  }
+</section>
+
+<!-- Bloque: Próximos a vencer -->
+<section class="mp-block red">
+  <div class="mp-block-head">
+    <span class="mp-block-icon">⏰</span>
+    <div class="mp-block-titles">
+      <span class="mp-block-title">PRÓXIMOS A VENCER</span>
+      <span class="mp-block-sub">Coordinar con el técnico responsable antes de la fecha límite</span>
+    </div>
+    <span class="mp-count">{{ soon().length }}</span>
+  </div>
+
+  @if (soon().length) {
+    <div class="mp-cards">
+      @for (s of soon(); track s.id) {
+        @let due = dueInfo(s);
+        @let mem = memberOf(s.assignee);
+        @let cl = clientOf(s.client);
+        <div class="mp-card red" [class.urgent]="due.critical" (click)="openStory(s)">
+          <div class="mp-card-top">
+            <span class="badge-id">{{ s.id }}</span>
+            <span class="badge-days" [class.critical]="due.critical">{{ due.label }}</span>
+            @if (mem) {
+              <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ mem.id }}</span>
+            } @else {
+              <span class="mp-avatar empty" title="Sin asignar">?</span>
+            }
+          </div>
+          @if (cl) { <div class="mp-card-client" [style.color]="cl.color || null">{{ cl.name }}</div> }
+          <div class="mp-card-title">{{ s.title }}</div>
+          <div class="mp-card-foot">
+            <span class="status-tag">{{ STATUS_LABELS[s.status] || s.status }}</span>
+            <span class="due">📅 {{ s.dueDate }}</span>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="mp-empty">✓ No hay tareas próximas a vencer.</div>
+  }
+</section>
+
+<!-- Bloque: Por asignar -->
+<section class="mp-block blue">
+  <div class="mp-block-head">
+    <span class="mp-block-icon">🆕</span>
+    <div class="mp-block-titles">
+      <span class="mp-block-title">POR ASIGNAR</span>
+      <span class="mp-block-sub">Tareas en To Do — abrir para asignar técnico</span>
+    </div>
+    <span class="mp-count">{{ porAsignar().length }}</span>
+  </div>
+
+  @if (porAsignar().length) {
+    <div class="mp-table-wrap">
+      <table class="mp-table">
+        <thead><tr><th>ID</th><th>Ticket</th><th>Título</th><th>Cliente</th><th>Prioridad</th><th>Asignado</th><th></th></tr></thead>
+        <tbody>
+          @for (s of porAsignar(); track s.id) {
+            @let mem = memberOf(s.assignee);
+            @let cl = clientOf(s.client);
+            <tr>
+              <td class="mono">{{ s.id }}</td>
+              <td class="mono">{{ s.ticket ? '#' + s.ticket : '—' }}</td>
+              <td class="b">{{ s.title }}</td>
+              <td>{{ cl?.name || '—' }}</td>
+              <td><span class="prio-pill" [class]="'prio-' + s.priority">{{ s.priority.toUpperCase() }}</span></td>
+              <td>
+                @if (mem) {
+                  <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ mem.id }}</span>
+                } @else {
+                  <span class="muted">Sin asignar</span>
+                }
+              </td>
+              <td><button mat-stroked-button class="sm" (click)="openStory(s)">Asignar</button></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div class="mp-empty">✓ No hay tareas pendientes de asignación.</div>
+  }
+</section>

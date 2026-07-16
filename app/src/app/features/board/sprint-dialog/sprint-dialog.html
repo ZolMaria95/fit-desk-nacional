@@ -1,0 +1,53 @@
+<h2 mat-dialog-title>{{ isNew ? 'Nuevo sprint' : 'Editar ' + sprint!.id }}</h2>
+
+<mat-dialog-content class="sprint-form">
+  <mat-form-field appearance="outline" class="full">
+    <mat-label>Nombre</mat-label>
+    <input matInput [(ngModel)]="name" placeholder="Sprint 3" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" class="full">
+    <mat-label>Objetivo</mat-label>
+    <textarea matInput rows="2" [(ngModel)]="goal" placeholder="Objetivo del sprint"></textarea>
+  </mat-form-field>
+
+  <div class="row">
+    <mat-form-field appearance="outline" class="grow">
+      <mat-label>Inicio</mat-label>
+      <input matInput [matDatepicker]="startP" [(ngModel)]="startModel" />
+      <mat-datepicker-toggle matIconSuffix [for]="startP"></mat-datepicker-toggle>
+      <mat-datepicker #startP></mat-datepicker>
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="grow">
+      <mat-label>Fin</mat-label>
+      <input matInput [matDatepicker]="endP" [(ngModel)]="endModel" />
+      <mat-datepicker-toggle matIconSuffix [for]="endP"></mat-datepicker-toggle>
+      <mat-datepicker #endP></mat-datepicker>
+    </mat-form-field>
+  </div>
+
+  <div class="row">
+    <mat-form-field appearance="outline" class="grow">
+      <mat-label>Capacidad (pts)</mat-label>
+      <input matInput type="number" min="0" [(ngModel)]="capacity" />
+    </mat-form-field>
+    @if (!isNew) {
+      <mat-form-field appearance="outline" class="grow">
+        <mat-label>Estado</mat-label>
+        <mat-select [(ngModel)]="status">
+          @for (s of STATUSES; track s) { <mat-option [value]="s">{{ s }}</mat-option> }
+        </mat-select>
+      </mat-form-field>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (!isNew) {
+    <button mat-button class="danger" [disabled]="esUnico" (click)="remove()"
+            [matTooltip]="esUnico ? 'No se puede borrar el único sprint' : ''">Borrar</button>
+    <span class="spacer"></span>
+  }
+  <button mat-button mat-dialog-close>Cancelar</button>
+  <button mat-flat-button color="primary" (click)="save()">{{ isNew ? 'Crear' : 'Guardar' }}</button>
+</mat-dialog-actions>

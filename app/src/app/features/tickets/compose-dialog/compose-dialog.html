@@ -1,0 +1,29 @@
+<div class="compose-head" mat-dialog-title>
+  <span>{{ titulo }}</span>
+  <span class="spacer"></span>
+  <button mat-icon-button mat-dialog-close aria-label="Cerrar"><mat-icon>close</mat-icon></button>
+</div>
+
+<div class="compose-toolbar">
+  <button mat-icon-button type="button" matTooltip="Negrita" (mousedown)="$event.preventDefault()" (click)="format('bold')">
+    <mat-icon>format_bold</mat-icon>
+  </button>
+  <button mat-icon-button type="button" matTooltip="Cursiva" (mousedown)="$event.preventDefault()" (click)="format('italic')">
+    <mat-icon>format_italic</mat-icon>
+  </button>
+  <button mat-icon-button type="button" matTooltip="Subrayado" (mousedown)="$event.preventDefault()" (click)="format('underline')">
+    <mat-icon>format_underlined</mat-icon>
+  </button>
+  <button mat-icon-button type="button" matTooltip="Bloque de código" (mousedown)="$event.preventDefault()" (click)="codeBlock()">
+    <mat-icon>code</mat-icon>
+  </button>
+</div>
+
+<mat-dialog-content class="compose-content">
+  <div #editor class="compose-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Mensaje" (paste)="onPaste($event)"></div>
+</mat-dialog-content>
+
+<div mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Cancelar</button>
+  <button mat-flat-button color="primary" (click)="done()">Listo</button>
+</div>

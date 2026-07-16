@@ -1,0 +1,13 @@
+id_local,nombre,rol_local,helpdesk_user_id,confianza,confirmado
+SC,Sol Contreras,Helpdesk,MSC001,alta,
+JH,Juan Huiracocha,Supervisor,JPHP001,media,
+LO,Lina Ochoa,Supervisor,ORLR001,media,
+AB,Andres Bernal,Supervisor,APBM001,media,
+DL,Domenica Lasso,Consultor,KDLS001,media,
+GR,Gabriel Reyes,Consultor,JGRV001,media,
+DG,David Gonzalez,Consultor,DSGS001,media,
+KV,Karla Vazquez,Consultor,KVAZQUEZ,baja,
+KM,Kevin Molina,Consultor,KIMA001,media,
+AC,Andres Calderon,Consultor,KACG001,confirmado,si
+JQ,Joel Quintuna,Consultor,JFQV001,media,
+VN,Valeria Neira,Consultor,VINC001,media,

@@ -1,0 +1,37 @@
+.sprint-form {
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+  min-width: 420px;
+}
+
+.full {
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+
+  .grow {
+    flex: 1;
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.danger {
+  color: var(--mat-sys-error);
+}
+
+@media (max-width: 520px) {
+  .sprint-form {
+    min-width: 0;
+  }
+  .row {
+    flex-direction: column;
+    gap: 0;
+  }
+}

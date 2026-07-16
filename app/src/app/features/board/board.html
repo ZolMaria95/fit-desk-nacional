@@ -1,0 +1,326 @@
+<div class="sprint-bar">
+  @if (boards().length > 1) {
+    <mat-form-field appearance="outline" class="sprint-select" subscriptSizing="dynamic">
+      <mat-label>Equipo / Tablero</mat-label>
+      <mat-select [value]="currentBoard()" (selectionChange)="switchBoard($event.value)">
+        @for (b of boards(); track b.codigo) {
+          <mat-option [value]="b.codigo">{{ b.equipo || b.nombre }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+  <mat-form-field appearance="outline" class="sprint-select" subscriptSizing="dynamic">
+    <mat-label>Sprint</mat-label>
+    <mat-select [value]="activeSprintId()" (selectionChange)="setSprint($event.value)">
+      @for (s of sprints(); track s.id) {
+        <mat-option [value]="s.id">{{ s.name }}{{ s.status === 'completed' ? ' ✓' : '' }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+  <button mat-icon-button (click)="openEditSprint()" matTooltip="Editar sprint actual" [disabled]="!activeSprint()">
+    <mat-icon>edit</mat-icon>
+  </button>
+  <button mat-icon-button (click)="openNewSprint()" matTooltip="Nuevo sprint">
+    <mat-icon>add</mat-icon>
+  </button>
+
+  @if (activeSprint(); as sp) {
+    <div class="sprint-banner">
+      <span class="sb-name">{{ sp.name }}</span>
+      @if (sp.goal) { <span class="sb-goal">— {{ sp.goal }}</span> }
+      <span class="sb-sep">·</span>
+      @if (sp.start || sp.end) {
+        <span class="sb-dates">{{ fmtSprintDate(sp.start) }} → {{ fmtSprintDate(sp.end) }}</span>
+        <span class="sb-sep">·</span>
+      }
+      <span class="sb-cap">{{ sp.capacity }} pts</span>
+      <span class="sb-status" [class]="'st-' + sp.status">{{ sp.status }}</span>
+    </div>
+  }
+
+  <span class="spacer"></span>
+
+  <button mat-flat-button color="primary" (click)="openNew()">
+    <mat-icon>add</mat-icon> Tarea
+  </button>
+  @if (puedeBorrarBoard()) {
+    <button mat-stroked-button class="danger" (click)="clearBoard()">
+      <mat-icon>delete_sweep</mat-icon> Borrar Board
+    </button>
+  }
+</div>
+
+<!-- Filtros del board: se publican al drawer del shell (ShellService), como en Tickets. -->
+<ng-template #filtersTpl>
+  <div class="board-filters-panel">
+  <mat-button-toggle-group
+    class="prio-filter"
+    [value]="priorityFilter()"
+    (change)="setPriority($event.value)"
+    hideSingleSelectionIndicator
+    aria-label="Filtrar por prioridad"
+  >
+    @for (p of PRIORITY_FILTERS; track p) {
+      <mat-button-toggle [value]="p">{{ p === 'all' ? 'Todas' : PRIORITY_LABELS[p] }}</mat-button-toggle>
+    }
+  </mat-button-toggle-group>
+
+  <button
+    type="button"
+    class="mine-toggle"
+    mat-stroked-button
+    [class.active]="mineOnly()"
+    [attr.aria-pressed]="mineOnly()"
+    (click)="toggleMine()"
+    matTooltip="Mostrar solo mis tareas"
+  >
+    <mat-icon>person</mat-icon> Asignados a mí
+  </button>
+
+  @if (puedeVerEquipo()) {
+    <button
+      type="button"
+      class="mine-toggle"
+      mat-stroked-button
+      [class.active]="teamOnly()"
+      [attr.aria-pressed]="teamOnly()"
+      (click)="toggleTeam()"
+      matTooltip="Incluir tareas de otros tableros que lleva mi equipo"
+    >
+      <mat-icon>groups</mat-icon> Mi equipo
+    </button>
+  }
+
+  <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
+    <mat-label>Buscar (N° o palabra)</mat-label>
+    <input matInput [value]="ticketSearch()" (input)="onTicketSearchInput($any($event.target).value)"
+           (keydown.enter)="submitTicketSearch()" placeholder="N° o palabra…" />
+    <button matSuffix mat-icon-button aria-label="Buscar" (click)="submitTicketSearch()">
+      <mat-icon>search</mat-icon>
+    </button>
+    @if (searchingTickets()) { <mat-hint>Buscando en el HelpDesk…</mat-hint> }
+    @else if (searchPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
+  </mat-form-field>
+
+  @if (hasFilters()) {
+    <button mat-stroked-button class="clear-filters" (click)="clearFilters()" matTooltip="Quitar todos los filtros">
+      <mat-icon>filter_alt_off</mat-icon> Limpiar filtros
+    </button>
+  }
+
+  @if (assigneeChips().length) {
+    <div class="assignee-filter">
+      <span class="filter-label">Asignado a:</span>
+      <mat-form-field appearance="outline" class="assignee-select" subscriptSizing="dynamic">
+        <mat-label>Consultores</mat-label>
+        <mat-select #asigSel multiple [value]="selectedAssignees()" (selectionChange)="onAssigneeSelectChange($event.value)" (closed)="buscarAsignado.set('')">
+          <div class="sel-head" (click)="$event.stopPropagation()">
+            <div class="sel-head-search">
+              <mat-icon>search</mat-icon>
+              <input [value]="buscarAsignado()" (input)="buscarAsignado.set($any($event.target).value)" (keydown)="$event.stopPropagation()" placeholder="Buscar consultor…" />
+              <button type="button" class="sel-close" (click)="asigSel.close()" aria-label="Cerrar lista"><mat-icon>close</mat-icon>Cerrar</button>
+            </div>
+            <button type="button" class="sel-head-all" (click)="toggleAllAssignees(); $event.stopPropagation()">
+              {{ allAssigneesSelected() ? 'Quitar todos' : 'Seleccionar todos' }}
+            </button>
+          </div>
+          @for (m of assigneeOptions(); track m.id) {
+            <mat-option [value]="m.id">{{ m.name }}</mat-option>
+          } @empty {
+            <mat-option disabled>Sin coincidencias</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      @if (selectedAssignees().length) {
+        <mat-chip-set class="assignee-chips">
+          @for (id of selectedAssignees(); track id) {
+            @let mem = resolveMember(id);
+            <mat-chip class="achip" [style.background]="pastel(mem?.color || '#9aa0a6')" [matTooltip]="mem?.name || id" (removed)="removeAssignee(id)">
+              {{ shortName(mem?.name || id) }}
+              <button matChipRemove [attr.aria-label]="'Quitar ' + (mem?.name || id)">
+                <mat-icon>close</mat-icon>
+              </button>
+            </mat-chip>
+          }
+        </mat-chip-set>
+      }
+    </div>
+  }
+
+  @if (clientChips().length) {
+    <div class="client-filter">
+      <span class="filter-label">Cliente:</span>
+      <mat-form-field appearance="outline" class="client-select" subscriptSizing="dynamic">
+        <mat-label>Clientes</mat-label>
+        <mat-select #cliSel multiple [value]="selectedClients()" (selectionChange)="onClientSelectChange($event.value)" (closed)="buscarCliente.set('')">
+          <div class="sel-head" (click)="$event.stopPropagation()">
+            <div class="sel-head-search">
+              <mat-icon>search</mat-icon>
+              <input [value]="buscarCliente()" (input)="buscarCliente.set($any($event.target).value)" (keydown)="$event.stopPropagation()" placeholder="Buscar cliente…" />
+              <button type="button" class="sel-close" (click)="cliSel.close()" aria-label="Cerrar lista"><mat-icon>close</mat-icon>Cerrar</button>
+            </div>
+            <button type="button" class="sel-head-all" (click)="toggleAllClients(); $event.stopPropagation()">
+              {{ allClientsSelected() ? 'Quitar todos' : 'Seleccionar todos' }}
+            </button>
+          </div>
+          @for (c of clientOptions(); track c.id) {
+            <mat-option [value]="c.id">{{ c.name }}</mat-option>
+          } @empty {
+            <mat-option disabled>Sin coincidencias</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      @if (selectedClients().length) {
+        <mat-chip-set class="assignee-chips">
+          @for (id of selectedClients(); track id) {
+            <mat-chip class="achip cchip" [style.background]="pastel(clientColorOf(id))" [matTooltip]="clientNameOf(id)" (removed)="removeClient(id)">
+              {{ clientNameOf(id) }}
+              <button matChipRemove [attr.aria-label]="'Quitar ' + clientNameOf(id)"><mat-icon>close</mat-icon></button>
+            </mat-chip>
+          }
+        </mat-chip-set>
+      }
+    </div>
+  }
+
+  </div>
+</ng-template>
+
+<div class="kanban" cdkDropListGroup>
+  @for (col of columns(); track col.status) {
+    <section class="kanban-col">
+      <header class="col-header" [class]="'head-' + col.status">
+        <span class="col-dot" [class]="'dot-' + col.status"></span>
+        <span class="col-title">{{ col.label }}</span>
+        <span class="col-count">{{ col.cards.length }}</span>
+      </header>
+
+      <div
+        class="col-cards"
+        cdkDropList
+        [cdkDropListData]="col.cards"
+        (cdkDropListDropped)="drop($event, col.status)"
+      >
+        @for (card of col.cards; track card.id) {
+          @let member = resolveMember(card.assignee);
+          @let cl = clientOf(card.client);
+          @let cs = clientStyle(cl);
+          @let due = dueInfo(card.dueDate, card.status);
+
+          <mat-card
+            class="story-card"
+            [class.not-mine]="!canDrag(card)"
+            [class.overdue]="due.overdue"
+            [class.soon]="due.soon"
+            [style.background]="cs.bg"
+            [style.color]="cs.ink"
+            [style.--accent]="cs.accent"
+            [style.--tilt]="cardTilt(card.id)"
+            cdkDrag
+            [cdkDragData]="card"
+            (click)="openDetail(card)"
+          >
+            <div class="card-top">
+              <span class="card-ticket">#{{ card.ticket || '—' }}</span>
+              @if (card.ticket) {
+                <button class="card-copy" (click)="copiarTicket(card.ticket, $event)"
+                        [matTooltip]="ticketCopiado() === card.ticket ? 'Copiado' : 'Copiar número'"
+                        aria-label="Copiar número de ticket">
+                  <mat-icon>{{ ticketCopiado() === card.ticket ? 'check' : 'content_copy' }}</mat-icon>
+                </button>
+              }
+              <span class="prio-badge" [class]="'prio-' + card.priority">{{ $any(PRIORITY_LABELS)[card.priority] }}</span>
+              @if (esForanea(card)) {
+                <span class="team-badge" matTooltip="Tarea de otro equipo (sigue en su tablero); te la asignaron">
+                  <mat-icon inline>groups</mat-icon>{{ boardLabel(card.board) }}
+                </span>
+              }
+              <span class="grow"></span>
+              @if (puedeGestionarTodo()) {
+                <button
+                  mat-icon-button
+                  class="del-btn"
+                  matTooltip="Eliminar tarea"
+                  (click)="$event.stopPropagation(); deleteCard(card)"
+                >
+                  <mat-icon>close</mat-icon>
+                </button>
+              }
+            </div>
+
+            @if (card.clientName || cl) {
+              <span class="client-name">{{ card.clientName || cl?.name }}</span>
+            }
+            <div class="card-title">{{ card.title }}</div>
+
+            @if (card.ticket && card.hdEstatus) {
+              <span class="hd-estatus">{{ card.hdEstatus }}</span>
+            }
+
+            @if (due.soon) {
+              <div class="soon-badge">⚠ Próximo a vencer — {{ due.badge }}</div>
+            }
+
+            @switch (card.status) {
+              @case ('in_progress') {
+                <div class="prog" (click)="$event.stopPropagation()">
+                  <mat-progress-bar
+                    mode="determinate"
+                    [value]="card.progress"
+                    [style.--mdc-linear-progress-active-indicator-color]="progColor(card.progress)"
+                  ></mat-progress-bar>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="5"
+                    [value]="card.progress"
+                    (change)="onProgressChange(card, $any($event.target).value)"
+                  />
+                </div>
+
+                @let wd = waitingDays(card);
+                <button
+                  class="wait-btn"
+                  [class.active]="wd !== null && wd < 3"
+                  [class.alert]="wd !== null && wd >= 3"
+                  (click)="$event.stopPropagation(); toggleWaiting(card)"
+                >
+                  {{ wd !== null && wd >= 3 ? '⚠ Notificar al cliente' : '⏳ Esperando cliente' }}
+                </button>
+              }
+              @case ('review') {
+                <div class="card-check" (click)="$event.stopPropagation()">
+                  <mat-checkbox [checked]="false" (change)="onCert(card, $event)" aria-label="Certificado"></mat-checkbox>
+                  <span class="check-text">Certificado</span>
+                </div>
+              }
+              @case ('done') {
+                <div class="card-check" (click)="$event.stopPropagation()">
+                  <mat-checkbox [checked]="card.approved" [disabled]="!!card.ticket" (change)="onFinalize(card, $event)">
+                    {{ card.approved ? 'Finalizado ✓' : 'Finalizado' }}
+                  </mat-checkbox>
+                </div>
+              }
+            }
+
+            <div class="card-bottom">
+              <span class="card-due" [class.overdue]="due.overdue" [class.soon]="due.soon">
+                <mat-icon>event</mat-icon>{{ due.str || '—' }}
+              </span>
+              @if (member) {
+                <span class="avatar" [style.background]="member.color" [matTooltip]="member.name">{{ member.id }}</span>
+              } @else {
+                <span class="avatar unassigned" matTooltip="Sin asignar"></span>
+              }
+            </div>
+          </mat-card>
+        } @empty {
+          <div class="empty-col"><span>○</span><span>Sin tareas</span></div>
+        }
+      </div>
+    </section>
+  }
+</div>

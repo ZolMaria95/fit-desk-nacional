@@ -1,0 +1,27 @@
+# ── Dependencias ──
+node_modules/
+
+# ── Builds / artefactos ──
+dist/
+.angular/
+target/
+*.class
+
+# ── Logs / temporales / OS ──
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+*.tmp
+
+# ── IDE ──
+.idea/
+*.iml
+.vscode/
+
+# ── Datos reales de Firebase (privacidad: NO subir dumps a repo público) ──
+/docs/exports/*.json
+
+# ── Credenciales / entorno local ──
+.env
+.env.*

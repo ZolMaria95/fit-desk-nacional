@@ -1,0 +1,89 @@
+.assign-body {
+  min-width: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.actual {
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+  margin-bottom: 10px;
+}
+
+.search {
+  width: 100%;
+}
+
+.emp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.emp {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+
+  &:hover:not([disabled]) {
+    border-color: var(--mat-sys-primary);
+    background: var(--mat-sys-surface-container-low);
+  }
+  &[disabled] {
+    cursor: default;
+    opacity: 0.7;
+  }
+  &.current {
+    border-color: var(--mat-sys-primary);
+    background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
+  }
+
+  .emp-main {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  .emp-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--mat-sys-on-surface);
+  }
+  .emp-role {
+    font-size: 11px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+  .emp-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+  .check {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.empty {
+  padding: 18px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 13px;
+}
+
+.estado-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}

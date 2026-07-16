@@ -1,0 +1,282 @@
+:host {
+  display: block;
+}
+
+.mp-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+
+  h2 { margin: 0; font-size: 20px; color: var(--mat-sys-on-surface); }
+  .mp-sub { margin: 2px 0 0; font-size: 12px; color: var(--mat-sys-on-surface-variant); }
+  .grow { flex: 1 1 auto; }
+}
+
+// ── KPIs ──
+.mp-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 760px) {
+  .mp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.mp-kpi {
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-left: 4px solid var(--c, #888);
+  border-radius: 12px;
+  padding: 12px 14px;
+
+  &.crimson { --c: #C0392B; }
+  &.amber { --c: #F29E3B; }
+  &.red { --c: #E74C3C; }
+  &.blue { --c: #048ABF; }
+
+  .mp-kpi-num { font-size: 28px; font-weight: 800; color: var(--c); line-height: 1; }
+  .mp-kpi-label { font-size: 13px; font-weight: 700; margin-top: 4px; color: var(--mat-sys-on-surface); }
+  .mp-kpi-desc { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
+}
+
+// ── Bloques ──
+.mp-block {
+  background: var(--mat-sys-surface-container-low, #f0f4f9);
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-left: 4px solid var(--c, #888);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+
+  &.crimson { --c: #C0392B; }
+  &.amber { --c: #F29E3B; }
+  &.red { --c: #E74C3C; }
+  &.blue { --c: #048ABF; }
+}
+
+.mp-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+
+  .mp-block-icon { font-size: 16px; }
+  .mp-block-titles { display: flex; flex-direction: column; }
+  .mp-block-title { font-size: 13px; font-weight: 800; letter-spacing: 0.3px; color: var(--c); }
+  .mp-block-sub { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
+  .mp-count {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--c);
+    background: color-mix(in srgb, var(--c) 12%, transparent);
+    border-radius: 10px;
+    padding: 1px 10px;
+  }
+}
+
+.mp-empty {
+  text-align: center;
+  padding: 18px;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ── Tablas ──
+.mp-table-wrap { overflow-x: auto; }
+.mp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+
+  th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--mat-sys-on-surface-variant);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant, #e6e6ea);
+  }
+  td { padding: 6px 10px; border-bottom: 1px solid #eef1f5; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .mono { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+  .crimson-tx { color: #C0392B; }
+  .b { font-weight: 600; }
+  .asunto { max-width: 260px; }
+  .nota { color: var(--mat-sys-on-surface-variant); max-width: 200px; }
+  .muted { color: #9e9e9e; }
+  .sm { line-height: 30px; font-size: 12px; }
+}
+
+.prio-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  &.prio-alta { color: #E74C3C; background: #E74C3C18; }
+  &.prio-media { color: #B26A00; background: #F29E3B22; }
+  &.prio-baja { color: #2E7D32; background: #27AE6018; }
+}
+
+// Grid para las cards de ticket reutilizadas de la vista Tickets (mismo diseño).
+.mp-ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+// "Esperando cliente" agrupado por cliente, con botón de copiar N° de tickets.
+.mp-cli-group {
+  margin-bottom: 14px;
+  &:last-child { margin-bottom: 0; }
+}
+.mp-cli-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--c) 35%, transparent);
+
+  .mp-cli-group-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--c);
+  }
+  .mp-cli-group-count {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--c);
+    background: color-mix(in srgb, var(--c) 12%, transparent);
+    border-radius: 10px;
+    padding: 1px 8px;
+  }
+  .copy-btn {
+    margin-left: auto;
+    line-height: 30px;
+    font-size: 12px;
+    mat-icon { font-size: 16px; width: 16px; height: 16px; margin-right: 2px; }
+  }
+}
+
+// ── Cards (próximos a vencer) ──
+.mp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 10px;
+}
+
+.mp-card {
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e6e6ea);
+  border-left: 3px solid var(--c, #888);
+  border-radius: 10px;
+  padding: 10px;
+
+  &.amber { --c: #F29E3B; }
+  &.red { --c: #E74C3C; cursor: pointer; }
+  &.urgent { border-left-color: #C0392B; box-shadow: 0 0 0 1px #C0392B22; }
+  &.red:hover { box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12); }
+
+  .mp-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .mp-card-client { font-size: 12px; font-weight: 700; }
+  .mp-card-title { font-size: 12.5px; margin: 2px 0 6px; }
+  .mp-card-msg {
+    font-size: 11px;
+    color: var(--mat-sys-on-surface-variant);
+    background: #f6f7f9;
+    border-radius: 6px;
+    padding: 4px 6px;
+    margin-bottom: 6px;
+  }
+  .mp-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.badge-ticket, .badge-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--brand, #048abf);
+}
+.badge-days {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #F29E3B22;
+  color: #B26A00;
+  &.critical { background: #C0392B18; color: #C0392B; }
+}
+.status-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container-high);
+}
+
+.mp-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  &.empty { background: #cfd4da; color: #fff; }
+}
+
+// ── Notas Sol (cliente pendiente) ──
+.mp-note-saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff7d6;
+  border-radius: 6px;
+  padding: 4px 6px;
+
+  .mp-note-text { flex: 1; min-width: 0; font-size: 11px; color: #6a5a00; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+.mp-note-link {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--brand, #048abf);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 4px;
+  &.add { border: 1px dashed #cfd8e3; border-radius: 6px; width: 100%; }
+}
+.mp-note-edit {
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 12px;
+    border: 1px solid var(--mat-sys-outline, #bdbdbd);
+    border-radius: 6px;
+    padding: 4px 6px;
+    resize: vertical;
+  }
+  .mp-note-actions { display: flex; gap: 6px; margin-top: 4px; }
+  .sm { line-height: 30px; font-size: 12px; }
+}

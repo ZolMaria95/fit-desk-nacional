@@ -1,0 +1,187 @@
+<!-- Panel de filtros: se publica al drawer del shell (ShellService). -->
+<ng-template #filtersTpl>
+  <div class="hd-filters-panel">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="f-search">
+      <mat-label>Buscar (N° o palabra)</mat-label>
+      <input matInput [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)"
+             (keydown.enter)="submitSearch()" placeholder="Ej. 27732 o crédito" />
+      <button matSuffix mat-icon-button aria-label="Buscar" (click)="submitSearch()">
+        <mat-icon>search</mat-icon>
+      </button>
+      @if (searchPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
+      @else if (filterTexto()) { <mat-hint>Resultados por contenido en todos los tickets</mat-hint> }
+    </mat-form-field>
+
+    @if (filterClientes().length) {
+      <div class="hd-cli-chips">
+        @for (id of filterClientes(); track id) {
+          <span class="hd-cli-chip" [title]="clienteName(id)">
+            <span class="hd-cli-chip-txt">{{ clienteName(id) }}</span>
+            <button type="button" class="hd-cli-chip-x" (click)="removeCliente(id)" [attr.aria-label]="'Quitar ' + clienteName(id)">
+              <mat-icon>close</mat-icon>
+            </button>
+          </span>
+        }
+      </div>
+    }
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Cliente</mat-label>
+      <mat-select #cliSel multiple [value]="filterClientes()" (selectionChange)="onClientesChange($event.value)" (closed)="buscarCliente.set('')">
+        <div class="sel-search" (click)="$event.stopPropagation()">
+          <mat-icon class="sel-search-icon">search</mat-icon>
+          <input matInput placeholder="Buscar cliente…" [ngModel]="buscarCliente()" (ngModelChange)="buscarCliente.set($event)" (keydown)="$event.stopPropagation()" />
+          <button type="button" class="sel-close" (click)="cliSel.close()" aria-label="Cerrar lista"><mat-icon>close</mat-icon>Cerrar</button>
+        </div>
+        @for (c of optClientesF(); track c.id) { <mat-option [value]="c.id">{{ c.name }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+
+    @if (filterEstatus().length) {
+      <div class="hd-cli-chips">
+        @for (e of filterEstatus(); track e) {
+          <span class="hd-cli-chip" [title]="e">
+            <span class="hd-cli-chip-txt">{{ e }}</span>
+            <button type="button" class="hd-cli-chip-x" (click)="removeEstatus(e)" [attr.aria-label]="'Quitar ' + e">
+              <mat-icon>close</mat-icon>
+            </button>
+          </span>
+        }
+      </div>
+    }
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Estatus</mat-label>
+      <mat-select #estSel multiple [value]="filterEstatus()" (selectionChange)="onEstatusChange($event.value)" (closed)="buscarEstatus.set('')">
+        <div class="sel-search" (click)="$event.stopPropagation()">
+          <mat-icon class="sel-search-icon">search</mat-icon>
+          <input matInput placeholder="Buscar estatus…" [ngModel]="buscarEstatus()" (ngModelChange)="buscarEstatus.set($event)" (keydown)="$event.stopPropagation()" />
+          <button type="button" class="sel-close" (click)="estSel.close()" aria-label="Cerrar lista"><mat-icon>close</mat-icon>Cerrar</button>
+        </div>
+        @for (e of optEstatusF(); track e) { <mat-option [value]="e">{{ e }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Asignado</mat-label>
+      <mat-select #asigSel [value]="filterAsignado()" (selectionChange)="onAsignadoChange($event.value)" (closed)="buscarAsignado.set('')">
+        <div class="sel-search" (click)="$event.stopPropagation()">
+          <mat-icon class="sel-search-icon">search</mat-icon>
+          <input matInput placeholder="Buscar empleado…" [ngModel]="buscarAsignado()" (ngModelChange)="buscarAsignado.set($event)" (keydown)="$event.stopPropagation()" />
+          <button type="button" class="sel-close" (click)="asigSel.close()" aria-label="Cerrar lista"><mat-icon>close</mat-icon>Cerrar</button>
+        </div>
+        <mat-option value="">Todos</mat-option>
+        @for (u of optAsignadosF(); track u.id) {
+          <mat-option [value]="u.id">{{ u.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Ordenar por</mat-label>
+      <mat-select [value]="sortValue()" (selectionChange)="onSortChange($event.value)">
+        <mat-option value="modified_date|desc">Modificación (recientes)</mat-option>
+        <mat-option value="modified_date|asc">Modificación (antiguos)</mat-option>
+        <mat-option value="entry_date|desc">Ingreso (recientes)</mat-option>
+        <mat-option value="entry_date|asc">Ingreso (antiguos)</mat-option>
+        <mat-option value="priority|asc">Prioridad (alta primero)</mat-option>
+        <mat-option value="priority|desc">Prioridad (baja primero)</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    @if (hasFilters()) {
+      <button mat-stroked-button (click)="clearFilters()"><mat-icon>close</mat-icon> Limpiar filtros</button>
+    }
+  </div>
+</ng-template>
+
+<!-- Contenido -->
+<div class="hd-header">
+  <h2>Tickets Helpdesk</h2>
+  <span class="hd-results">{{ rows().length }} de {{ tabTotal() }}</span>
+  <span class="grow"></span>
+  <button mat-icon-button class="hd-refresh" (click)="refresh()" [disabled]="loading()"
+          matTooltip="Refrescar tickets" aria-label="Refrescar tickets">
+    <mat-icon>refresh</mat-icon>
+  </button>
+</div>
+
+@if (loading()) {
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+@if (status().msg) {
+  <div class="hd-status" [class]="'st-' + status().type">{{ status().msg }}</div>
+}
+
+<div class="hd-tabs">
+  <button class="hd-tab" [class.active]="tab() === 'pendientes'" (click)="setTab('pendientes')">Pendientes</button>
+  <button class="hd-tab" [class.active]="tab() === 'asignados'" (click)="setTab('asignados')">Asignados a mí</button>
+  <button class="hd-tab" [class.active]="tab() === 'generales'" (click)="setTab('generales')">Todos los clientes</button>
+  <button class="hd-tab" [class.active]="tab() === 'estadisticas'" (click)="setTab('estadisticas')">Estadísticas</button>
+</div>
+
+@if (tab() === 'estadisticas') {
+  @let s = stats();
+  <div class="hd-stats-header">RESUMEN EJECUTIVO — Total tickets activos: <strong>{{ s.total }}</strong></div>
+  <div class="hd-stats-grid">
+    @for (block of [{ t: 'Por Cliente', rows: s.porCliente }, { t: 'Por Estatus', rows: s.porEstatus }]; track block.t) {
+      <div class="hd-stats-block">
+        <div class="hd-stats-title">{{ block.t }}</div>
+        <table class="hd-stats-tbl">
+          <thead><tr><th>{{ block.t.split(' ')[1] }}</th><th>Tickets</th><th>% Total</th></tr></thead>
+          <tbody>
+            @for (r of block.rows; track r.key) {
+              <tr><td [style.color]="r.color">{{ r.key }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.pct }}</td></tr>
+            }
+          </tbody>
+          <tfoot><tr><td>TOTAL</td><td class="num">{{ s.total }}</td><td class="num">100%</td></tr></tfoot>
+        </table>
+      </div>
+    }
+  </div>
+} @else {
+  @if (!rows().length) {
+    <div class="hd-empty">
+      @if (searching()) { Buscando ticket #{{ filterTicket() }} en el sistema… }
+      @else if (loading()) { Cargando tickets… }
+      @else if (filterTicket()) { No se encontró el ticket #{{ filterTicket() }}. }
+      @else if (filterTexto()) { No se encontraron tickets que contengan “{{ filterTexto() }}”. }
+      @else if (tabHasData()) { Sin tickets que coincidan con el filtro. }
+      @else { No hay tickets. Usa el botón <strong>↻</strong> para refrescar. }
+    </div>
+  } @else {
+    <div class="ticket-grid">
+      @for (t of pagedRows(); track t.ticket) {
+        <app-ticket-card
+          [ticket]="t"
+          [statusOptions]="statusOptions()"
+          [nota]="noteOf(t)"
+          [esAccion]="isAction(t)"
+          [esPendiente]="isPending(t)"
+          [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
+          (verConversacion)="openConversation(t)"
+          (crearTarea)="openTicketTask(t)"
+          (asignar)="openAssign(t)"
+          (cambiarEstado)="changeStatus(t, $event)"
+          (guardarNota)="onGuardarNota(t, $event)"
+          (toggleAccion)="toggleAction(t)"
+          (togglePendiente)="togglePending(t)" />
+      }
+    </div>
+
+    <div class="hd-pageinfo">
+      <span>Página {{ pageIndex() + 1 }} de {{ totalPages() }} · {{ tabTotal() }} tickets</span>
+      @if (hayMasPaginas()) {
+        <span class="hd-pageinfo-more"><mat-icon>arrow_forward</mat-icon> hay más en la siguiente página</span>
+      }
+    </div>
+
+    <mat-paginator
+      [length]="paginatorLength()"
+      [pageIndex]="pageIndex()"
+      [pageSize]="pageSize()"
+      [hidePageSize]="true"
+      [showFirstLastButtons]="true"
+      (page)="onPage($event)"
+      aria-label="Páginas de tickets">
+    </mat-paginator>
+  }
+}

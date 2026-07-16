@@ -1,0 +1,13 @@
+# Excluir solo lo pesado/transitorio. Quedan disponibles: src/, pom.xml, mvnw, .mvn
+# y target/quarkus-app. Así funcionan AMBOS Dockerfiles:
+#  - Dockerfile.multistage → compila desde src/ (necesita el código fuente).
+#  - Dockerfile.jvm/native → usan el fast-jar ya construido (target/quarkus-app).
+.git
+.idea
+*.iml
+target/classes
+target/test-classes
+target/generated-sources
+target/generated-test-sources
+target/maven-status
+target/maven-archiver

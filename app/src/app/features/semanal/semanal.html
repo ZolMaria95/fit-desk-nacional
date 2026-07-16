@@ -1,0 +1,141 @@
+<div class="sem-toolbar">
+  <h2>HelpDesk Semanal</h2>
+  @if (mostrarSelector()) {
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="sem-team">
+      <mat-label>Equipo</mat-label>
+      <mat-select [ngModel]="semanalTeam()" (ngModelChange)="selectTeam($event)">
+        @for (b of boards(); track b.codigo) {
+          <mat-option [value]="b.codigo">{{ b.equipo || b.nombre }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+  <span class="grow"></span>
+  <div class="sem-nav">
+    <button mat-icon-button (click)="prevMonth()" aria-label="Mes anterior"><mat-icon>chevron_left</mat-icon></button>
+    <span class="sem-period">{{ periodLabel() }}</span>
+    <button mat-icon-button (click)="nextMonth()" aria-label="Mes siguiente"><mat-icon>chevron_right</mat-icon></button>
+    <button mat-stroked-button (click)="goToday()">Hoy</button>
+  </div>
+</div>
+
+<div class="sem-layout">
+  <!-- Calendario -->
+  <section class="sem-calendar-wrap">
+    <div class="sem-calendar-header">
+      <h3>{{ periodLabel() }}</h3>
+      <span class="sem-legend">
+        <span class="leg"><span class="dot dot-current"></span>Semana actual</span>
+        <span class="leg"><span class="dot dot-assigned"></span>Asignado</span>
+        <span class="leg"><span class="dot dot-empty"></span>Sin asignar</span>
+      </span>
+    </div>
+
+    <div class="sem-calendar">
+      @for (d of DAY_LABELS; track d) {
+        <div class="sem-dayname">{{ d }}</div>
+      }
+      @for (c of calendarCells(); track $index) {
+        <button
+          class="sem-cell"
+          [class.other]="c.isOther"
+          [class.today]="c.isToday"
+          [class.friday]="c.isFri"
+          [class.current]="c.isCurrentWeek && !c.assigned"
+          [class.assigned]="c.assigned"
+          [class.cur-assigned]="c.isCurrentWeek && c.assigned"
+          [style.background]="c.color?.bg || null"
+          [style.borderColor]="c.assigned ? (c.isToday ? 'var(--brand)' : c.color!.fg + '55') : null"
+          (click)="onCellClick(c)"
+        >
+          <span class="sem-cell-num" [style.color]="c.color?.fg || null">{{ c.dayNum }}</span>
+          @if (c.isFri && c.assigned) {
+            <span class="sem-cell-chip" [style.background]="c.color!.fg" [title]="c.assigneeFull">{{ c.assigneeShort }}</span>
+          }
+        </button>
+      }
+    </div>
+  </section>
+
+  <!-- Resumen lateral -->
+  <aside class="sem-summary">
+    <!-- Semana actual -->
+    <div class="sem-card sem-current" [style.borderLeftColor]="currentWeek().color?.fg || null">
+      <div class="sem-card-label">Semana actual</div>
+      <div class="sem-range">{{ currentWeek().range }}</div>
+      <div class="sem-assignee" [class.empty]="!currentWeek().color" [style.color]="currentWeek().color?.fg || null">
+        {{ currentWeek().name }}
+      </div>
+      <button mat-flat-button color="primary" class="sm" (click)="openAssign(currentWeek().key)">Asignar / Editar</button>
+    </div>
+
+    <!-- Tickets resueltos -->
+    <div class="sem-block">
+      <div class="sem-block-head">
+        <span class="sem-block-title">Tickets resueltos</span>
+        <span class="sem-count">{{ weekTickets().length }}</span>
+      </div>
+      <div class="sem-week-pill">
+        <span>{{ selectedWeek().range }}</span>
+        @if (selectedWeek().short) {
+          <span class="tech" [style.background]="selectedWeek().color?.bg || null" [style.color]="selectedWeek().color?.fg || null">{{ selectedWeek().short }}</span>
+        }
+      </div>
+
+      <div class="sem-tickets">
+        @for (t of weekTickets(); track $index) {
+          <div class="sem-ticket">
+            <span class="t-id">#{{ t.id }}</span>
+            <span class="t-desc" [title]="t.desc">{{ t.desc }}</span>
+            <button class="t-del" (click)="removeTicket($index)" aria-label="Quitar">✕</button>
+          </div>
+        } @empty {
+          <div class="sem-empty">Sin tickets registrados</div>
+        }
+      </div>
+
+      <form class="sem-add" (submit)="$event.preventDefault(); addTicket()">
+        <input class="t-in id" [(ngModel)]="ticketId" name="tid" placeholder="N° ticket" maxlength="20" autocomplete="off" />
+        <input class="t-in" [(ngModel)]="ticketDesc" name="tdesc" placeholder="Descripción (opcional)" autocomplete="off" />
+        <button mat-flat-button color="primary" type="submit" aria-label="Agregar"><mat-icon>add</mat-icon></button>
+      </form>
+    </div>
+
+    <!-- Próximas semanas -->
+    <div class="sem-block">
+      <div class="sem-block-head">
+        <span class="sem-block-title">Próximas semanas</span>
+        <span class="sem-count">{{ nextCount() }}</span>
+      </div>
+      <div class="sem-weeks">
+        @for (w of nextWeeks(); track w.key) {
+          <button class="sem-week-item" (click)="selectWeek(w.key); openAssign(w.key)">
+            <span class="w-range">{{ w.range }}</span>
+            @if (w.assigned) {
+              <span class="w-name" [style.background]="w.color?.bg || null" [style.color]="w.color?.fg || null" [title]="w.full">{{ w.short }}</span>
+            } @else {
+              <span class="w-name empty">Sin asignar</span>
+            }
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Resumen de asignaciones -->
+    <div class="sem-block">
+      <div class="sem-block-head">
+        <span class="sem-block-title">Resumen de asignaciones</span>
+      </div>
+      <div class="sem-stats">
+        @for (s of stats(); track s.id) {
+          <div class="sem-stat" [style.borderLeftColor]="s.color.fg">
+            <span class="s-name" [style.color]="s.color.fg">{{ s.name }}</span>
+            <span class="s-count" [style.color]="s.color.fg">{{ s.count }} {{ s.count === 1 ? 'semana' : 'semanas' }}</span>
+          </div>
+        } @empty {
+          <div class="sem-empty">Sin asignaciones registradas</div>
+        }
+      </div>
+    </div>
+  </aside>
+</div>

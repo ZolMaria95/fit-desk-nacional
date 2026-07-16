@@ -1,0 +1,127 @@
+<div class="bandeja">
+  <header class="bandeja-head">
+    <h1>Bandeja de equipo</h1>
+    <button mat-stroked-button (click)="cargar()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon> Actualizar
+    </button>
+  </header>
+
+  @if (loading()) {
+    <div class="center"><mat-spinner diameter="32"></mat-spinner></div>
+  } @else {
+    <!-- ── Transferencias entrantes ── -->
+    <section>
+      <h2>Transferencias entrantes <span class="count">{{ transferencias().length }}</span></h2>
+      @if (!transferencias().length) {
+        <p class="empty">No hay transferencias pendientes dirigidas a tus equipos.</p>
+      } @else {
+        <div class="grid">
+          @for (t of transferencias(); track t.id) {
+            <div class="b-card accent-pend">
+              <div class="b-head">
+                <div class="b-head-top">
+                  <span class="b-id">{{ t.tareaCodigo }}</span>
+                  <span class="b-spacer"></span>
+                  <span class="b-badge estado-pend">Pendiente</span>
+                </div>
+                <div class="b-route"><mat-icon inline>swap_horiz</mat-icon> {{ t.equipoOrigen }} → {{ t.equipoDestino }}</div>
+              </div>
+              <div class="b-body">
+                <div class="b-subject" [title]="t.tareaTitulo">{{ t.tareaTitulo || '(sin título)' }}</div>
+                @if (t.clienteTarea) { <div class="b-meta"><mat-icon>business</mat-icon> {{ t.clienteTarea }}</div> }
+                @if (t.despachadorOrigen) { <div class="b-meta"><mat-icon>person</mat-icon> Envía: {{ t.despachadorOrigen }}</div> }
+                @if (t.motivo) { <div class="b-motivo">"{{ t.motivo }}"</div> }
+              </div>
+              <div class="b-foot">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="asignar">
+                  <mat-label>Asignar a</mat-label>
+                  <mat-select [(ngModel)]="asignadoSel[t.id]">
+                    @for (m of miembrosDe(t.equipoDestinoId); track m.helpdeskUserId) {
+                      <mat-option [value]="m.helpdeskUserId">{{ m.nombre }}</mat-option>
+                    } @empty {
+                      <mat-option [value]="null" disabled>Sin miembros</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <span class="b-foot-spacer"></span>
+                <button mat-flat-button color="primary" [disabled]="busy() === 't-' + t.id" (click)="aceptar(t)">Aceptar</button>
+                <button mat-button class="danger" [disabled]="busy() === 't-' + t.id" (click)="rechazarTransferencia(t)">Rechazar</button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- ── Solicitudes de Especialistas ── -->
+    <section>
+      <h2>Solicitudes de Especialistas <span class="count">{{ solicitudes().length }}</span></h2>
+      @if (!solicitudes().length) {
+        <p class="empty">No hay solicitudes pendientes sobre tareas de tus equipos.</p>
+      } @else {
+        <div class="grid">
+          @for (s of solicitudes(); track s.id) {
+            <div class="b-card accent-sol">
+              <div class="b-head">
+                <div class="b-head-top">
+                  <span class="b-id">{{ s.tareaCodigo }}</span>
+                  <span class="b-spacer"></span>
+                  <span class="b-badge badge-tipo">{{ s.tipo === 'TRANSFERENCIA' ? 'Transferir' : 'Reasignar' }}</span>
+                </div>
+                <div class="b-route"><mat-icon inline>campaign</mat-icon> Pide: {{ s.solicitante }}</div>
+              </div>
+              <div class="b-body">
+                <div class="b-subject" [title]="s.tareaTitulo">{{ s.tareaTitulo || '(sin título)' }}</div>
+                @if (s.tipo === 'TRANSFERENCIA' && s.equipoDestino) {
+                  <div class="b-meta"><mat-icon>arrow_forward</mat-icon> Sugiere: {{ s.equipoDestino }}</div>
+                }
+                @if (s.tipo === 'REASIGNACION' && s.asignadoSugerido) {
+                  <div class="b-meta"><mat-icon>arrow_forward</mat-icon> Sugiere: {{ s.asignadoSugerido }}</div>
+                }
+                @if (s.motivo) { <div class="b-motivo">"{{ s.motivo }}"</div> }
+              </div>
+              <div class="b-foot">
+                <span class="b-foot-spacer"></span>
+                <button mat-flat-button color="primary" [disabled]="busy() === 's-' + s.id" (click)="aprobar(s)">Aprobar</button>
+                <button mat-button class="danger" [disabled]="busy() === 's-' + s.id" (click)="rechazarSolicitud(s)">Rechazar</button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <!-- ── Trabajo de mi equipo (aceptado, de otros tableros) ── -->
+    <section>
+      <h2>Trabajo de mi equipo (de otros tableros) <span class="count">{{ aceptadas().length }}</span></h2>
+      @if (!aceptadas().length) {
+        <p class="empty">Nadie de tus equipos tiene tareas transferidas de otros tableros.</p>
+      } @else {
+        <div class="grid">
+          @for (t of aceptadas(); track t.id) {
+            <div class="b-card accent-done">
+              <div class="b-head">
+                <div class="b-head-top">
+                  <span class="b-id">{{ t.tareaCodigo }}</span>
+                  <span class="b-spacer"></span>
+                  <span class="b-badge estado-done">Aceptada</span>
+                </div>
+                <div class="b-route"><mat-icon inline>arrow_forward</mat-icon> de {{ t.equipoOrigen }}</div>
+              </div>
+              <div class="b-body">
+                <div class="b-subject" [title]="t.tareaTitulo">{{ t.tareaTitulo || '(sin título)' }}</div>
+                @if (t.clienteTarea) { <div class="b-meta"><mat-icon>business</mat-icon> {{ t.clienteTarea }}</div> }
+              </div>
+              <div class="b-foot">
+                <span class="b-assignee">
+                  <mat-icon>person</mat-icon>
+                  <span class="b-assignee-name">Lleva: {{ t.asignadoDestino || '—' }}</span>
+                </span>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </section>
+  }
+</div>

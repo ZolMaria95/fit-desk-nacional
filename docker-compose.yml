@@ -1,0 +1,63 @@
+# =====================================================================
+# FitDesk · Stack completo en contenedores (Fase 4)
+# ---------------------------------------------------------------------
+# Levanta TODO con un comando:  docker compose up --build
+#   - db       : PostgreSQL (datos en el volumen fitdesk_pgdata)
+#   - backend  : Quarkus (JVM), en :8080
+#   - frontend : Angular servido por Nginx, en :8081
+#
+# El frontend (build `-c quarkus`) habla SOLO con el backend (datos + proxy del
+# HelpDesk); Firebase/GitPages quedan intactos (esto es el stack nuevo en paralelo).
+# En AWS: `db` → RDS, y las credenciales/URLs salen de Secrets Manager (no aquí).
+#
+# NOTA: usa el mismo volumen que backend/docker-compose.yml; no corras ambos a la
+# vez (chocan puerto 5432 y contenedor fitdesk-db). Este es el stack full; el otro
+# es solo la BD para desarrollo con el jar local.
+# =====================================================================
+services:
+  db:
+    image: postgres:16
+    container_name: fitdesk-db
+    environment:
+      POSTGRES_DB: fitdesk
+      POSTGRES_USER: fitdesk
+      POSTGRES_PASSWORD: fitdesk_local   # solo local; en AWS via Secrets Manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - fitdesk_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitdesk -d fitdesk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: src/main/docker/Dockerfile.multistage
+    container_name: fitdesk-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Override por env var (MicroProfile Config los mapea a las propiedades Quarkus).
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://db:5432/fitdesk
+      QUARKUS_DATASOURCE_USERNAME: fitdesk
+      QUARKUS_DATASOURCE_PASSWORD: fitdesk_local
+      # CORS: origen del frontend contenedorizado.
+      QUARKUS_HTTP_CORS_ORIGINS: http://localhost:8081
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./app
+    container_name: fitdesk-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+volumes:
+  fitdesk_pgdata:

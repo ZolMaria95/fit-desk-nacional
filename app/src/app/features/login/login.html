@@ -1,0 +1,33 @@
+<div class="login-wrap">
+  <div class="login-brand">
+    <div class="brand-mark">SW</div>
+    <div class="brand-title">Fit-Desk</div>
+    <div class="brand-subtitle">Soft Warehouse SA — Uso interno</div>
+  </div>
+
+  <mat-card class="login-card" appearance="raised">
+    <h2>Ingresar al sistema</h2>
+
+    <form (ngSubmit)="submit()" autocomplete="off">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Usuario Helpdesk</mat-label>
+        <input matInput name="usuario" [(ngModel)]="usuario" placeholder="Ej. JPHP001" required autofocus />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Contraseña</mat-label>
+        <input matInput type="password" name="password" [(ngModel)]="password" required />
+      </mat-form-field>
+
+      @if (error()) {
+        <div class="login-error">{{ error() }}</div>
+      }
+
+      <button mat-flat-button color="primary" class="full submit-btn" type="submit" [disabled]="loading()">
+        {{ loading() ? 'Verificando…' : 'Ingresar' }}
+      </button>
+    </form>
+  </mat-card>
+
+  <div class="login-footer">Herramienta interna — no compartir credenciales</div>
+</div>

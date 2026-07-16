@@ -1,0 +1,196 @@
+// Tema de Angular Material con la paleta de marca Fit-Daily / FitBank.
+// Las paletas tonales se generan en _theme-colors.scss a partir de los colores
+// de marca (primary #048ABF, secondary #30BAD9, tertiary #F2811D) con
+// `ng generate @angular/material:theme-color`.
+@use '@angular/material' as mat;
+@use './theme-colors' as brand;
+
+html {
+  height: 100%;
+  @include mat.theme(
+    (
+      color: (
+        primary: brand.$primary-palette,
+        tertiary: brand.$tertiary-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
+  // Colores de marca para los componentes propios (board, cards, etc.).
+  --brand: #048abf;
+  --brand-mid: #30bad9;
+  --brand-dark: #0390bc;
+  --accent: #f29e38;
+  --accent-dark: #f2811d;
+  --bg: #f2f2f2;
+
+  // Safari no resuelve bien `light-dark()` de las variables del sistema M3 → los
+  // fondos salen transparentes. Fijamos las superficies a valores sólidos (tonos
+  // claros de la paleta neutral). En Chrome se ve igual (son los mismos tonos light).
+  --mat-sys-background: #f6fafe;
+  --mat-sys-surface: #f6fafe;
+  --mat-sys-surface-dim: #dcdce0;
+  --mat-sys-surface-bright: #f6fafe;
+  --mat-sys-surface-container-lowest: #ffffff;
+  --mat-sys-surface-container-low: #f0f4f9;
+  --mat-sys-surface-container: #ebeef3;
+  --mat-sys-surface-container-high: #e5e8ed;
+  --mat-sys-surface-container-highest: #dfe3e7;
+}
+
+body {
+  color-scheme: light;
+
+  // Fondo gris claro de la paleta de marca (#F2F2F2).
+  background-color: var(--bg);
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-body-medium);
+
+  // Reset the user agent margin.
+  margin: 0;
+  height: 100%;
+}
+
+// Fondo sólido blanco en superficies flotantes (Safari las dejaba transparentes).
+.mat-mdc-dialog-surface,
+.mat-mdc-menu-panel,
+.mat-mdc-select-panel,
+.mat-mdc-autocomplete-panel,
+.cdk-overlay-pane .mat-mdc-card {
+  background-color: #ffffff !important;
+}
+.cdk-overlay-dark-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+// Buscador sticky dentro de los mat-select de filtros (el panel vive en el overlay).
+.sel-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+
+  .sel-search-icon {
+    flex: none;
+    color: var(--mat-sys-primary, #048abf);
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+  }
+
+  input {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 13px;
+    background: #f4f6f9;
+    border: 1px solid var(--mat-sys-outline, #bdbdbd);
+    border-radius: 16px;
+    padding: 6px 12px;
+    outline: none;
+
+    &:focus {
+      border-color: var(--mat-sys-primary, #048abf);
+      background: #fff;
+    }
+
+    &::placeholder {
+      color: #8a8a9a;
+    }
+  }
+}
+// Botón "Listo" para cerrar la lista de un filtro (multi-select del drawer).
+.sel-close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--mat-sys-primary, #048abf);
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  padding: 4px 12px 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+  &:hover { filter: brightness(1.06); }
+  &:active { transform: translateY(1px); }
+}
+
+// Encabezado sticky dentro de un mat-select (panel en overlay): buscador +
+// "Seleccionar todos" (filtros del board).
+.sel-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #ffffff;
+  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  .sel-head-search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    mat-icon {
+      flex: none;
+      color: var(--mat-sys-primary, #048abf);
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+    }
+
+    input {
+      flex: 1;
+      min-width: 0;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 13px;
+      background: #f4f6f9;
+      border: 1px solid var(--mat-sys-outline, #bdbdbd);
+      border-radius: 16px;
+      padding: 6px 12px;
+      outline: none;
+
+      &:focus { border-color: var(--mat-sys-primary, #048abf); background: #fff; }
+      &::placeholder { color: #8a8a9a; }
+    }
+  }
+
+  .sel-head-all {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mat-sys-primary, #048abf);
+    padding: 4px 6px;
+    border-radius: 6px;
+
+    &:hover { background: #f0f4f9; }
+  }
+}
+
+/* You can add global styles to this file, and also import other style files */

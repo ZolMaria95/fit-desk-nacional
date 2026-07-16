@@ -1,0 +1,48 @@
+<h2 mat-dialog-title>{{ editando ? 'Editar equipo' : 'Nuevo equipo' }}</h2>
+
+<mat-dialog-content>
+  <div class="dialog-form">
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Regional</mat-label>
+      <mat-select [(ngModel)]="form.regionalId" name="er">
+        @for (r of regionales; track r.id) { <mat-option [value]="r.id">{{ r.nombre }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Código</mat-label>
+      <input matInput [(ngModel)]="form.codigo" name="ec" placeholder="QUITO" [disabled]="editando" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>Nombre</mat-label>
+      <input matInput [(ngModel)]="form.nombre" name="en" placeholder="Equipo Quito" />
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Responsable de equipo (opcional, del HelpDesk)</mat-label>
+      <mat-select [(ngModel)]="form.responsableHid" name="resp">
+        <div class="opt-buscar-wrap" (click)="$event.stopPropagation()">
+          <input class="opt-buscar" placeholder="Buscar empleado…" [ngModel]="hdBuscar()"
+                 [ngModelOptions]="{ standalone: true }" (ngModelChange)="hdBuscar.set($event)"
+                 (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" />
+        </div>
+        <mat-option [value]="null">— sin responsable —</mat-option>
+        @for (u of hdFiltrados(); track u.id) {
+          <mat-option [value]="u.id">{{ u.name }} ({{ u.id }})</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    @if (editando) {
+      <mat-slide-toggle class="full" [(ngModel)]="form.activo" name="ea">
+        {{ form.activo ? 'Activo' : 'Inactivo' }}
+      </mat-slide-toggle>
+    }
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancelar()">Cancelar</button>
+  <button mat-flat-button color="primary" (click)="crear()" [disabled]="guardando()">
+    <mat-icon>{{ editando ? 'save' : 'add' }}</mat-icon> {{ editando ? 'Guardar' : 'Crear equipo' }}
+  </button>
+</mat-dialog-actions>

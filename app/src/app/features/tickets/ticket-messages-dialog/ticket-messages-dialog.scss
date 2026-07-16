@@ -1,0 +1,568 @@
+:host {
+  // Diálogo de alto acotado: cabecera y composer fijos, la conversación scrollea
+  // en el medio. Evita que un mensaje largo empuje el botón Enviar fuera de pantalla.
+  display: flex;
+  flex-direction: column;
+  // Piso de altura para que el área de lectura sea cómoda aun con pocos mensajes
+  // (se acota a la pantalla en viewports cortos). El techo es 88vh.
+  min-height: min(520px, 88vh);
+  max-height: 88vh;
+  overflow: hidden;
+}
+
+.conv-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  flex: 0 0 auto;
+
+  .ticket-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: var(--mat-sys-primary);
+  }
+  .cliente {
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--mat-sys-surface-container-high);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .tipo {
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--mat-sys-outline-variant);
+    color: var(--mat-sys-on-surface-variant);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .estatus {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 12px;
+  }
+  .spacer {
+    flex: 1;
+  }
+}
+
+.asunto {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 0 24px 8px;
+  color: var(--mat-sys-on-surface);
+}
+
+.ticket-attach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px 6px;
+
+  .ticket-attach-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  // Botón de descarga compacto: roba menos alto y deja más para la lectura.
+  .mat-mdc-outlined-button {
+    --mdc-outlined-button-container-height: 30px;
+    min-height: 30px;
+    line-height: 30px;
+    padding: 0 12px;
+    font-size: 12px;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      margin-right: 4px;
+    }
+  }
+}
+
+.conv-body {
+  // Único elemento que crece/encoge y scrollea. min-height: 0 permite que encoja
+  // por debajo de su contenido (y por tanto scrollee) en pantallas cortas, en vez
+  // de empujar el composer fuera del diálogo y cortarlo.
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  background: #f4f6f9;
+  padding: 12px;
+}
+
+.conv-loading,
+.conv-empty {
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+  padding: 24px;
+  font-size: 13px;
+}
+
+.conv-msg {
+  max-width: 80%;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+  &.conv-emp {
+    margin-left: auto;
+    background: #e3f0fb;
+    border: 1px solid #c6e0f5;
+  }
+  &.conv-cli {
+    margin-right: auto;
+    background: #fff;
+    border: 1px solid var(--mat-sys-outline-variant);
+  }
+  &.conv-sys {
+    margin: 8px auto;
+    max-width: 90%;
+    background: transparent;
+    box-shadow: none;
+    text-align: center;
+    color: var(--mat-sys-on-surface-variant);
+    font-size: 12px;
+    font-style: italic;
+  }
+}
+
+.conv-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 11px;
+
+  .conv-user {
+    font-weight: 700;
+    font-family: inherit; // nombre completo del usuario: se lee mejor en fuente normal
+  }
+  .conv-date {
+    color: var(--mat-sys-on-surface-variant);
+    margin-left: auto; // empuja fecha + botón editar al extremo derecho, agrupados
+  }
+
+  // Botón ✎ inline (solo si el API dice can_edit): compacto, no roba alto al globo.
+  .conv-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    padding: 2px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--mat-sys-on-surface-variant);
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+    &:hover:not(:disabled) {
+      color: var(--mat-sys-primary, #048abf);
+    }
+    &:disabled {
+      cursor: default;
+      opacity: 0.5;
+    }
+  }
+}
+
+.conv-text {
+  line-height: 1.4;
+  overflow-wrap: anywhere; // el texto (incluidas palabras/URLs largas) siempre envuelve
+  word-break: break-word;
+  overflow-x: auto; // red de seguridad: contenido rígido (tablas) scrollea, no desborda
+
+  // Preformateado: envolver en vez de empujar el ancho.
+  :where(pre, code) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  :where(pre) {
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 6px 0;
+    font-size: 12px;
+  }
+  :where(code) {
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 0.92em;
+  }
+  :where(pre code) { // código dentro de bloque: sin doble fondo
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+
+  // Viñetas y numeración: sangría dentro del globo.
+  :where(ul, ol) {
+    margin: 4px 0;
+    padding-left: 22px;
+  }
+  :where(li) {
+    margin: 2px 0;
+  }
+
+  :where(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    cursor: zoom-in;
+    margin: 4px 0;
+    float: none !important; // evita íconos embebidos flotando fuera del globo
+  }
+  :where(a) {
+    color: var(--mat-sys-primary);
+    word-break: break-all;
+  }
+  :where(table) {
+    max-width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  :where(td, th) {
+    border: 1px solid var(--mat-sys-outline-variant);
+    padding: 2px 6px;
+  }
+  :where(th) { background: rgba(0, 0, 0, 0.04); font-weight: 700; }
+
+  // Párrafos, encabezados y citas del contenido pegado (ChatGPT/web): compactos.
+  :where(p) { margin: 4px 0; }
+  :where(h1, h2, h3, h4, h5, h6) { margin: 8px 0 4px; line-height: 1.25; font-weight: 700; }
+  :where(h1) { font-size: 1.25em; }
+  :where(h2) { font-size: 1.15em; }
+  :where(h3) { font-size: 1.08em; }
+  :where(h4, h5, h6) { font-size: 1em; }
+  :where(blockquote) {
+    margin: 6px 0;
+    padding: 2px 0 2px 10px;
+    border-left: 3px solid var(--mat-sys-outline-variant);
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.conv-attach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.conv-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  background: var(--mat-sys-surface);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  mat-icon {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+  }
+  &:hover {
+    border-color: var(--mat-sys-primary);
+  }
+}
+
+// ── Composer ── (fijo al pie del diálogo, siempre visible)
+.composer {
+  position: relative;
+  // Flex column que puede encoger, pero NO por debajo de su contenido (barra +
+  // texto mínimo + fila Enviar): por eso NO lleva `min-height: 0` — con él, el
+  // reparto de flex lo encogía bajo su contenido y la fila de Enviar se recortaba
+  // contra el borde del diálogo. La conversación (`.conv-body`, con `min-height: 0`)
+  // es la que absorbe la falta de espacio y scrollea. El tope 55vh evita que un
+  // mensaje largo acapare toda la altura (el área de texto scrollea dentro).
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  max-height: 55vh;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  padding: 6px 24px 16px;
+
+  // Arrastrando archivos encima: resalta y muestra la pista de "soltar aquí".
+  &.drag-over {
+    background: rgba(4, 138, 191, 0.06);
+
+    .composer-drop-hint {
+      display: flex;
+    }
+  }
+}
+
+.composer-drop-hint {
+  display: none;
+  position: absolute;
+  inset: 4px;
+  z-index: 2;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 2px dashed var(--mat-sys-primary, #048abf);
+  border-radius: 14px;
+  background: rgba(244, 246, 249, 0.92);
+  color: var(--mat-sys-primary, #048abf);
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none; // que los eventos de drag lleguen al contenedor
+
+  mat-icon {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+  }
+}
+
+// Banner de edición: aparece sobre la barra mientras se edita un mensaje propio.
+.composer-editing {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(4, 138, 191, 0.08);
+  color: var(--mat-sys-primary, #048abf);
+  font-size: 12px;
+  font-weight: 600;
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+  .spacer {
+    flex: 1;
+  }
+}
+
+.composer-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  .spacer {
+    flex: 1;
+  }
+}
+
+// Editor de respuesta con formato (contenteditable). Pegar/escribir aquí
+// conserva el formato porque viaja como HTML (negrita/cursiva/subrayado,
+// colores, etc.). Burbuja redondeada como el chat input del Helpdesk; arranca
+// compacta (44px) y CRECE con el texto para escribir cómodo, con scroll al tope.
+.composer-input {
+  flex: 0 1 auto; // dentro del composer flex: encoge y scrollea cuando falta espacio
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  max-height: none; // el alto efectivo lo limita el composer (55vh); aquí solo scroll
+  overflow-y: auto;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  border: 1px solid #d4d6db;
+  border-radius: 18px;
+  padding: 10px 14px;
+  background: #fff;
+  color: var(--mat-sys-on-surface);
+  outline: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap; // conserva espacios y saltos del contenido pegado
+
+  &:focus {
+    border-color: var(--mat-sys-primary, #048abf);
+    box-shadow: 0 0 0 2px rgba(4, 138, 191, 0.15);
+  }
+
+  &:empty::before {
+    content: attr(data-placeholder);
+    color: var(--mat-sys-on-surface-variant);
+    pointer-events: none;
+  }
+
+  // Mismo aspecto que el mensaje publicado al escribir/pegar código y viñetas.
+  :where(pre) {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 6px 0;
+    font-size: 12px;
+  }
+  :where(code) {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-size: 0.92em;
+  }
+  :where(pre code) {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+  }
+  :where(ul, ol) {
+    margin: 4px 0;
+    padding-left: 22px;
+  }
+  :where(li) { margin: 2px 0; }
+  :where(p) { margin: 4px 0; }
+  :where(h1, h2, h3, h4, h5, h6) { margin: 8px 0 4px; line-height: 1.25; font-weight: 700; }
+  :where(h1) { font-size: 1.25em; }
+  :where(h2) { font-size: 1.15em; }
+  :where(h3) { font-size: 1.08em; }
+  :where(h4, h5, h6) { font-size: 1em; }
+  :where(blockquote) {
+    margin: 6px 0;
+    padding: 2px 0 2px 10px;
+    border-left: 3px solid var(--mat-sys-outline-variant);
+    color: var(--mat-sys-on-surface-variant);
+  }
+  :where(table) { max-width: 100%; border-collapse: collapse; font-size: 12px; }
+  :where(td, th) { border: 1px solid var(--mat-sys-outline-variant); padding: 2px 6px; }
+  :where(th) { background: rgba(0, 0, 0, 0.04); font-weight: 700; }
+}
+
+.composer-actions {
+  flex: 0 0 auto; // Enviar/adjuntos siempre visibles al pie del composer
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+
+  .attach-label {
+    display: inline-flex;
+    cursor: pointer;
+    color: var(--mat-sys-on-surface-variant);
+  }
+  .files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+  }
+  .file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 220px;
+    padding: 2px 4px 2px 8px;
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 14px;
+    background: var(--mat-sys-surface-container-high, #eef1f5);
+    font-size: 12px;
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      color: var(--mat-sys-on-surface-variant);
+    }
+    .file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-remove {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      color: var(--mat-sys-on-surface-variant);
+      font-size: 12px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 50%;
+
+      &:hover {
+        color: var(--mat-sys-error, #d32f2f);
+      }
+      &:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+    }
+  }
+  .spacer {
+    flex: 1;
+  }
+  .send-status {
+    font-size: 12px;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+// ── Lightbox ──
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+
+  img {
+    max-width: 92vw;
+    max-height: 92vh;
+    border-radius: 6px;
+  }
+
+  .lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 28px;
+    cursor: pointer;
+  }
+}
+
+.conv-older {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 10px;
+}
+
+.conv-expired {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant, #555);
+
+  mat-icon {
+    font-size: 40px;
+    width: 40px;
+    height: 40px;
+    color: var(--brand, #048abf);
+  }
+  p { margin: 0; max-width: 320px; }
+}
