@@ -117,6 +117,10 @@ export class ReunionDialog {
     }
     // El consultor SIEMPRE queda como responsable (además de ocultar el picker).
     const assignee = this.puedeAsignarAOtros() ? this.assignee() || null : this.auth.session()?.id || null;
+    // El cliente se guarda por código, pero la tarjeta muestra el NOMBRE del API:
+    // lo resolvemos aquí para que se pinte de inmediato (igual que las tareas con ticket).
+    const clientId = this.clientId();
+    const cli = this.perfil.misClientes().find((c) => c.codigo === clientId);
     const patch: Partial<Story> = {
       title: tema,
       tipo: 'REUNION',
@@ -126,7 +130,8 @@ export class ReunionDialog {
       inicio,
       fin,
       assignee,
-      client: this.clientId() || null,
+      client: clientId || null,
+      clientName: cli?.nombre || '',
     };
     if (this.isNew) {
       this.data.addStory({ ...patch, status: 'todo', priority: 'media' });

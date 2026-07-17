@@ -239,7 +239,12 @@
                   </button>
                 }
               }
-              <span class="prio-badge" [class]="'prio-' + card.priority">{{ $any(PRIORITY_LABELS)[card.priority] }}</span>
+              @if (card.ticket && ticketPrio(card.ticket)) {
+                <span class="prio-badge" [class]="prioClase(ticketPrio(card.ticket))"
+                      matTooltip="Prioridad del ticket">P{{ ticketPrio(card.ticket) }}</span>
+              } @else {
+                <span class="prio-badge" [class]="'prio-' + card.priority">{{ $any(PRIORITY_LABELS)[card.priority] }}</span>
+              }
               @if (esForanea(card)) {
                 <span class="team-badge" matTooltip="Tarea de otro equipo (sigue en su tablero); te la asignaron">
                   <mat-icon inline>groups</mat-icon>{{ boardLabel(card.board) }}

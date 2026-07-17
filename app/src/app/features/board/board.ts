@@ -92,6 +92,9 @@ export class Board implements OnDestroy {
   readonly filtersTpl = viewChild<TemplateRef<unknown>>('filtersTpl');
 
   readonly syncing = signal(false);
+  /** Prioridad viva del ticket (orden numérico del HelpDesk) por ticketId, poblada en el sync.
+   *  Las tarjetas con ticket muestran ESTE valor en vez de la prioridad interna Alta/Media/Baja. */
+  readonly ticketPrioMap = signal<Record<string, string>>({});
 
   /** Toggle "Mi equipo" (solo RE/ADMIN): incluye en el board las tareas foráneas de mi gente. */
   readonly teamOnly = signal(false);
@@ -158,10 +161,14 @@ export class Board implements OnDestroy {
     // desactualizada) queda solo como RESPALDO si la lectura viva falla (404/ticket viejo).
     // Solo tarjetas del sprint activo con ticket → volumen acotado. Sigue siendo read-only.
     const cache = this.data.usesQuarkus() ? await this.data.getTicketEspejoCache() : null;
+    const prios: Record<string, string> = {};
     await Promise.all(
       conTicket.map(async (s) => {
         const raw = (await this.helpdesk.fetchTicketRaw(s.ticket)) ?? (cache ? cache[s.ticket] : null);
         if (!raw) return;
+        // Prioridad/orden del ticket (la del HelpDesk), para mostrarla en la tarjeta.
+        const prio = String(raw.priority ?? '').trim();
+        if (prio) prios[s.ticket] = prio;
         // El cliente de una tarea con ticket lo define el ticket (id + nombre, para
         // mostrar el nombre aunque el cliente no esté en el catálogo).
         const clientId = String(raw.client_id ?? '').trim();
@@ -184,7 +191,21 @@ export class Board implements OnDestroy {
         if (m.waiting && !s.waitingClient) this.data.setWaitingClient(s.id, true);
       }),
     );
+    this.ticketPrioMap.set(prios);
     this.syncing.set(false);
+  }
+
+  /** Prioridad/orden del ticket asociado a la tarjeta (vacío si no se ha sincronizado o no tiene). */
+  ticketPrio(ticketId?: string): string {
+    return ticketId ? this.ticketPrioMap()[ticketId] || '' : '';
+  }
+
+  /** Clase de color del badge según el orden del ticket (1 = más urgente … ≥3 = baja). */
+  prioClase(orden: string): string {
+    const n = parseInt(orden, 10);
+    if (n <= 1) return 'prio-alta';
+    if (n === 2) return 'prio-media';
+    return 'prio-baja';
   }
 
   // ── Helpers expuestos al template ──
