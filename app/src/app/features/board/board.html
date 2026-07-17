@@ -273,7 +273,7 @@
                 <div class="reunion-horario"><mat-icon inline>schedule</mat-icon> {{ fmtReunion(card.inicio, card.fin) }}</div>
               }
               @if (card.link) {
-                <a class="reunion-link" [href]="card.link" target="_blank" rel="noopener" (click)="$event.stopPropagation()">
+                <a class="reunion-link" [href]="linkHref(card.link)" target="_blank" rel="noopener noreferrer" (click)="$event.stopPropagation()">
                   <mat-icon inline>link</mat-icon> Abrir enlace
                 </a>
               }

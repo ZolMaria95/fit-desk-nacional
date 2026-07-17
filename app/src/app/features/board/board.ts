@@ -633,6 +633,15 @@ export class Board implements OnDestroy {
     return subtipo === 'PRESENTACION' ? 'Presentación' : subtipo === 'CAPACITACION' ? 'Capacitación' : 'Reunión';
   }
 
+  /** URL absoluta del enlace de reunión. Si viene sin esquema (p.ej. "meet.google.com/…"),
+   *  el navegador lo trataría como ruta relativa y, dentro de la PWA, recargaría la app
+   *  ("duplica la PWA"). Le anteponemos https:// para que abra el sitio externo real. */
+  linkHref(link?: string): string {
+    const l = (link || '').trim();
+    if (!l) return '';
+    return /^[a-z][a-z0-9+.-]*:/i.test(l) ? l : 'https://' + l;
+  }
+
   /** Formatea el horario de una reunión: "20 jul · 14:00–15:00" (o solo el inicio). */
   fmtReunion(inicio?: string, fin?: string): string {
     if (!inicio) return '';
