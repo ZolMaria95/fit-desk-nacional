@@ -1,0 +1,18 @@
+{
+  "clients": [
+    { "id": "dolorosa",    "name": "Dolorosa",    "color": "#04BAF0" },
+    { "id": "erco",        "name": "ERCO",        "color": "#27AE60" },
+    { "id": "giron",       "name": "Girón",       "color": "#F29E3B" },
+    { "id": "austro",      "name": "Austro",      "color": "#9B59B6" },
+    { "id": "cacel",       "name": "CACEL",       "color": "#E74C3C" },
+    { "id": "julian",      "name": "Julián",      "color": "#1ABC9C" },
+    { "id": "gualaquiza",  "name": "Gualaquiza",  "color": "#2980B9" },
+    { "id": "litarg",      "name": "LITARG",      "color": "#F2811D" },
+    { "id": "vazcredit",   "name": "VazCredit",   "color": "#8E44AD" },
+    { "id": "4rios",       "name": "4Ríos",       "color": "#0390BC" },
+    { "id": "copac_austro","name": "COPAC Austro","color": "#16A085" },
+    { "id": "fininvest",   "name": "Fininvest",   "color": "#C0392B" },
+    { "id": "segura",      "name": "Segura Coop", "color": "#D35400" },
+    { "id": "puntoprestamo","name": "PuntoPréstamo","color": "#2C3E50" }
+  ]
+}

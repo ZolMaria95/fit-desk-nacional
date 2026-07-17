@@ -1,0 +1,155 @@
+{
+  "configVersion": 1,
+  "timestamp": 1784258817654,
+  "index": "/fit-desk-nacional/index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/fit-desk-nacional/favicon.ico",
+        "/fit-desk-nacional/index.html",
+        "/fit-desk-nacional/manifest.webmanifest"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "static-assets",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/fit-desk-nacional/chunk-1d0ktQxC.js",
+        "/fit-desk-nacional/chunk-5K-zrl86.js",
+        "/fit-desk-nacional/chunk-5cgOuhkU.js",
+        "/fit-desk-nacional/chunk-9X39EHOf.js",
+        "/fit-desk-nacional/chunk-B6lZExrY.js",
+        "/fit-desk-nacional/chunk-B8ogpfan.js",
+        "/fit-desk-nacional/chunk-BR01UFFd.js",
+        "/fit-desk-nacional/chunk-BTz4KASc.js",
+        "/fit-desk-nacional/chunk-BcegIiMq.js",
+        "/fit-desk-nacional/chunk-BffRIxQd.js",
+        "/fit-desk-nacional/chunk-BqKj_MH5.js",
+        "/fit-desk-nacional/chunk-Br1mg_VS.js",
+        "/fit-desk-nacional/chunk-Bu8yiQF_.js",
+        "/fit-desk-nacional/chunk-BvemRMtK.js",
+        "/fit-desk-nacional/chunk-BvzruaEh.js",
+        "/fit-desk-nacional/chunk-C4RAjMSR.js",
+        "/fit-desk-nacional/chunk-C5f3CvQ4.js",
+        "/fit-desk-nacional/chunk-CJ6W2CzF.js",
+        "/fit-desk-nacional/chunk-CblPchTW.js",
+        "/fit-desk-nacional/chunk-Ch9oe5Yw.js",
+        "/fit-desk-nacional/chunk-CouZcF_P.js",
+        "/fit-desk-nacional/chunk-D6p8RrZl.js",
+        "/fit-desk-nacional/chunk-DBXlc-U7.js",
+        "/fit-desk-nacional/chunk-DLlAVdKy.js",
+        "/fit-desk-nacional/chunk-DMLN6I5_.js",
+        "/fit-desk-nacional/chunk-Dcm_iBl2.js",
+        "/fit-desk-nacional/chunk-Dl4a-4Pl.js",
+        "/fit-desk-nacional/chunk-etbX2Ojj.js",
+        "/fit-desk-nacional/chunk-j47hLwaf.js",
+        "/fit-desk-nacional/chunk-o7943TdG.js",
+        "/fit-desk-nacional/chunk-o8KZty-f.js",
+        "/fit-desk-nacional/main-2FXQ4DFR.js",
+        "/fit-desk-nacional/styles-4E3GM6BH.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/fit-desk-nacional/apple-touch-icon.png",
+        "/fit-desk-nacional/icon-192.png",
+        "/fit-desk-nacional/icon-512.png"
+      ],
+      "patterns": []
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "seed-json",
+      "patterns": [
+        "\\/data\\/[^/]*\\.json"
+      ],
+      "strategy": "freshness",
+      "maxSize": 20,
+      "maxAge": 86400000,
+      "timeoutMs": 5000,
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "version": 1
+    }
+  ],
+  "hashTable": {
+    "/fit-desk-nacional/apple-touch-icon.png": "7d6881a16f8db39b25f45bdf6f71b532a78710a9",
+    "/fit-desk-nacional/chunk-1d0ktQxC.js": "4f7eb616b923063fd13b6f66213fb9362d567cf5",
+    "/fit-desk-nacional/chunk-5K-zrl86.js": "4bc460105eb589eeb9e68df2fc179f476607d145",
+    "/fit-desk-nacional/chunk-5cgOuhkU.js": "bbfdd01d15e79abc3a5175d9a18dc2a449b043d0",
+    "/fit-desk-nacional/chunk-9X39EHOf.js": "a413004606cf036f03e49c70d646152bf37188f7",
+    "/fit-desk-nacional/chunk-B6lZExrY.js": "d4dfb82e09799b2b04a31b5a2cae2c7b8526849f",
+    "/fit-desk-nacional/chunk-B8ogpfan.js": "bc38a8a635a2cd6b38e553653b627423c32b32fa",
+    "/fit-desk-nacional/chunk-BR01UFFd.js": "8f0aac399ef498a50478615af72e87c07afd7a5d",
+    "/fit-desk-nacional/chunk-BTz4KASc.js": "aa6f2e0315a720fd59d19dc6a395a3e485186b05",
+    "/fit-desk-nacional/chunk-BcegIiMq.js": "96cb6b36030d84f093049ccf155a20b1a04761d9",
+    "/fit-desk-nacional/chunk-BffRIxQd.js": "5981aabd6859e44db85a015e6c889ddff9943857",
+    "/fit-desk-nacional/chunk-BqKj_MH5.js": "bfdd3fbefea22a86fd69450884710f79935b56be",
+    "/fit-desk-nacional/chunk-Br1mg_VS.js": "67d0e009374e8172f14293625b48736a0c53bb8f",
+    "/fit-desk-nacional/chunk-Bu8yiQF_.js": "5ea494075b7e4b50be0dd8dc4f69807f8498cb31",
+    "/fit-desk-nacional/chunk-BvemRMtK.js": "a69de2f4e415e36ee68f09650ff7807b3dbc9bdc",
+    "/fit-desk-nacional/chunk-BvzruaEh.js": "83e9057d5af84eedb5e4e610bf1f4796562025fa",
+    "/fit-desk-nacional/chunk-C4RAjMSR.js": "e8aa1f9b64ad19b6b6c8609f69ac2fe6a047bc89",
+    "/fit-desk-nacional/chunk-C5f3CvQ4.js": "e76435fc9734d394abcd0346ca24af10033a8906",
+    "/fit-desk-nacional/chunk-CJ6W2CzF.js": "3c3e720c4568361b5bc0aa3ac264a5cd66c6edba",
+    "/fit-desk-nacional/chunk-CblPchTW.js": "5b8b9507b235c26d29a9edd770e85d48c12ac7c7",
+    "/fit-desk-nacional/chunk-Ch9oe5Yw.js": "5dffd3b1878bd28d025969f93f7d3ab66a3e66a9",
+    "/fit-desk-nacional/chunk-CouZcF_P.js": "2bf2733baa3eafde5b4c11a1e1a07b724af73c27",
+    "/fit-desk-nacional/chunk-D6p8RrZl.js": "5ed0cdea9aa4e0fdd9635ddfce857de5e08d2b34",
+    "/fit-desk-nacional/chunk-DBXlc-U7.js": "fbc2183d4f1ecd275a022bc037e6e2725a6b0d30",
+    "/fit-desk-nacional/chunk-DLlAVdKy.js": "5857fdd31caa4efadb183455083e075ef1754a13",
+    "/fit-desk-nacional/chunk-DMLN6I5_.js": "513104315913aa46577a33050846bc036369585a",
+    "/fit-desk-nacional/chunk-Dcm_iBl2.js": "7599295e4490cd504247975c23ed3269ab38d080",
+    "/fit-desk-nacional/chunk-Dl4a-4Pl.js": "76d22d21bb88d78544a21b331a4b785c67334485",
+    "/fit-desk-nacional/chunk-etbX2Ojj.js": "ed2a68b946f11bf6dfbb4830933ae48baa15d302",
+    "/fit-desk-nacional/chunk-j47hLwaf.js": "f4e0fde3f4c39af52a7d749b309261e963fe2cf3",
+    "/fit-desk-nacional/chunk-o7943TdG.js": "3e9edf91daa2f3b2ab97848ca1b4b00976ad8c57",
+    "/fit-desk-nacional/chunk-o8KZty-f.js": "5b26f40f0a165f6a1139ee84ecfeeb1b13cd302f",
+    "/fit-desk-nacional/favicon.ico": "9c39f434fe1261f68c5e3eefdf734630d99c5670",
+    "/fit-desk-nacional/icon-192.png": "c3b1dfc5689b50d1164454ad8f6fec488073c6e7",
+    "/fit-desk-nacional/icon-512.png": "eaca23c4d22e3aefcd12eb1bc43786a566c6b536",
+    "/fit-desk-nacional/index.html": "461006791e499b93e528cecdaf05e7dfc865d643",
+    "/fit-desk-nacional/main-2FXQ4DFR.js": "3ec8f9608da0f5c17b27d8792148f93f262a6cb5",
+    "/fit-desk-nacional/manifest.webmanifest": "7c8da9a198aeee884528f128ed45142eb3f1edf9",
+    "/fit-desk-nacional/styles-4E3GM6BH.css": "8e10d8af603b6433c91d0dcbf5e9300205094f3a"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}
