@@ -40,9 +40,13 @@
 
   <span class="spacer"></span>
 
-  <button mat-flat-button color="primary" (click)="openNew()">
-    <mat-icon>add</mat-icon> Tarea
+  <button mat-flat-button color="primary" [matMenuTriggerFor]="crearMenu">
+    <mat-icon>add</mat-icon> Crear <mat-icon class="crear-caret">arrow_drop_down</mat-icon>
   </button>
+  <mat-menu #crearMenu="matMenu">
+    <button mat-menu-item (click)="openNew()"><mat-icon>assignment</mat-icon> Tarea de desarrollo/soporte</button>
+    <button mat-menu-item (click)="openNewReunion()"><mat-icon>groups</mat-icon> Reunión</button>
+  </mat-menu>
   @if (puedeBorrarBoard()) {
     <button mat-stroked-button class="danger" (click)="clearBoard()">
       <mat-icon>delete_sweep</mat-icon> Borrar Board
@@ -223,13 +227,17 @@
             (click)="openDetail(card)"
           >
             <div class="card-top">
-              <span class="card-ticket">#{{ card.ticket || '—' }}</span>
-              @if (card.ticket) {
-                <button class="card-copy" (click)="copiarTicket(card.ticket, $event)"
-                        [matTooltip]="ticketCopiado() === card.ticket ? 'Copiado' : 'Copiar número'"
-                        aria-label="Copiar número de ticket">
-                  <mat-icon>{{ ticketCopiado() === card.ticket ? 'check' : 'content_copy' }}</mat-icon>
-                </button>
+              @if (esReunion(card)) {
+                <span class="reunion-badge"><mat-icon inline>groups</mat-icon> {{ subtipoLabel(card.subtipo) }}</span>
+              } @else {
+                <span class="card-ticket">#{{ card.ticket || '—' }}</span>
+                @if (card.ticket) {
+                  <button class="card-copy" (click)="copiarTicket(card.ticket, $event)"
+                          [matTooltip]="ticketCopiado() === card.ticket ? 'Copiado' : 'Copiar número'"
+                          aria-label="Copiar número de ticket">
+                    <mat-icon>{{ ticketCopiado() === card.ticket ? 'check' : 'content_copy' }}</mat-icon>
+                  </button>
+                }
               }
               <span class="prio-badge" [class]="'prio-' + card.priority">{{ $any(PRIORITY_LABELS)[card.priority] }}</span>
               @if (esForanea(card)) {
@@ -254,6 +262,17 @@
               <span class="client-name">{{ card.clientName || cl?.name }}</span>
             }
             <div class="card-title">{{ card.title }}</div>
+
+            @if (esReunion(card)) {
+              @if (card.inicio) {
+                <div class="reunion-horario"><mat-icon inline>schedule</mat-icon> {{ fmtReunion(card.inicio, card.fin) }}</div>
+              }
+              @if (card.link) {
+                <a class="reunion-link" [href]="card.link" target="_blank" rel="noopener" (click)="$event.stopPropagation()">
+                  <mat-icon inline>link</mat-icon> Abrir enlace
+                </a>
+              }
+            }
 
             @if (card.ticket && card.hdEstatus) {
               <span class="hd-estatus">{{ card.hdEstatus }}</span>
@@ -311,9 +330,14 @@
                 <mat-icon>event</mat-icon>{{ due.str || '—' }}
               </span>
               @if (member) {
-                <span class="avatar" [style.background]="member.color" [matTooltip]="member.name">{{ member.id }}</span>
+                <span class="card-assignee" [matTooltip]="member.name">
+                  <span class="ca-dot" [style.background]="member.color"></span>
+                  <span class="ca-name">{{ shortName(member.name) }}</span>
+                </span>
               } @else {
-                <span class="avatar unassigned" matTooltip="Sin asignar"></span>
+                <span class="card-assignee unassigned" matTooltip="Sin asignar">
+                  <span class="ca-dot"></span><span class="ca-name">Sin asignar</span>
+                </span>
               }
             </div>
           </mat-card>

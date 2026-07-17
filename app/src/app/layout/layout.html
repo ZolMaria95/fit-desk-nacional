@@ -42,7 +42,11 @@
 
     @if (session(); as s) {
       <div class="drawer-user">
-        <span class="user-chip" [style.background]="s.color">{{ s.id }}</span>
+        <button type="button" class="user-chip" [class.has-foto]="perfil.fotoDe(s.id)"
+                [style.background]="perfil.fotoDe(s.id) ? 'transparent' : s.color"
+                (click)="abrirPerfil()" title="Mi perfil" aria-label="Mi perfil">
+          @if (perfil.fotoDe(s.id); as f) { <img [src]="f" alt="Foto de perfil" /> } @else { {{ iniciales(s.name) }} }
+        </button>
         <span class="user-name">{{ s.name }}</span>
         <button mat-icon-button (click)="logout()" title="Cerrar sesión" aria-label="Cerrar sesión">
           <mat-icon>logout</mat-icon>
@@ -60,7 +64,11 @@
         <span class="brand">Fit-Desk</span>
         <span class="spacer"></span>
         @if (session(); as s) {
-          <span class="user-chip" [style.background]="s.color">{{ s.id }}</span>
+          <button type="button" class="user-chip" [class.has-foto]="perfil.fotoDe(s.id)"
+                [style.background]="perfil.fotoDe(s.id) ? 'transparent' : s.color"
+                (click)="abrirPerfil()" title="Mi perfil" aria-label="Mi perfil">
+          @if (perfil.fotoDe(s.id); as f) { <img [src]="f" alt="Foto de perfil" /> } @else { {{ iniciales(s.name) }} }
+        </button>
         }
       </mat-toolbar>
     }

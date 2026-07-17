@@ -144,7 +144,7 @@
             <span class="badge-id">{{ s.id }}</span>
             <span class="badge-days" [class.critical]="due.critical">{{ due.label }}</span>
             @if (mem) {
-              <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ mem.id }}</span>
+              <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ iniciales(mem.name) }}</span>
             } @else {
               <span class="mp-avatar empty" title="Sin asignar">?</span>
             }
@@ -190,7 +190,7 @@
               <td><span class="prio-pill" [class]="'prio-' + s.priority">{{ s.priority.toUpperCase() }}</span></td>
               <td>
                 @if (mem) {
-                  <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ mem.id }}</span>
+                  <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ iniciales(mem.name) }}</span>
                 } @else {
                   <span class="muted">Sin asignar</span>
                 }

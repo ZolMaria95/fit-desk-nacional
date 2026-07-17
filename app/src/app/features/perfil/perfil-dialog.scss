@@ -1,0 +1,144 @@
+.pf-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.pf-avatar {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: 0.5px;
+
+  img { width: 100%; height: 100%; object-fit: cover; }
+
+  .pf-avatar-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+  }
+}
+
+.pf-name { font-weight: 700; font-size: 16px; }
+.pf-meta { font-size: 13px; color: var(--mat-sys-on-surface-variant); }
+
+.pf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.pf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  border: 1px solid var(--mat-sys-outline, #bdbdbd);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mat-sys-primary, #048abf);
+
+  &.disabled { opacity: 0.6; pointer-events: none; }
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.pf-hint {
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  margin: 4px 0 0;
+}
+
+// Avatar clickeable → lightbox
+.pf-avatar.clickable { cursor: zoom-in; }
+.pf-avatar .pf-avatar-zoom {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.pf-avatar.clickable:hover .pf-avatar-zoom { opacity: 1; }
+
+// Filas de datos (roles / equipo)
+.pf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+}
+.pf-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.pf-label {
+  flex: none;
+  width: 92px;
+  color: var(--mat-sys-on-surface-variant);
+  font-weight: 600;
+}
+.pf-val { flex: 1; min-width: 0; }
+
+// Lightbox de la foto completa
+.pf-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+
+  img {
+    max-width: min(90vw, 480px);
+    max-height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+    cursor: default;
+  }
+
+  .pf-lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover { background: rgba(255, 255, 255, 0.3); }
+  }
+}

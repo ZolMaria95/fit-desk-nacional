@@ -19,7 +19,9 @@ import { Client, DataService, Story } from '../../core/services/data.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
 import { TransferenciasService } from '../../core/services/transferencias.service';
 import { ShellService } from '../../core/services/shell.service';
+import { MatMenuModule } from '@angular/material/menu';
 import { CardDetailDialog } from './card-detail-dialog/card-detail-dialog';
+import { ReunionDialog } from './reunion-dialog/reunion-dialog';
 import { ConfirmDialog } from './confirm-dialog/confirm-dialog';
 import { SprintDialog } from './sprint-dialog/sprint-dialog';
 import {
@@ -72,6 +74,7 @@ interface Column {
     MatIconModule,
     MatProgressBarModule,
     MatTooltipModule,
+    MatMenuModule,
   ],
   templateUrl: './board.html',
   styleUrl: './board.scss',
@@ -585,10 +588,40 @@ export class Board implements OnDestroy {
 
   // ── Acciones de card ──
   openDetail(card: Story): void {
-    this.dialog.open(CardDetailDialog, { data: { story: card }, width: '560px', maxWidth: '95vw' });
+    // Las reuniones usan su propio modal (tema/link/horario); el resto, el modal normal.
+    if (card.tipo === 'REUNION') {
+      this.dialog.open(ReunionDialog, { data: { story: card }, width: '520px', maxWidth: '95vw' });
+    } else {
+      this.dialog.open(CardDetailDialog, { data: { story: card }, width: '560px', maxWidth: '95vw' });
+    }
   }
   openNew(): void {
     this.dialog.open(CardDetailDialog, { data: { story: null }, width: '560px', maxWidth: '95vw' });
+  }
+  openNewReunion(): void {
+    this.dialog.open(ReunionDialog, { data: { story: null }, width: '520px', maxWidth: '95vw' });
+  }
+
+  /** ¿la card es una reunión? */
+  esReunion(card: Story): boolean {
+    return card.tipo === 'REUNION';
+  }
+
+  /** Etiqueta legible del subtipo de reunión. */
+  subtipoLabel(subtipo?: string): string {
+    return subtipo === 'PRESENTACION' ? 'Presentación' : subtipo === 'CAPACITACION' ? 'Capacitación' : 'Reunión';
+  }
+
+  /** Formatea el horario de una reunión: "20 jul · 14:00–15:00" (o solo el inicio). */
+  fmtReunion(inicio?: string, fin?: string): string {
+    if (!inicio) return '';
+    const d = new Date(inicio);
+    if (isNaN(d.getTime())) return inicio;
+    const fecha = d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    const hora = (v?: string) => (v && !isNaN(new Date(v).getTime()) ? new Date(v).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '');
+    const hi = hora(inicio);
+    const hf = hora(fin);
+    return `${fecha} · ${hi}${hf ? '–' + hf : ''}`;
   }
 
   onProgressChange(card: Story, value: string): void {

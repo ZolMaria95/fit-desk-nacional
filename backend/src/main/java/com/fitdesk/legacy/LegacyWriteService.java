@@ -184,6 +184,25 @@ public class LegacyWriteService {
         if (f.has("hdEstatus") && t.ticketEspejo != null) {
             t.ticketEspejo.estadoOrigen = text(f, "hdEstatus");
         }
+        // Tipo de tarea + campos de reunión (V11).
+        if (f.has("tipo")) {
+            t.tipo = coalesce(text(f, "tipo"), "DESARROLLO_SOPORTE");
+        }
+        if (f.has("subtipo")) {
+            t.subtipo = text(f, "subtipo");
+        }
+        if (f.has("tema")) {
+            t.tema = text(f, "tema");
+        }
+        if (f.has("link")) {
+            t.link = text(f, "link");
+        }
+        if (f.has("inicio")) {
+            t.inicio = text(f, "inicio");
+        }
+        if (f.has("fin")) {
+            t.fin = text(f, "fin");
+        }
         t.actualizadoEn = OffsetDateTime.now();
     }
 

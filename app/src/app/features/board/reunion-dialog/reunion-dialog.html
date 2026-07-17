@@ -1,0 +1,83 @@
+<h2 mat-dialog-title>
+  <mat-icon>groups</mat-icon> {{ isNew ? 'Nueva reunión' : 'Editar reunión' }}
+</h2>
+
+<mat-dialog-content class="rn-form">
+  <mat-button-toggle-group class="rn-subtipo" [value]="subtipo()" (change)="subtipo.set($event.value)"
+                           hideSingleSelectionIndicator aria-label="Tipo de reunión">
+    <mat-button-toggle value="CAPACITACION"><mat-icon>school</mat-icon> Capacitación</mat-button-toggle>
+    <mat-button-toggle value="PRESENTACION"><mat-icon>co_present</mat-icon> Presentación</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Tema</mat-label>
+    <input matInput [ngModel]="tema()" (ngModelChange)="tema.set($event)" placeholder="Tema de la reunión" maxlength="300" />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Link (opcional)</mat-label>
+    <mat-icon matPrefix>link</mat-icon>
+    <input matInput [ngModel]="link()" (ngModelChange)="link.set($event)" placeholder="https://meet…" />
+  </mat-form-field>
+
+  <div class="rn-2col">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Fecha inicio</mat-label>
+      <input matInput [matDatepicker]="dpI" [ngModel]="inicioFecha()" (ngModelChange)="inicioFecha.set($event)" readonly (click)="dpI.open()" />
+      <mat-datepicker-toggle matSuffix [for]="dpI"></mat-datepicker-toggle>
+      <mat-datepicker #dpI></mat-datepicker>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Hora inicio</mat-label>
+      <input matInput type="time" [ngModel]="inicioHora()" (ngModelChange)="inicioHora.set($event)" />
+    </mat-form-field>
+  </div>
+
+  <div class="rn-2col">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Fecha fin</mat-label>
+      <input matInput [matDatepicker]="dpF" [ngModel]="finFecha()" (ngModelChange)="finFecha.set($event)" readonly (click)="dpF.open()" />
+      <mat-datepicker-toggle matSuffix [for]="dpF"></mat-datepicker-toggle>
+      <mat-datepicker #dpF></mat-datepicker>
+    </mat-form-field>
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Hora fin</mat-label>
+      <input matInput type="time" [ngModel]="finHora()" (ngModelChange)="finHora.set($event)" />
+    </mat-form-field>
+  </div>
+
+  @if (puedeAsignarAOtros()) {
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Responsable</mat-label>
+      <mat-select [value]="assignee()" (selectionChange)="assignee.set($event.value)" (closed)="buscarResp.set('')">
+        <div class="sel-search" (click)="$event.stopPropagation()">
+          <mat-icon class="sel-search-icon">search</mat-icon>
+          <input matInput placeholder="Buscar consultor…" [ngModel]="buscarResp()" (ngModelChange)="buscarResp.set($event)" (keydown)="$event.stopPropagation()" />
+        </div>
+        <mat-option value="">— Sin asignar —</mat-option>
+        @for (u of usuariosF(); track u.id) { <mat-option [value]="u.id">{{ u.name }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+  } @else {
+    <div class="rn-self"><mat-icon>person</mat-icon> Responsable: <strong>{{ nombreYo() }}</strong> (tú)</div>
+  }
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Cliente (opcional)</mat-label>
+    <mat-select [value]="clientId()" (selectionChange)="clientId.set($event.value)" (closed)="buscarCli.set('')">
+      <div class="sel-search" (click)="$event.stopPropagation()">
+        <mat-icon class="sel-search-icon">search</mat-icon>
+        <input matInput placeholder="Buscar cliente…" [ngModel]="buscarCli()" (ngModelChange)="buscarCli.set($event)" (keydown)="$event.stopPropagation()" />
+      </div>
+      <mat-option value="">— Sin cliente —</mat-option>
+      @for (c of clientesF(); track c.codigo) { <mat-option [value]="c.codigo">{{ c.nombre }}</mat-option> }
+    </mat-select>
+  </mat-form-field>
+</mat-dialog-content>
+
+<mat-dialog-actions>
+  @if (!isNew) { <button mat-button color="warn" (click)="eliminar()"><mat-icon>delete</mat-icon> Eliminar</button> }
+  <span class="rn-spacer"></span>
+  <button mat-button (click)="cerrar()">Cancelar</button>
+  <button mat-flat-button color="primary" (click)="guardar()">Guardar</button>
+</mat-dialog-actions>

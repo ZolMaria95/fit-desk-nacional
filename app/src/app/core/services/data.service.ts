@@ -27,6 +27,13 @@ export interface Story {
   title?: string;
   hdEstatus?: string;
   clientName?: string; // nombre del cliente (de tareas con ticket) para no depender del catálogo
+  // Tipo de tarea + reunión (V11).
+  tipo?: string; // 'DESARROLLO_SOPORTE' (default) | 'REUNION'
+  subtipo?: string; // 'CAPACITACION' | 'PRESENTACION' (solo reunión)
+  tema?: string;
+  link?: string;
+  inicio?: string; // ISO local "YYYY-MM-DDThh:mm"
+  fin?: string;
   [k: string]: unknown;
 }
 
@@ -415,6 +422,8 @@ export class DataService {
   updateStoryClientName(id: string, clientName: string) { this.patchStoryField(id, { clientName }); }
   updateStoryHdEstatus(id: string, hdEstatus: string) { this.patchStoryField(id, { hdEstatus }); }
   updateStoryPriority(id: string, priority: string) { this.patchStoryField(id, { priority }); }
+  /** Actualiza campos de una reunión (tema/link/inicio/fin/subtipo + comunes) de una sola vez. */
+  updateStoryReunion(id: string, patch: Partial<Story>) { this.patchStoryField(id, patch); }
   approveStory(id: string) { this.patchStoryField(id, { approved: true, approvedDate: new Date().toISOString().split('T')[0] }); }
   unapproveStory(id: string) { this.patchStoryField(id, { approved: false, approvedDate: null }); }
   setWaitingClient(id: string, waiting: boolean) {

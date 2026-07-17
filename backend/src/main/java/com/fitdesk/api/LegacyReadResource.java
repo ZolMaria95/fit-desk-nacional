@@ -96,6 +96,13 @@ public class LegacyReadResource {
             if (t.cliente != null) {
                 s.put("clientName", t.cliente.nombre);
             }
+            // Tipo de tarea + reunión (V11).
+            s.put("tipo", t.tipo != null ? t.tipo : "DESARROLLO_SOPORTE");
+            if (t.subtipo != null) s.put("subtipo", t.subtipo);
+            if (t.tema != null) s.put("tema", t.tema);
+            if (t.link != null) s.put("link", t.link);
+            if (t.inicio != null) s.put("inicio", t.inicio);
+            if (t.fin != null) s.put("fin", t.fin);
             mapa.put(t.codigo, s);
         }
         return Map.of("stories", mapa);

@@ -79,6 +79,20 @@ public class Tarea extends PanacheEntityBase {
     @Column(name = "fecha_limite")
     public LocalDate fechaLimite;
 
+    // ── Tipo de tarea + Reunión (V11) ──
+    /** DESARROLLO_SOPORTE (default; las que tienen ticket) o REUNION. */
+    @Column(nullable = false)
+    public String tipo = "DESARROLLO_SOPORTE";
+    /** Solo reunión: CAPACITACION | PRESENTACION. */
+    public String subtipo;
+    /** Reunión: tema, link (opcional) y horario de inicio/fin (ISO local, texto). */
+    @Column(columnDefinition = "text")
+    public String tema;
+    @Column(columnDefinition = "text")
+    public String link;
+    public String inicio;
+    public String fin;
+
     @Column(name = "creado_en")
     public OffsetDateTime creadoEn = OffsetDateTime.now();
 

@@ -14,6 +14,8 @@ import { AuthService } from '../core/services/auth.service';
 import { DataService } from '../core/services/data.service';
 import { HelpdeskService } from '../core/services/helpdesk.service';
 import { ShellService } from '../core/services/shell.service';
+import { PerfilService } from '../core/services/perfil.service';
+import { PerfilDialog } from '../features/perfil/perfil-dialog';
 import { ReminderAlertDialog, ReminderItem } from '../features/pendientes/reminder-alert-dialog/reminder-alert-dialog';
 
 /**
@@ -47,6 +49,7 @@ export class Layout {
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   readonly shell = inject(ShellService);
+  readonly perfil = inject(PerfilService);
 
   /** Evita apilar varias alertas de recordatorio a la vez. */
   private alertOpen = false;
@@ -92,6 +95,8 @@ export class Layout {
     // abrir una vista concreta. Reintentan solos si la 1ª petición falla.
     this.helpdesk.getHdUsers();
     this.helpdesk.getClients();
+    // Fotos de perfil (backend/Neon) para pintar los avatares con la imagen subida.
+    this.perfil.cargarFotos();
     // Recordatorios de tickets pendientes: revisa cada 30s para que la alerta salte
     // cerca de la hora exacta (la lista vive en memoria, sin costo de red).
     const timer = setInterval(() => this.checkReminders(), 30 * 1000);
@@ -244,6 +249,18 @@ export class Layout {
     } catch {
       /* autoplay bloqueado o sin Web Audio: la alerta visual igual aparece */
     }
+  }
+
+  /** Abre el diálogo de perfil (datos + foto personalizable). */
+  abrirPerfil(): void {
+    this.dialog.open(PerfilDialog, { width: '380px', maxWidth: '95vw', autoFocus: false });
+  }
+
+  /** Iniciales del nombre (avatar sin foto). El código del API ya no se muestra. */
+  iniciales(nombre: string | null | undefined): string {
+    const n = (nombre || '').trim();
+    if (!n) return '?';
+    return n.split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase() || '?';
   }
 
   async logout(): Promise<void> {

@@ -1,0 +1,60 @@
+<h2 mat-dialog-title>Mi perfil</h2>
+
+<mat-dialog-content>
+  @if (session(); as s) {
+    <div class="pf-top">
+      <div class="pf-avatar" [class.clickable]="foto()" [style.background]="foto() ? null : s.color"
+           (click)="abrirFoto()" [title]="foto() ? 'Ver foto completa' : ''">
+        @if (foto(); as f) {
+          <img [src]="f" alt="Foto de perfil" />
+          <div class="pf-avatar-zoom"><mat-icon>zoom_in</mat-icon></div>
+        } @else {
+          <span>{{ iniciales() }}</span>
+        }
+        @if (subiendo()) { <div class="pf-avatar-loading"><mat-icon>hourglass_top</mat-icon></div> }
+      </div>
+      <div class="pf-id">
+        <div class="pf-name">{{ s.name }}</div>
+        @if (s.email) { <div class="pf-meta">{{ s.email }}</div> }
+      </div>
+    </div>
+
+    <div class="pf-rows">
+      @if (s.apiRole) {
+        <div class="pf-row"><span class="pf-label">Rol HelpDesk</span><span class="pf-val">{{ s.apiRole }}</span></div>
+      }
+      <div class="pf-row">
+        <span class="pf-label">Rol FitDesk</span>
+        <span class="pf-val">{{ rolesFitdesk().length ? rolesFitdesk().join(', ') : '—' }}</span>
+      </div>
+      <div class="pf-row">
+        <span class="pf-label">Equipo</span>
+        <span class="pf-val">{{ equiposTexto() || '—' }}</span>
+      </div>
+    </div>
+
+    <div class="pf-actions">
+      <label class="pf-btn" [class.disabled]="subiendo()">
+        <mat-icon>photo_camera</mat-icon> Cambiar foto
+        <input type="file" accept="image/*" hidden (change)="onArchivo($event)" [disabled]="subiendo()" />
+      </label>
+      @if (foto()) {
+        <button mat-stroked-button (click)="quitar()" [disabled]="subiendo()">
+          <mat-icon>delete</mat-icon> Quitar foto
+        </button>
+      }
+    </div>
+    <p class="pf-hint">La foto se guarda en tu cuenta (se ve desde cualquier dispositivo y para los demás).</p>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cerrar()">Cerrar</button>
+</mat-dialog-actions>
+
+@if (verFoto()) {
+  <div class="pf-lightbox" (click)="verFoto.set(false)">
+    <img [src]="foto()" alt="Foto de perfil" (click)="$event.stopPropagation()" />
+    <button class="pf-lightbox-close" (click)="verFoto.set(false)" aria-label="Cerrar"><mat-icon>close</mat-icon></button>
+  </div>
+}

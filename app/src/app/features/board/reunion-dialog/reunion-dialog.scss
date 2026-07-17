@@ -1,0 +1,45 @@
+h2[mat-dialog-title] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  mat-icon { color: var(--mat-sys-primary, #048abf); }
+}
+
+.rn-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+
+  mat-form-field { width: 100%; }
+}
+
+.rn-subtipo {
+  align-self: flex-start;
+  mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
+}
+
+.rn-2col {
+  display: flex;
+  gap: 10px;
+
+  mat-form-field { flex: 1; }
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.rn-self {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--mat-sys-on-surface);
+  padding: 2px 2px;
+
+  mat-icon { color: var(--mat-sys-on-surface-variant); font-size: 20px; width: 20px; height: 20px; }
+}
+
+.rn-spacer { flex: 1 1 auto; }

@@ -288,3 +288,15 @@ Además `editorToMessageHtml` (al ENVIAR) aplanaba `<div>` **y** `<p>` a `<br>` 
 - `editorToMessageHtml`: aplana solo `<div>` (Enter del editor), **conserva `<p>`**.
 - CSS de `.conv-text` y `.composer-input`: estilos para blockquote/encabezados/`<p>`/`<th>`.
 **Verificación:** test jsdom con las funciones reales → ChatGPT (título+listas+código+cita+tabla) ahora **NINGUNA etiqueta perdida** (fuera de strong→b/em→i); XSS sigue limpio (`<img onerror>`, `<script>`, `onclick`, `javascript:` eliminados).
+
+### [2026-07-16] Perfil de usuario + foto personalizable (persistida en Neon)
+**Fuente:** pedido de la dueña (avatar clickeable → perfil; y una foto subible que reemplace el código MSC001).
+**Backend:** migración **V10** (`usuario.foto TEXT`), campo `foto` en `Usuario`, y `PerfilResource` (`GET /api/legacy/perfil/fotos` → mapa hid→dataUri; `PUT /api/legacy/perfil/foto` con X-Actor-Hid → set/borra la foto del actor, tope 400 KB, valida `data:image/`). Requiere reconstruir imagen Docker + redeploy Render (Flyway aplica V10).
+**Frontend:** `PerfilService` (mapa de fotos, `subirFoto`/`quitarFoto`), diálogo `features/perfil/perfil-dialog` (datos + subir foto), avatar del `layout` ahora es **button** clickeable que abre el perfil y pinta la foto (`.user-chip.has-foto` circular) o el código. La imagen se **comprime en el navegador** a 128×128 JPEG (canvas, recorte cuadrado) antes de subir, así pesa pocos KB.
+**Nota:** las fotos se cargan una vez al iniciar (`layout` → `perfil.cargarFotos()`) y se muestran por `helpdesk_user_id`, así a futuro se pueden pintar también en tarjetas/asignados.
+
+### [2026-07-16] Tipos de tarea + Reuniones en el board
+**Fuente:** pedido de la dueña. Tareas de **Desarrollo/Soporte** (las que traen ticket son de este tipo) vs **Reunión** (subtipos Capacitación/Presentación).
+**Backend:** V11 agrega a `tarea`: `tipo` (default DESARROLLO_SOPORTE), `subtipo`, `tema`, `link`, `inicio`, `fin` (texto ISO local). `applyFields` (write) y `stories()` (read) manejan los 6 campos. Requiere rebuild imagen + redeploy Render.
+**Frontend:** modal propio `features/board/reunion-dialog` (subtipo, tema, link opcional, inicio/fin `datetime-local`, responsable, cliente opcional). Botón "+ Crear" con menú (Tarea / Reunión). `openDetail` enruta por `tipo` (reunión → su modal). La card de reunión muestra badge morado + subtipo + horario (`fmtReunion`) + link. Persisten por el mismo camino de stories (`addStory` escribe el objeto completo; `updateStoryReunion` edita).
+**Decisiones (dueña):** crear con menú (no dos botones); reuniones viven en las columnas del Kanban (tarjeta arrastrable); responsable sí, cliente opcional.

@@ -27,7 +27,7 @@
         </div>
         <mat-option [value]="null">— sin responsable —</mat-option>
         @for (u of hdFiltrados(); track u.id) {
-          <mat-option [value]="u.id">{{ u.name }} ({{ u.id }})</mat-option>
+          <mat-option [value]="u.id">{{ u.name }}</mat-option>
         }
       </mat-select>
     </mat-form-field>

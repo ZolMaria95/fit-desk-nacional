@@ -117,7 +117,7 @@
         <div class="tab-actions">
           <div class="buscador">
             <mat-icon>search</mat-icon>
-            <input type="search" placeholder="Buscar por nombre, código del API, rol o alcance…"
+            <input type="search" placeholder="Buscar por nombre, rol o alcance…"
                    [value]="asigBuscar()" (input)="asigBuscar.set($any($event.target).value)" />
           </div>
           @if (asigBuscar().trim()) {
@@ -130,7 +130,6 @@
         <table class="grid">
           <thead><tr>
             <th class="sortable" (click)="ordenarPor('asig', 'usuarioNombre')">Usuario{{ flecha('asig', 'usuarioNombre') }}</th>
-            <th class="sortable" (click)="ordenarPor('asig', 'helpdeskUserId')">ID API{{ flecha('asig', 'helpdeskUserId') }}</th>
             <th class="sortable" (click)="ordenarPor('asig', 'rolCodigo')">Rol{{ flecha('asig', 'rolCodigo') }}</th>
             <th class="sortable" (click)="ordenarPor('asig', 'alcanceTipo')">Alcance{{ flecha('asig', 'alcanceTipo') }}</th>
             <th class="sortable" (click)="ordenarPor('asig', 'alcanceNombre')">Objetivo{{ flecha('asig', 'alcanceNombre') }}</th>
@@ -142,7 +141,6 @@
             @for (a of asignacionesOrd(); track a.id) {
               <tr>
                 <td>{{ a.usuarioNombre }}</td>
-                <td>{{ a.helpdeskUserId || '—' }}</td>
                 <td>{{ a.rolNombre }}</td>
                 <td>{{ a.alcanceTipo }}</td>
                 <td>{{ a.alcanceNombre }}</td>

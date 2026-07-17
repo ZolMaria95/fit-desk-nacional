@@ -35,6 +35,11 @@ public class Usuario extends PanacheEntityBase {
     public String email;
     public String alias;
     public String color;
+
+    /** Foto de perfil (data URI base64, comprimida ~128px por el frontend). NULL = sin foto. */
+    @Column(columnDefinition = "text")
+    public String foto;
+
     public boolean activo = true;
 
     @Column(name = "creado_en")

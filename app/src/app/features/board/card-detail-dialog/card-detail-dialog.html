@@ -91,7 +91,7 @@
       @for (m of filteredAssignees(); track m.id) {
         <mat-option [value]="m">
           <span class="opt-name">{{ m.name }}</span>
-          <small class="opt-meta">{{ m.id }}{{ m.role ? ' · ' + m.role : '' }}</small>
+          @if (m.role) { <small class="opt-meta">{{ m.role }}</small> }
         </mat-option>
       } @empty {
         <mat-option [value]="null" disabled>Sin coincidencias</mat-option>

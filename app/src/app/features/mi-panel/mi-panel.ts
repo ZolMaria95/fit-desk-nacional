@@ -197,6 +197,13 @@ export class MiPanel {
 
   // ── Helpers de stories ──
   memberOf(id: string | null) { return id ? this.data.getMember(id) : undefined; }
+
+  /** Iniciales del nombre (avatar sin foto). El código del API ya no se muestra. */
+  iniciales(nombre: string | null | undefined): string {
+    const n = (nombre || '').trim();
+    if (!n) return '?';
+    return n.split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('').toUpperCase() || '?';
+  }
   clientOf(id: string | null): { id: string; name: string; color?: string } | undefined {
     if (!id) return undefined;
     const c = this.data.getClient(id) as { id: string; name: string; color?: string } | undefined;

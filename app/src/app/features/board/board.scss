@@ -508,30 +508,81 @@
   &.soon { color: #b5560e; }
 }
 
-.avatar {
+// Asignado en la card: punto de color + NOMBRE (igual que en las cards de tickets).
+.card-assignee {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 26px;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #fff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  gap: 6px;
+  min-width: 0;
+  max-width: 150px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+
+  .ca-dot {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #9aa0a6;
+  }
+  .ca-name {
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #2b2b3a;
+  }
 
   &.unassigned {
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    background: transparent;
-    border: 1.5px dashed rgba(43, 43, 58, 0.4);
-    box-shadow: none;
+    .ca-dot { background: transparent; border: 1.5px dashed rgba(43, 43, 58, 0.4); }
+    .ca-name { font-weight: 500; color: #6b6b78; }
   }
 }
+
+// ── Reuniones (tipo de tarea) ──────────────────────────────────────
+.reunion-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 9px;
+  background: #7e57c2;
+  color: #fff;
+
+  mat-icon { font-size: 13px; width: 13px; height: 13px; }
+}
+.reunion-horario {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #5e35b1;
+  margin-top: 4px;
+
+  mat-icon { font-size: 14px; width: 14px; height: 14px; }
+}
+.reunion-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mat-sys-primary, #048abf);
+  text-decoration: none;
+  margin-top: 3px;
+
+  &:hover { text-decoration: underline; }
+  mat-icon { font-size: 14px; width: 14px; height: 14px; }
+}
+.crear-caret { margin-left: -4px; }
 
 // CDK drag placeholder / preview
 .cdk-drag-preview {

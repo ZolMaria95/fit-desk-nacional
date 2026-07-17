@@ -328,7 +328,9 @@
   color: #9aa0a6;
   cursor: pointer;
 
-  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  // overflow: visible → el ícono `pause_circle` (círculo a sangre completa) no se
+  // recorta en los bordes por el overflow:hidden por defecto de mat-icon.
+  mat-icon { font-size: 18px; width: 18px; height: 18px; line-height: 18px; overflow: visible; }
   &:hover { background: #00000010; }
   &.on { color: #c0392b; }
   &.pend.on { color: #9c27b0; }
