@@ -15,6 +15,8 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { HelpdeskService, TicketFilters } from '../../core/services/helpdesk.service';
 import { ShellService } from '../../core/services/shell.service';
+import { PerfilService } from '../../core/services/perfil.service';
+import { resolveMember } from '../board/board-utils';
 import { CardDetailDialog } from '../board/card-detail-dialog/card-detail-dialog';
 import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-dialog';
 import { AssignTicketDialog } from './assign-ticket-dialog/assign-ticket-dialog';
@@ -25,7 +27,7 @@ import { Ticket } from './ticket-utils';
 import { esEstadoFinalizado } from '../../core/helpdesk-estados';
 
 // Orden de tabs: Pendientes (default) primero, Estadísticas al final.
-type Tab = 'pendientes' | 'asignados' | 'generales' | 'estadisticas';
+type Tab = 'equipo' | 'asignados' | 'generales' | 'estadisticas';
 
 interface StatRow {
   key: string;
@@ -64,6 +66,7 @@ export class Tickets implements OnDestroy {
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   private readonly shell = inject(ShellService);
+  private readonly perfil = inject(PerfilService);
 
   /** Panel de filtros que se publica al drawer del shell. */
   readonly filtersTpl = viewChild<TemplateRef<unknown>>('filtersTpl');
@@ -78,11 +81,16 @@ export class Tickets implements OnDestroy {
   readonly statusOptions = computed(() => this.statusNames().filter((s) => s.trim().toUpperCase() !== 'ABIERTO'));
 
   // ── Estado de la vista ──
-  readonly tab = signal<Tab>('pendientes');
+  readonly tab = signal<Tab>('equipo');
+  /** Equipo elegido en la pestaña "Equipo" ('' = todos los que puedo revisar). Solo
+   *  aplica cuando el usuario puede revisar más de un equipo (responsable regional). */
+  readonly equipoSel = signal('');
   readonly filterClientes = signal<string[]>([]); // client_ids (server-side, multi); [] = todos
   readonly filterEstatus = signal<string[]>([]); // nombres de estado (server-side, multi); [] = todos
   readonly filterAsignado = signal(''); // assigned_user_id (server-side); '' = todos
-  readonly searchTerm = signal(''); // texto crudo de la caja de búsqueda (N° o palabra)
+  // Dos búsquedas GLOBALES independientes (puntos 1 y 7): por N° de ticket y por palabra.
+  readonly ticketInput = signal(''); // texto crudo del campo "Ticket" (N°)
+  readonly palabraInput = signal(''); // texto crudo del campo "Palabra"
   readonly filterTicket = signal(''); // búsqueda por N° exacto (lookup) activa
   readonly filterTexto = signal(''); // búsqueda por palabra (contenido, /tickets/search) activa
   readonly remoteResult = signal<Ticket | null>(null);
@@ -114,7 +122,7 @@ export class Tickets implements OnDestroy {
     // Espera los catálogos de clientes Y estados (para mapear válidos→client_id y
     // no-finalizados→ticket_status_id) y luego consulta fresca. Así Pendientes filtra
     // TODO server-side desde la primera carga. El botón ↻ vuelve a llamar a refresh().
-    Promise.all([this.hd.getClients(), this.hd.getTicketStatuses()]).then(() => this.refresh());
+    Promise.all([this.hd.getClients(), this.hd.getTicketStatuses(), this.perfil.cargarEquiposRevisar()]).then(() => this.refresh());
     // Los overlays (notas/acciones/pendientes) se cargan en `data.ensureInit()` (lo
     // dispara el layout). La señal se inicializó vacía en el constructor; al resolver
     // la carga hay que RE-leerla, si no las notas nunca se pintan aunque existan.
@@ -156,6 +164,33 @@ export class Tickets implements OnDestroy {
       .map((n) => this.hd.statusIdOf(n))
       .filter((id): id is string => !!id),
   );
+
+  // ── Pestaña "Equipo": tickets de los clientes del equipo (o del equipo elegido) ──
+  /** Equipos que el usuario puede revisar y si hay más de uno (→ selector). */
+  readonly equiposRevisar = this.perfil.equiposRevisar;
+  readonly multiEquipo = this.perfil.multiEquipo;
+
+  /** Nombres (uppercase) de los clientes del/los equipo(s) a revisar (según el selector). */
+  private readonly equipoClientNames = computed(() => {
+    const sel = this.equipoSel();
+    const eqs = this.perfil.equiposRevisar().filter((e) => !sel || e.codigo === sel);
+    const set = new Set<string>();
+    for (const e of eqs) for (const c of e.clientes) set.add((c.nombre || '').trim().toUpperCase());
+    return set;
+  });
+
+  /** client_id (catálogo del API) de los clientes del equipo → filtro server-side de "Equipo". */
+  private readonly equipoClientIds = computed(() => {
+    const names = this.equipoClientNames();
+    return this.clients().filter((c) => names.has(c.name.trim().toUpperCase())).map((c) => c.id);
+  });
+
+  /** Cambia el equipo elegido en la pestaña "Equipo" y recarga. */
+  async onEquipoChange(codigo: string): Promise<void> {
+    this.equipoSel.set(codigo);
+    this.pageIndex.set(0);
+    await this.query();
+  }
 
   // ── Conjunto base según la tab / búsqueda ──
   // Cliente/Estatus/Asignado ya vienen filtrados del API. Aquí solo el refinamiento
@@ -207,9 +242,9 @@ export class Tickets implements OnDestroy {
     const list = this.hd.hdUsers();
     return t ? list.filter((u) => u.name.toLowerCase().includes(t) || String(u.id).toLowerCase().includes(t)) : list;
   });
-  /** Nombre del asignado seleccionado (para mostrar en el select). */
+  /** Nombre del asignado seleccionado (para mostrar en el select). Regla #8: nunca el código. */
   asignadoName(id: string): string {
-    return this.hd.hdUsers().find((u) => String(u.id) === String(id))?.name || id;
+    return this.hd.hdUsers().find((u) => String(u.id) === String(id))?.name || '—';
   }
 
   // El orden lo aplica el API (sortField/sortDir) y la búsqueda por número va
@@ -228,10 +263,28 @@ export class Tickets implements OnDestroy {
       ),
   );
 
-  /** Término escrito (N° o palabra) pero aún NO buscado (para el hint "Presiona Enter"). */
-  readonly searchPending = computed(() => {
-    const v = this.searchTerm().trim();
-    return !!v && v !== this.filterTicket() && v !== this.filterTexto();
+  /** Texto escrito pero aún NO buscado (hint "Presiona Enter"), por campo. */
+  readonly ticketPending = computed(() => {
+    const v = this.ticketInput().trim();
+    return !!v && v !== this.filterTicket();
+  });
+  readonly palabraPending = computed(() => {
+    const v = this.palabraInput().trim();
+    return !!v && v !== this.filterTexto();
+  });
+
+  /**
+   * Búsqueda GLOBAL de ticket: al buscar un N°, indica si ese ticket tiene tarea en
+   * algún tablero y quién la lleva (barrido local sobre TODAS las stories). Si no está
+   * en ningún board / sin asignar, la vista lo resalta. Sin llamadas extra al API.
+   */
+  readonly ticketEnBoard = computed(() => {
+    const n = this.filterTicket().trim();
+    if (!n) return null;
+    const st = this.data.stories().find((s) => String(s.ticket) === n);
+    if (!st) return { enBoard: false, board: '', asignado: '' };
+    const m = st.assignee ? resolveMember(st.assignee, this.data.team(), this.hd.hdUsers()) : null;
+    return { enBoard: true, board: st.board || '', asignado: m?.name || '' };
   });
 
   // ── Paginación server-side ──
@@ -278,8 +331,8 @@ export class Tickets implements OnDestroy {
     const f: TicketFilters = {};
     if (this.filterClientes().length) {
       f.clientIds = this.filterClientes(); // selección explícita del usuario
-    } else if (this.tab() === 'pendientes') {
-      f.clientIds = this.validClientIds(); // Pendientes: solo clientes que atiende el equipo
+    } else if (this.tab() === 'equipo') {
+      f.clientIds = this.equipoClientIds(); // Equipo: solo los clientes del equipo (o del equipo elegido)
     }
     // Estatus SIEMPRE server-side: filtro explícito → esos estados (lista por comas);
     // Pendientes sin filtro → lista de todos los estados NO finalizados (excluye
@@ -289,7 +342,7 @@ export class Tickets implements OnDestroy {
         .map((n) => this.hd.statusIdOf(n))
         .filter((id): id is string => !!id);
       if (ids.length) f.statusIds = ids;
-    } else if (this.tab() === 'pendientes') {
+    } else if (this.tab() === 'equipo') {
       const ids = this.pendingStatusIds();
       if (ids.length) f.statusIds = ids;
     }
@@ -396,7 +449,8 @@ export class Tickets implements OnDestroy {
     this.filterClientes.set([]);
     this.filterEstatus.set([]);
     this.filterAsignado.set('');
-    this.searchTerm.set('');
+    this.ticketInput.set('');
+    this.palabraInput.set('');
     this.clearSearchState();
     this.buscarCliente.set('');
     this.buscarEstatus.set('');
@@ -413,43 +467,56 @@ export class Tickets implements OnDestroy {
     this.searching.set(false);
   }
 
-  /**
-   * Cambio en la caja (cada tecla): SOLO guarda el término; NO busca (ni por N° ni por
-   * palabra). La búsqueda se dispara con la orden explícita (`submitSearch`, con Enter
-   * o el ícono 🔍). Vaciar la caja sí restaura la lista de la tab de inmediato.
-   */
-  onSearchInput(value: string): void {
-    this.searchTerm.set(value);
+  // ── Campo "Ticket" (búsqueda GLOBAL por N° exacto) ──
+  /** Tecla en el campo Ticket: solo guarda; vaciarlo restaura la lista. */
+  onTicketInput(value: string): void {
+    this.ticketInput.set(value);
     if (!value.trim()) {
-      this.clearSearchState();
+      this.filterTicket.set('');
+      this.remoteResult.set(null);
+      this.searching.set(false);
       this.pageIndex.set(0);
-      this.query(); // caja vacía → restaura la lista normal de la tab
+      this.query();
     }
-    // Con texto (N° o palabra): no dispara nada; el usuario debe ejecutar submitSearch().
   }
-
-  /** Búsqueda EXPLÍCITA (Enter / ícono). Rutea N° exacto vs. palabra (contenido). */
-  async submitSearch(): Promise<void> {
-    const v = this.searchTerm().trim();
+  /** Búsqueda EXPLÍCITA por N° (Enter / 🔍). Lookup exacto server-side (global). */
+  async submitTicket(): Promise<void> {
+    const v = this.ticketInput().trim();
     this.pageIndex.set(0);
+    // El N° y la palabra son mutuamente excluyentes: al buscar por N°, quita la palabra.
+    this.palabraInput.set('');
+    this.filterTexto.set('');
     if (!v) {
-      this.clearSearchState();
+      this.filterTicket.set('');
+      this.remoteResult.set(null);
       await this.query();
       return;
     }
-    if (/^\d+$/.test(v)) {
-      // Numérico → lookup EXACTO por número (server-side).
+    this.filterTicket.set(v);
+    this.remoteResult.set(null);
+    this.searching.set(true);
+    const t = await this.hd.searchTicketRemote(v);
+    if (this.ticketInput().trim() !== v) return; // el usuario cambió el término
+    this.remoteResult.set(t);
+    this.searching.set(false);
+  }
+
+  // ── Campo "Palabra" (búsqueda por contenido) ──
+  /** Tecla en el campo Palabra: solo guarda; vaciarlo restaura la lista. */
+  onPalabraInput(value: string): void {
+    this.palabraInput.set(value);
+    if (!value.trim()) {
       this.filterTexto.set('');
-      this.remoteResult.set(null);
-      this.filterTicket.set(v);
-      this.searching.set(true);
-      const t = await this.hd.searchTicketRemote(v);
-      if (this.searchTerm().trim() !== v) return; // el usuario cambió el término
-      this.remoteResult.set(t);
-      this.searching.set(false);
-      return;
+      this.pageIndex.set(0);
+      this.query();
     }
-    // Palabra → búsqueda por contenido (API), paginada y global.
+  }
+  /** Búsqueda EXPLÍCITA por palabra (Enter / 🔍). Contenido, paginada y global. */
+  async submitPalabra(): Promise<void> {
+    const v = this.palabraInput().trim();
+    this.pageIndex.set(0);
+    // Mutuamente excluyente con el N°.
+    this.ticketInput.set('');
     this.filterTicket.set('');
     this.remoteResult.set(null);
     this.searching.set(false);

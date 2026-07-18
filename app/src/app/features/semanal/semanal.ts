@@ -119,11 +119,12 @@ export class Semanal {
     return map;
   });
 
-  /** Nombre del asignado: por los miembros del equipo cargados; si no, por el catálogo del HelpDesk. */
+  /** Nombre del asignado: por los miembros del equipo cargados; si no, por el catálogo del HelpDesk.
+   *  Regla #8: si no resuelve, NUNCA devolver el código; usar placeholder neutro. */
   private memberName(id: string): string {
     return this.memberOptions().find((m) => m.id === id)?.name
       || this.hd.hdUsers().find((u) => String(u.id) === String(id))?.name
-      || id;
+      || '—';
   }
   private memberShort(id: string): string { return this.memberName(id).split(' ')[0]; }
   private memberFull(id: string): string { return this.memberName(id); }

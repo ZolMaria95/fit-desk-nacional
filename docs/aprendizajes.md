@@ -6,6 +6,20 @@ Hechos descubiertos sobre el código real, el HelpDesk, Firebase y el negocio. *
 
 ---
 
+### [2026-07-18] Arquitectura de búsqueda/filtros de Tickets y Board (para futuros cambios)
+**Fuente:** implementación del lote UX (tickets.ts, board.ts, shell.service.ts).
+- Cada vista **publica su panel de filtros** al drawer del shell vía `ShellService.setFilters(templateRef)` (`afterNextRender`), y lo limpia en `ngOnDestroy`. El drawer del `Layout` los renderiza.
+- **Tickets** filtra **todo server-side** (ADR 2026-07-01): `buildFilters()` arma `TicketFilters {clientIds, statusIds, assignedUserId}` según la tab + filtros; `base()` = la página del API tal cual. La búsqueda por N° (`filterTicket`) es lookup exacto server-side (`hd.searchTicketRemote`); por palabra (`filterTexto`) es `hd.searchTickets`. Los clientes se filtran por **client_id mapeado desde el NOMBRE** contra el catálogo (`clients()`), no por código.
+- **Board** filtra en memoria dentro de `columns()` (sprint activo): la búsqueda por N° es coincidencia local parcial; por palabra usa `matchedTickets` (Set de N° del API). Es **section-scoped** (solo su tablero).
+- **Regla #8 (no códigos):** `resolveMember` (board-utils) ahora devuelve `name:'—'` cuando el id no resuelve (antes devolvía el código); revisar cualquier `|| id`/`|| usuarioAsignado` nuevo. Ver [[no-codigos-empleado-ui]].
+
+### [2026-07-18] `/api/legacy/perfil/*` y alcance por Asignaciones (Actor)
+**Fuente:** `PerfilResource.java`, `Actor.java`.
+- `GET /perfil/me` (X-Actor-Hid) → `{roles, equipos:[{codigo,nombre}], clientes:[{codigo,nombre}]}`. `equipos` = `equiposComoMiembro`; si vacío, `equiposComoResponsable`. `clientes` = `Cliente where equipoResponsable.id in (ids)` (nombre = **nombre del API**, sirve para mapear a client_id del HelpDesk).
+- Nuevo `GET /perfil/equipos-clientes` → equipos revisables = **miembro ∪ responsable** con sus clientes; `multiEquipo` si hay >1. Lo usa la pestaña "Equipo".
+- `Actor.equiposComoResponsable(hid)` expande el alcance: **EQUIPO** = ese equipo; **REGIONAL** = todos los equipos de la regional; **GLOBAL** = todos. Es la base del "selector de equipo" del responsable regional.
+- **Limitación:** el frontend NO conoce el alcance (EQUIPO/REGIONAL/GLOBAL) directamente; se infiere de si `equipos-clientes` trae >1 equipo (`multiEquipo`). `mis-roles` solo devuelve códigos de rol.
+
 ### [2026-07-09] Envío entre equipos implementado (Transferencia + Solicitud) — hechos del código
 **Fuente:** implementación + verificación (curl end-to-end sobre Postgres local; `ng build -c quarkus`; CORS preflight). Ver decisión en [decisiones.md](decisiones.md) 2026-07-09.
 **Hechos técnicos:**

@@ -3,6 +3,7 @@ package com.fitdesk.api;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,6 +78,42 @@ public class PerfilResource {
             }
         }
         m.put("clientes", clientes);
+        return m;
+    }
+
+    /**
+     * GET /api/legacy/perfil/equipos-clientes → equipos que el actor puede REVISAR
+     * (donde es miembro ∪ donde es responsable) con sus clientes. Para un responsable
+     * con alcance REGIONAL, `equiposComoResponsable` devuelve todos los equipos de su
+     * regional (GLOBAL = todos), así el frontend puede ofrecer un selector de equipo.
+     * Forma: { multiEquipo: bool, equipos: [{codigo, nombre, clientes:[{codigo,nombre}]}] }.
+     */
+    @GET
+    @Path("/equipos-clientes")
+    public Map<String, Object> equiposClientes(@HeaderParam("X-Actor-Hid") String actorHid) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (actorHid == null || actorHid.isBlank()) {
+            m.put("multiEquipo", false);
+            m.put("equipos", List.of());
+            return m;
+        }
+        LinkedHashSet<Long> ids = new LinkedHashSet<>(Actor.equiposComoMiembro(actorHid));
+        ids.addAll(Actor.equiposComoResponsable(actorHid));
+        List<Map<String, Object>> equipos = new ArrayList<>();
+        for (Long id : ids) {
+            Equipo eq = Equipo.findById(id);
+            if (eq == null) continue;
+            List<Map<String, Object>> cls = new ArrayList<>();
+            for (Cliente c : Cliente.<Cliente>list("equipoResponsable.id = ?1 order by nombre", id)) {
+                cls.add(Map.of("codigo", c.codigo, "nombre", c.nombre != null ? c.nombre : c.codigo));
+            }
+            equipos.add(Map.of(
+                "codigo", eq.codigo,
+                "nombre", eq.nombre != null ? eq.nombre : eq.codigo,
+                "clientes", cls));
+        }
+        m.put("multiEquipo", equipos.size() > 1);
+        m.put("equipos", equipos);
         return m;
     }
 

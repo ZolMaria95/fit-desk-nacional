@@ -21,6 +21,13 @@ export class PerfilService {
   /** Clientes del equipo del usuario (código + nombre del API), desde /perfil/me. */
   readonly misClientes = signal<{ codigo: string; nombre: string }[]>([]);
 
+  /** Equipos que el usuario puede REVISAR (miembro ∪ responsable) con sus clientes,
+   *  desde /perfil/equipos-clientes. Un responsable regional trae todos los equipos
+   *  de su regional → el selector de equipo de la pestaña "Equipo" se apoya en esto. */
+  readonly equiposRevisar = signal<{ codigo: string; nombre: string; clientes: { codigo: string; nombre: string }[] }[]>([]);
+  /** ¿El usuario puede revisar más de un equipo? (→ mostrar el selector). */
+  readonly multiEquipo = signal(false);
+
   private usaQuarkus(): boolean {
     return environment.dataBackend === 'quarkus' && !!this.base;
   }
@@ -51,6 +58,22 @@ export class PerfilService {
         const d = await r.json();
         this.misEquipos.set(d.equipos || []);
         this.misClientes.set(d.clientes || []);
+      }
+    } catch {
+      /* silencioso */
+    }
+  }
+
+  /** Carga los equipos que el usuario puede revisar (con sus clientes) para la pestaña "Equipo". */
+  async cargarEquiposRevisar(): Promise<void> {
+    const hid = this.auth.session()?.id;
+    if (!this.usaQuarkus() || !hid) return;
+    try {
+      const r = await fetch(`${this.base}/api/legacy/perfil/equipos-clientes`, { headers: { 'X-Actor-Hid': String(hid) } });
+      if (r.ok) {
+        const d = await r.json();
+        this.equiposRevisar.set(d.equipos || []);
+        this.multiEquipo.set(!!d.multiEquipo);
       }
     } catch {
       /* silencioso */

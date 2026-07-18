@@ -34,6 +34,9 @@
     <div class="tc-subject" [title]="ticket().asunto">{{ ticket().asunto }}</div>
 
     <div class="tc-badges">
+      @if (tienePrioridad()) {
+        <span class="tc-prio" [class]="prioClase()" matTooltip="Prioridad del ticket">#{{ ticket().orden }}</span>
+      }
       <span class="tc-badge" [style.background]="estado().badgeBg" [style.color]="estado().badgeText">{{ ticket().estatus || '— sin estado —' }}</span>
       @if (ticket().tipo) {
         <span class="tc-badge" [style.background]="tipo().badgeBg" [style.color]="tipo().badgeText">{{ ticket().tipo }}</span>

@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { HdUser, HelpdeskService } from '../../../core/services/helpdesk.service';
 import { Ticket } from '../ticket-utils';
 import { estadoStyle } from '../tickets-card-utils';
@@ -26,6 +27,7 @@ export interface AssignTicketData {
     MatFormFieldModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    MatTooltipModule,
   ],
   templateUrl: './assign-ticket-dialog.html',
   styleUrl: './assign-ticket-dialog.scss',

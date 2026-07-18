@@ -19,6 +19,9 @@ Thumbs.db
 *.iml
 .vscode/
 
+# ── Artefactos de verificación (Playwright MCP) ──
+.playwright-mcp/
+
 # ── Datos reales de Firebase (privacidad: NO subir dumps a repo público) ──
 /docs/exports/*.json
 

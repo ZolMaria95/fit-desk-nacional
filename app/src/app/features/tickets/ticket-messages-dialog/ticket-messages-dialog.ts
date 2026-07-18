@@ -1,10 +1,11 @@
-import { Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -13,7 +14,8 @@ import { HelpdeskService } from '../../../core/services/helpdesk.service';
 import { ComposeDialog } from '../compose-dialog/compose-dialog';
 import { EMPLEADOS } from '../helpdesk.constants';
 import { Ticket, clipboardToHtml, editorToMessageHtml, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
-import { estadoStyle } from '../tickets-card-utils';
+import { estadoStyle, fmtIngreso } from '../tickets-card-utils';
+import { prioBadgeClase } from '../../board/board-utils';
 
 interface ConvMsg {
   /** id del mensaje (ObjectId del API); vacío si el API no lo trajo. */
@@ -39,7 +41,7 @@ export interface TicketMessagesData {
 /** Conversación completa de un ticket: mensajes, adjuntos, lightbox y composer. */
 @Component({
   selector: 'app-ticket-messages-dialog',
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
+  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatProgressBarModule, MatTooltipModule],
   templateUrl: './ticket-messages-dialog.html',
   styleUrl: './ticket-messages-dialog.scss',
 })
@@ -55,15 +57,30 @@ export class TicketMessagesDialog {
 
   readonly ticketId = this.data.ticketId || this.data.ticket?.ticket || '';
   readonly estadoStyle = estadoStyle;
+  readonly prioClase = prioBadgeClase;
   private ticketObj: Ticket | null = this.data.ticket ?? null;
-  readonly header = signal({
-    cliente: this.data.ticket?.clienteRaw || '',
-    tipo: this.data.ticket?.tipo || '',
-    estatus: this.data.ticket?.estatus || '',
-    asunto: this.data.ticket?.asunto || '',
-  });
+  readonly header = signal(this.headerFrom(this.data.ticket ?? null));
+
+  /** Construye el encabezado desde el Ticket. Regla #8: `creador` usa el NOMBRE
+   *  (`nombreIngreso`), nunca el código (`usuarioIngreso`). */
+  private headerFrom(t: Ticket | null) {
+    return {
+      cliente: t?.clienteRaw || '',
+      tipo: t?.tipo || '',
+      estatus: t?.estatus || '',
+      asunto: t?.asunto || '',
+      orden: t?.orden ?? 999,
+      fecha: t?.fechaIngreso ? fmtIngreso(t.fechaIngreso) : '',
+      creador: t?.nombreIngreso || '',
+    };
+  }
   readonly loading = signal(true);
   readonly sessionExpired = signal(false);
+  // Cambio de estado del ticket desde el propio diálogo (acción explícita del usuario;
+  // "abrir no escribe" se respeta: solo escribe al elegir un estado del menú). Reusa
+  // el catálogo y el mismo endpoint que la lista de Tickets.
+  readonly statusOptions = computed(() => this.hd.statusNames().filter((s) => s.trim().toUpperCase() !== 'ABIERTO'));
+  readonly changingStatus = signal(false);
   readonly messages = signal<ConvMsg[]>([]);
   readonly ticketAttachments = signal<string[]>([]);
   readonly lightbox = signal<string | null>(null);
@@ -108,12 +125,7 @@ export class TicketMessagesDialog {
       const raw = await this.hd.fetchTicketRaw(this.ticketId);
       if (raw) {
         this.ticketObj = mapTicket(raw);
-        this.header.set({
-          cliente: this.ticketObj.clienteRaw,
-          tipo: this.ticketObj.tipo,
-          estatus: this.ticketObj.estatus,
-          asunto: this.ticketObj.asunto,
-        });
+        this.header.set(this.headerFrom(this.ticketObj));
       }
     }
     const msgs = await this.hd.fetchMessages(this.ticketId);
@@ -161,6 +173,20 @@ export class TicketMessagesDialog {
   goToLogin(): void {
     this.dialogRef.close();
     this.router.navigate(['/login']);
+  }
+
+  /** Cambia el estado del ticket en el HelpDesk sin cerrar el diálogo (acción explícita). */
+  async changeStatus(nuevo: string): Promise<void> {
+    if (this.changingStatus() || nuevo === this.header().estatus) return;
+    this.changingStatus.set(true);
+    const ok = await this.hd.setTicketStatus(this.ticketId, nuevo);
+    this.changingStatus.set(false);
+    if (ok) {
+      this.header.update((h) => ({ ...h, estatus: nuevo }));
+      this.snack.open(`Ticket #${this.ticketId} → ${nuevo}`, '', { duration: 2500 });
+    } else {
+      this.snack.open(`No se pudo cambiar el estado del ticket #${this.ticketId}.`, 'OK', { duration: 4000 });
+    }
   }
 
   private esEmpleado(m: any): boolean {

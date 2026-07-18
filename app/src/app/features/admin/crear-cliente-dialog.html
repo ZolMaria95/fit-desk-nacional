@@ -13,7 +13,7 @@
                  (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" />
         </div>
         @for (h of hdFiltrados(); track h.id) {
-          <mat-option [value]="h.id">#{{ h.id }} · {{ h.name }}</mat-option>
+          <mat-option [value]="h.id">{{ h.name }}</mat-option>
         }
       </mat-select>
     </mat-form-field>

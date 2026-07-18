@@ -1,6 +1,8 @@
 import { Component, OnDestroy, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
-import { firstValueFrom } from 'rxjs';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { firstValueFrom, map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCardModule } from '@angular/material/card';
@@ -39,6 +41,7 @@ import {
   colorFor,
   dueInfo,
   pastel,
+  prioBadgeClase,
   progColor,
   resolveMember,
   roundUp5,
@@ -87,6 +90,14 @@ export class Board implements OnDestroy {
   private readonly snack = inject(MatSnackBar);
   private readonly transfer = inject(TransferenciasService);
   private readonly shell = inject(ShellService);
+  private readonly breakpoints = inject(BreakpointObserver);
+
+  /** Pantalla pequeña (móvil/tablet angosto): se DESACTIVA el arrastre y las cards
+   *  cambian de columna con el botón/menú "Mover" (drag&drop solo en escritorio). */
+  readonly isHandset = toSignal(
+    this.breakpoints.observe('(max-width: 768px)').pipe(map((r) => r.matches)),
+    { initialValue: false },
+  );
 
   /** Panel de filtros que se publica al drawer del shell (mismo patrón que Tickets). */
   readonly filtersTpl = viewChild<TemplateRef<unknown>>('filtersTpl');
@@ -201,12 +212,7 @@ export class Board implements OnDestroy {
   }
 
   /** Clase de color del badge según el orden del ticket (1 = más urgente … ≥3 = baja). */
-  prioClase(orden: string): string {
-    const n = parseInt(orden, 10);
-    if (n <= 1) return 'prio-alta';
-    if (n === 2) return 'prio-media';
-    return 'prio-baja';
-  }
+  readonly prioClase = prioBadgeClase;
 
   // ── Helpers expuestos al template ──
   readonly resolveMember = (id: string | null | undefined) =>
@@ -563,7 +569,16 @@ export class Board implements OnDestroy {
   }
 
   async drop(event: CdkDragDrop<Story[]>, target: Status): Promise<void> {
-    const task = event.item.data as Story;
+    await this.moveCard(event.item.data as Story, target);
+  }
+
+  /**
+   * Cambia la columna/estado de una tarea (mismo camino que el drag&drop): valida
+   * permiso, aplica la regla de "no volver a To Do con ticket", pide confirmación
+   * (o el flujo de iniciar trabajo) y sincroniza el estado del ticket en el Helpdesk.
+   * Lo usan tanto el drop del escritorio como el menú "Mover" de pantallas pequeñas.
+   */
+  async moveCard(task: Story, target: Status): Promise<void> {
     if (!task || task.status === target) return;
     // Permiso: solo el asignado, un supervisor o el Helpdesk pueden moverla.
     if (!this.puedeOperar(task)) {

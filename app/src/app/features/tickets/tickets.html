@@ -1,16 +1,35 @@
 <!-- Panel de filtros: se publica al drawer del shell (ShellService). -->
 <ng-template #filtersTpl>
   <div class="hd-filters-panel">
-    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="f-search">
-      <mat-label>Buscar (N° o palabra)</mat-label>
-      <input matInput [ngModel]="searchTerm()" (ngModelChange)="onSearchInput($event)"
-             (keydown.enter)="submitSearch()" placeholder="Ej. 27732 o crédito" />
-      <button matSuffix mat-icon-button aria-label="Buscar" (click)="submitSearch()">
-        <mat-icon>search</mat-icon>
-      </button>
-      @if (searchPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
-      @else if (filterTexto()) { <mat-hint>Resultados por contenido en todos los tickets</mat-hint> }
-    </mat-form-field>
+    <!-- Búsqueda GLOBAL: por N° de ticket y por palabra (dos campos independientes). -->
+    <div class="filter-group">
+      <div class="filter-group-title">Búsqueda global</div>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="f-search">
+        <mat-label>Ticket (N°)</mat-label>
+        <input matInput inputmode="numeric" [ngModel]="ticketInput()" (ngModelChange)="onTicketInput($event)"
+               (keydown.enter)="submitTicket()" placeholder="Ej. 304705" />
+        <button matSuffix mat-icon-button aria-label="Buscar ticket" (click)="submitTicket()">
+          <mat-icon>search</mat-icon>
+        </button>
+        @if (ticketPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="f-search">
+        <mat-label>Palabra</mat-label>
+        <input matInput [ngModel]="palabraInput()" (ngModelChange)="onPalabraInput($event)"
+               (keydown.enter)="submitPalabra()" placeholder="Ej. crédito" />
+        <button matSuffix mat-icon-button aria-label="Buscar palabra" (click)="submitPalabra()">
+          <mat-icon>search</mat-icon>
+        </button>
+        @if (palabraPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
+        @else if (filterTexto()) { <mat-hint>Resultados por contenido en todos los tickets</mat-hint> }
+      </mat-form-field>
+    </div>
+
+    <!-- Filtros que aplican SOLO a esta sección (Tickets). -->
+    <div class="filter-group">
+      <div class="filter-group-title">Filtros de la sección</div>
 
     @if (filterClientes().length) {
       <div class="hd-cli-chips">
@@ -86,6 +105,7 @@
         <mat-option value="priority|desc">Prioridad (baja primero)</mat-option>
       </mat-select>
     </mat-form-field>
+    </div>
 
     @if (hasFilters()) {
       <button mat-stroked-button (click)="clearFilters()"><mat-icon>close</mat-icon> Limpiar filtros</button>
@@ -112,11 +132,26 @@
 }
 
 <div class="hd-tabs">
-  <button class="hd-tab" [class.active]="tab() === 'pendientes'" (click)="setTab('pendientes')">Pendientes</button>
+  <button class="hd-tab" [class.active]="tab() === 'equipo'" (click)="setTab('equipo')">Equipo</button>
   <button class="hd-tab" [class.active]="tab() === 'asignados'" (click)="setTab('asignados')">Asignados a mí</button>
   <button class="hd-tab" [class.active]="tab() === 'generales'" (click)="setTab('generales')">Todos los clientes</button>
   <button class="hd-tab" [class.active]="tab() === 'estadisticas'" (click)="setTab('estadisticas')">Estadísticas</button>
 </div>
+
+<!-- Selector de equipo (solo si el usuario puede revisar más de uno: responsable regional). -->
+@if (tab() === 'equipo' && multiEquipo()) {
+  <div class="hd-equipo-sel">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Equipo a revisar</mat-label>
+      <mat-select [value]="equipoSel()" (selectionChange)="onEquipoChange($event.value)">
+        <mat-option value="">Todos mis equipos</mat-option>
+        @for (e of equiposRevisar(); track e.codigo) {
+          <mat-option [value]="e.codigo">{{ e.nombre }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+}
 
 @if (tab() === 'estadisticas') {
   @let s = stats();
@@ -138,6 +173,20 @@
     }
   </div>
 } @else {
+  <!-- Búsqueda global de ticket: ¿tiene tarea en algún tablero y quién la lleva? -->
+  @if (filterTicket() && !searching() && ticketEnBoard(); as tb) {
+    @if (tb.enBoard) {
+      <div class="hd-board-info in">
+        <mat-icon>dashboard</mat-icon>
+        <span>Ticket <strong>#{{ filterTicket() }}</strong> está en el tablero <strong>{{ tb.board }}</strong>@if (tb.asignado) { · lo lleva <strong>{{ tb.asignado }}</strong> } @else { · <strong>sin asignar</strong> }</span>
+      </div>
+    } @else {
+      <div class="hd-board-info out">
+        <mat-icon>warning</mat-icon>
+        <span>El ticket <strong>#{{ filterTicket() }}</strong> no está en ningún tablero (nadie lo tiene como tarea asignada).</span>
+      </div>
+    }
+  }
   @if (!rows().length) {
     <div class="hd-empty">
       @if (searching()) { Buscando ticket #{{ filterTicket() }} en el sistema… }

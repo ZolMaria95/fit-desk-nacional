@@ -1,28 +1,54 @@
 <div class="conv-head" mat-dialog-title>
-  <span class="ticket-id">#{{ ticketId }}</span>
-  <span class="cliente">{{ header().cliente }}</span>
-  @if (header().tipo; as tipo) {
-    <span class="tipo">{{ tipo }}</span>
-  }
-  @if (header().estatus; as est) {
-    <span class="estatus" [style.background]="estadoStyle(est).badgeBg" [style.color]="estadoStyle(est).badgeText">{{ est }}</span>
-  }
+  <span class="conv-head-label">TICKET</span>
   <span class="spacer"></span>
   <button mat-icon-button mat-dialog-close aria-label="Cerrar"><mat-icon>close</mat-icon></button>
 </div>
 
-<div class="asunto">{{ header().asunto }}</div>
+<div class="conv-summary">
+  <div class="conv-ticket-no">{{ ticketId }}</div>
+  <h2 class="conv-title">{{ header().asunto }}</h2>
 
-@if (ticketAttachments().length) {
-  <div class="ticket-attach">
-    <span class="ticket-attach-label">Adjunto del ticket:</span>
-    @for (id of ticketAttachments(); track id; let i = $index) {
-      <button mat-stroked-button (click)="openAttachment(id, 'adjunto-general_' + ticketId + (ticketAttachments().length > 1 ? '_' + (i + 1) : ''))">
-        <mat-icon>attach_file</mat-icon> Descargar{{ ticketAttachments().length > 1 ? ' ' + (i + 1) : '' }}
-      </button>
+  <div class="conv-chips">
+    @if (header().cliente) { <span class="chip chip-cliente">{{ header().cliente }}</span> }
+    @if (header().tipo) { <span class="chip chip-tipo">{{ header().tipo }}</span> }
+    <button class="chip chip-estatus chip-btn"
+            [style.background]="header().estatus ? estadoStyle(header().estatus).badgeBg : null"
+            [style.color]="header().estatus ? estadoStyle(header().estatus).badgeText : null"
+            [matMenuTriggerFor]="estadoMenu" [disabled]="changingStatus() || sessionExpired()"
+            matTooltip="Cambiar estado del ticket">
+      {{ header().estatus || 'Sin estado' }}<mat-icon class="chip-caret">arrow_drop_down</mat-icon>
+    </button>
+    @if (header().orden && header().orden !== 999) {
+      <span class="chip chip-prio" [class]="prioClase(header().orden)" matTooltip="Prioridad del ticket">#{{ header().orden }}</span>
     }
   </div>
-}
+
+  <mat-menu #estadoMenu="matMenu">
+    @for (s of statusOptions(); track s) {
+      <button mat-menu-item [disabled]="s === header().estatus" (click)="changeStatus(s)">{{ s }}</button>
+    } @empty {
+      <button mat-menu-item disabled>Catálogo no disponible</button>
+    }
+  </mat-menu>
+
+  @if (header().fecha || header().creador) {
+    <div class="conv-byline">
+      @if (header().fecha) { <span class="bl-item"><mat-icon>event</mat-icon>{{ header().fecha }}</span> }
+      @if (header().creador) { <span class="bl-item"><mat-icon>person</mat-icon>{{ header().creador }}</span> }
+    </div>
+  }
+
+  @if (ticketAttachments().length) {
+    <div class="ticket-attach">
+      <span class="ticket-attach-label">Adjunto del ticket:</span>
+      @for (id of ticketAttachments(); track id; let i = $index) {
+        <button mat-stroked-button (click)="openAttachment(id, 'adjunto-general_' + ticketId + (ticketAttachments().length > 1 ? '_' + (i + 1) : ''))">
+          <mat-icon>attach_file</mat-icon> Descargar{{ ticketAttachments().length > 1 ? ' ' + (i + 1) : '' }}
+        </button>
+      }
+    </div>
+  }
+</div>
 
 <mat-dialog-content class="conv-body" (click)="onConvClick($event)">
   @if (sessionExpired()) {

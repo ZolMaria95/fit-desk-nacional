@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { clientStyle, colorFor, shortName } from '../../board/board-utils';
+import { clientStyle, colorFor, prioBadgeClase, shortName } from '../../board/board-utils';
 import { Ticket } from '../ticket-utils';
 import { estadoStyle, fmtIngreso, fmtMod, tipoStyle } from '../tickets-card-utils';
 
@@ -39,18 +39,26 @@ export class TicketCard {
 
   readonly estado = computed(() => estadoStyle(this.ticket().estatus));
   readonly tipo = computed(() => tipoStyle(this.ticket().tipo));
+  // Prioridad del ticket: orden del HelpDesk (1=urgente…). 999 = sin prioridad → no se muestra.
+  readonly tienePrioridad = computed(() => { const o = this.ticket().orden; return !!o && o !== 999; });
+  readonly prioClase = computed(() => prioBadgeClase(this.ticket().orden));
   // Color por cliente (mismo criterio que el board: tinte claro + acento).
   readonly cliente = computed(() => clientStyle({ id: this.ticket().clientId || this.ticket().clienteRaw }));
   readonly fIngreso = computed(() => fmtIngreso(this.ticket().fechaIngreso));
   readonly fMod = computed(() => fmtMod(this.ticket().fechaMod));
   readonly avatar = computed(() => {
     const t = this.ticket();
+    const asignado = !!(t.usuarioAsignado || t.nombreAsignado);
+    // Regla #8: solo el NOMBRE, nunca el código. Si está asignado pero no hay nombre → '—'.
+    const nombre = t.nombreAsignado ? shortName(t.nombreAsignado) : asignado ? '—' : 'Sin asignar';
+    // Color estable por el código (uso interno, no se muestra).
     const ref = t.usuarioAsignado || t.nombreAsignado || '';
-    // Nombre + apellido (criterio compartido con el board); sin asignar → guion.
-    const nombre = shortName(t.nombreAsignado || t.usuarioAsignado);
-    return { nombre: ref ? nombre : 'Sin asignar', color: ref ? colorFor(ref) : '#9aa0a6', asignado: !!ref };
+    return { nombre, color: asignado ? colorFor(ref) : '#9aa0a6', asignado };
   });
-  readonly asignadoLabel = computed(() => this.ticket().nombreAsignado || this.ticket().usuarioAsignado || 'Sin asignar');
+  readonly asignadoLabel = computed(() => {
+    const t = this.ticket();
+    return t.nombreAsignado || (t.usuarioAsignado ? '—' : 'Sin asignar');
+  });
 
   // Edición de nota inline (estado de UI local).
   readonly editingNota = signal(false);

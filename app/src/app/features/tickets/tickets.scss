@@ -78,9 +78,51 @@
 .hd-filters-panel {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 
   mat-form-field { width: 100%; }
+}
+
+// Grupos del drawer: "Búsqueda global" y "Filtros de la sección".
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  & + .filter-group {
+    padding-top: 12px;
+    border-top: 1px solid var(--mat-sys-outline-variant);
+  }
+}
+.filter-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Banner de la búsqueda global: dónde está el ticket (o aviso de que no está).
+.hd-board-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+
+  mat-icon { flex: 0 0 auto; font-size: 18px; width: 18px; height: 18px; }
+
+  &.in {
+    background: rgba(4, 138, 191, 0.10);
+    color: var(--mat-sys-primary, #048abf);
+  }
+  &.out {
+    background: rgba(231, 76, 60, 0.12);
+    color: #c0392b;
+  }
 }
 
 // Chips de clientes seleccionados (arriba del select de Cliente), cada uno con "x".
@@ -157,25 +199,45 @@
   }
 }
 
+// Selector de equipo de la pestaña "Equipo" (responsable regional).
+.hd-equipo-sel {
+  margin: 8px 0 4px;
+  mat-form-field { width: 100%; max-width: 340px; }
+}
+
 // ── Grid de cards (responsive, sin scroll horizontal) ──
+// Móvil (360–430px): UNA columna, con separación clara (antes eran 2 apretadas).
+// A partir de tablet vuelven a caber varias.
 .ticket-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: 1fr;
+  gap: 12px;
   align-items: stretch;
 }
 
-@media (min-width: 540px) {
+@media (min-width: 480px) {
   .ticket-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+}
+
+@media (min-width: 720px) {
+  .ticket-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 900px) {
   .ticket-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .ticket-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 

@@ -14,7 +14,7 @@ export const routes: Routes = [
     loadComponent: () => import('./layout/layout').then((m) => m.Layout),
     canActivate: [authGuard],
     children: [
-      { path: '', pathMatch: 'full', redirectTo: 'board' },
+      { path: '', pathMatch: 'full', redirectTo: 'tickets' },
       { path: 'board', loadComponent: () => import('./features/board/board').then((m) => m.Board) },
       { path: 'burndown', loadComponent: () => import('./features/burndown/burndown').then((m) => m.Burndown) },
       { path: 'progreso', loadComponent: () => import('./features/progreso/progreso').then((m) => m.Progreso) },

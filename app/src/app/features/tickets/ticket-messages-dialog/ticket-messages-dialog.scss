@@ -10,49 +10,138 @@
   overflow: hidden;
 }
 
+// ── Encabezado tipo "issue" (Jira/Linear): barra fina + N° grande + título +
+//    chips + fecha/creador. Móvil-first; el padding lateral crece en escritorio.
 .conv-head {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   flex: 0 0 auto;
+  padding: 12px 16px 0;
 
-  .ticket-id {
-    font-family: 'JetBrains Mono', monospace;
+  .conv-head-label {
+    font-size: 11px;
     font-weight: 700;
-    color: var(--mat-sys-primary);
-  }
-  .cliente {
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--mat-sys-surface-container-high);
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-  .tipo {
-    font-size: 12px;
-    font-weight: 600;
-    border: 1px solid var(--mat-sys-outline-variant);
+    letter-spacing: 0.08em;
     color: var(--mat-sys-on-surface-variant);
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-  .estatus {
-    font-size: 12px;
-    font-weight: 700;
-    padding: 2px 10px;
-    border-radius: 12px;
   }
   .spacer {
     flex: 1;
   }
 }
 
-.asunto {
-  font-weight: 600;
-  font-size: 14px;
-  padding: 0 24px 8px;
-  color: var(--mat-sys-on-surface);
+.conv-summary {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 16px 12px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  // N° de ticket: el elemento más prominente. Completo, nunca truncado.
+  .conv-ticket-no {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 800;
+    font-size: 30px;
+    line-height: 1.05;
+    color: var(--mat-sys-primary);
+    white-space: nowrap;
+    word-break: keep-all;
+  }
+
+  // Título: ocupa el ancho, hasta 3 líneas antes de truncar.
+  .conv-title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--mat-sys-on-surface);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+// Chips (Banco, Tipo, Estado, Prioridad): fila que envuelve, compacta.
+.conv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  .chip {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+  .chip-cliente {
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface);
+  }
+  .chip-tipo {
+    border: 1px solid var(--mat-sys-outline-variant);
+    color: var(--mat-sys-on-surface-variant);
+  }
+  .chip-estatus {
+    font-weight: 700;
+  }
+  // Chip interactivo (cambiar estado): se ve como chip pero es botón con caret.
+  // Fondo/color por defecto (para "Sin estado"); el estilo inline lo sobreescribe
+  // cuando hay estado real (color por estatus).
+  .chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    background: var(--mat-sys-surface-container-high);
+    color: var(--mat-sys-on-surface);
+
+    &:disabled { cursor: default; opacity: 0.7; }
+
+    .chip-caret {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      margin-right: -4px;
+    }
+  }
+  // Prioridad #N: mismo color por severidad que el board.
+  .chip-prio {
+    color: #fff;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+
+    &.prio-alta { background: #e74c3c; }
+    &.prio-media { background: #f2811d; }
+    &.prio-baja { background: rgba(43, 43, 58, 0.45); }
+  }
+}
+
+// Fecha + creador: una fila con iconos, mínimo alto.
+.conv-byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+
+  .bl-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+  }
 }
 
 .ticket-attach {
@@ -60,7 +149,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 0 24px 6px;
 
   .ticket-attach-label {
     font-size: 12px;
@@ -68,7 +156,7 @@
     color: var(--mat-sys-on-surface-variant);
   }
 
-  // Botón de descarga compacto: roba menos alto y deja más para la lectura.
+  // Botón de descarga compacto, al ancho natural.
   .mat-mdc-outlined-button {
     --mdc-outlined-button-container-height: 30px;
     min-height: 30px;
@@ -297,7 +385,7 @@
   flex-direction: column;
   max-height: 55vh;
   border-top: 1px solid var(--mat-sys-outline-variant);
-  padding: 6px 24px 16px;
+  padding: 8px 16px 12px;
 
   // Arrastrando archivos encima: resalta y muestra la pista de "soltar aquí".
   &.drag-over {
@@ -565,4 +653,16 @@
     color: var(--brand, #048abf);
   }
   p { margin: 0; max-width: 320px; }
+}
+
+// ── Escritorio (≥600px): paddings laterales amplios y N° un poco mayor. En móvil
+//    (base, 360–430px) el layout va compacto para aprovechar el ancho. ──
+@media (min-width: 600px) {
+  .conv-head { padding: 16px 24px 0; }
+  .conv-summary {
+    padding: 4px 24px 14px;
+    .conv-ticket-no { font-size: 34px; }
+  }
+  .conv-body { padding: 16px; }
+  .composer { padding: 8px 24px 16px; }
 }

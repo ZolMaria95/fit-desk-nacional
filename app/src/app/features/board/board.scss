@@ -68,7 +68,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 
   // En el drawer (angosto) todo va a ancho completo.
   mat-form-field,
@@ -76,6 +76,26 @@
   .assignee-select,
   .client-select,
   .ticket-search { width: 100%; }
+
+  // Grupos: "Búsqueda en el tablero" y "Filtros de la sección".
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+
+    & + .filter-group {
+      padding-top: 12px;
+      border-top: 1px solid var(--mat-sys-outline-variant);
+    }
+  }
+  .filter-group-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--mat-sys-on-surface-variant);
+  }
 
   .clear-filters {
     mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 2px; }

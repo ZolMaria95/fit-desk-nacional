@@ -57,60 +57,61 @@
 <!-- Filtros del board: se publican al drawer del shell (ShellService), como en Tickets. -->
 <ng-template #filtersTpl>
   <div class="board-filters-panel">
-  <mat-button-toggle-group
-    class="prio-filter"
-    [value]="priorityFilter()"
-    (change)="setPriority($event.value)"
-    hideSingleSelectionIndicator
-    aria-label="Filtrar por prioridad"
-  >
-    @for (p of PRIORITY_FILTERS; track p) {
-      <mat-button-toggle [value]="p">{{ p === 'all' ? 'Todas' : PRIORITY_LABELS[p] }}</mat-button-toggle>
-    }
-  </mat-button-toggle-group>
+  <!-- Búsqueda acotada a ESTE tablero (la búsqueda global vive en la sección Tickets). -->
+  <div class="filter-group">
+    <div class="filter-group-title">Búsqueda en el tablero</div>
+    <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
+      <mat-label>Ticket o palabra (en este tablero)</mat-label>
+      <input matInput [value]="ticketSearch()" (input)="onTicketSearchInput($any($event.target).value)"
+             (keydown.enter)="submitTicketSearch()" placeholder="N° o palabra…" />
+      <button matSuffix mat-icon-button aria-label="Buscar" (click)="submitTicketSearch()">
+        <mat-icon>search</mat-icon>
+      </button>
+      @if (searchingTickets()) { <mat-hint>Buscando en el HelpDesk…</mat-hint> }
+      @else if (searchPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
+    </mat-form-field>
+  </div>
 
-  <button
-    type="button"
-    class="mine-toggle"
-    mat-stroked-button
-    [class.active]="mineOnly()"
-    [attr.aria-pressed]="mineOnly()"
-    (click)="toggleMine()"
-    matTooltip="Mostrar solo mis tareas"
-  >
-    <mat-icon>person</mat-icon> Asignados a mí
-  </button>
+  <div class="filter-group">
+    <div class="filter-group-title">Filtros de la sección</div>
 
-  @if (puedeVerEquipo()) {
+    <mat-button-toggle-group
+      class="prio-filter"
+      [value]="priorityFilter()"
+      (change)="setPriority($event.value)"
+      hideSingleSelectionIndicator
+      aria-label="Filtrar por prioridad"
+    >
+      @for (p of PRIORITY_FILTERS; track p) {
+        <mat-button-toggle [value]="p">{{ p === 'all' ? 'Todas' : PRIORITY_LABELS[p] }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+
     <button
       type="button"
       class="mine-toggle"
       mat-stroked-button
-      [class.active]="teamOnly()"
-      [attr.aria-pressed]="teamOnly()"
-      (click)="toggleTeam()"
-      matTooltip="Incluir tareas de otros tableros que lleva mi equipo"
+      [class.active]="mineOnly()"
+      [attr.aria-pressed]="mineOnly()"
+      (click)="toggleMine()"
+      matTooltip="Mostrar solo mis tareas"
     >
-      <mat-icon>groups</mat-icon> Mi equipo
+      <mat-icon>person</mat-icon> Asignados a mí
     </button>
-  }
 
-  <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
-    <mat-label>Buscar (N° o palabra)</mat-label>
-    <input matInput [value]="ticketSearch()" (input)="onTicketSearchInput($any($event.target).value)"
-           (keydown.enter)="submitTicketSearch()" placeholder="N° o palabra…" />
-    <button matSuffix mat-icon-button aria-label="Buscar" (click)="submitTicketSearch()">
-      <mat-icon>search</mat-icon>
-    </button>
-    @if (searchingTickets()) { <mat-hint>Buscando en el HelpDesk…</mat-hint> }
-    @else if (searchPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
-  </mat-form-field>
-
-  @if (hasFilters()) {
-    <button mat-stroked-button class="clear-filters" (click)="clearFilters()" matTooltip="Quitar todos los filtros">
-      <mat-icon>filter_alt_off</mat-icon> Limpiar filtros
-    </button>
-  }
+    @if (puedeVerEquipo()) {
+      <button
+        type="button"
+        class="mine-toggle"
+        mat-stroked-button
+        [class.active]="teamOnly()"
+        [attr.aria-pressed]="teamOnly()"
+        (click)="toggleTeam()"
+        matTooltip="Incluir tareas de otros tableros que lleva mi equipo"
+      >
+        <mat-icon>groups</mat-icon> Mi equipo
+      </button>
+    }
 
   @if (assigneeChips().length) {
     <div class="assignee-filter">
@@ -140,9 +141,9 @@
         <mat-chip-set class="assignee-chips">
           @for (id of selectedAssignees(); track id) {
             @let mem = resolveMember(id);
-            <mat-chip class="achip" [style.background]="pastel(mem?.color || '#9aa0a6')" [matTooltip]="mem?.name || id" (removed)="removeAssignee(id)">
-              {{ shortName(mem?.name || id) }}
-              <button matChipRemove [attr.aria-label]="'Quitar ' + (mem?.name || id)">
+            <mat-chip class="achip" [style.background]="pastel(mem?.color || '#9aa0a6')" [matTooltip]="mem?.name || '—'" (removed)="removeAssignee(id)">
+              {{ shortName(mem?.name || '—') }}
+              <button matChipRemove [attr.aria-label]="'Quitar ' + (mem?.name || '—')">
                 <mat-icon>close</mat-icon>
               </button>
             </mat-chip>
@@ -188,6 +189,13 @@
       }
     </div>
   }
+  </div><!-- /filter-group Filtros de la sección -->
+
+  @if (hasFilters()) {
+    <button mat-stroked-button class="clear-filters" (click)="clearFilters()" matTooltip="Quitar todos los filtros">
+      <mat-icon>filter_alt_off</mat-icon> Limpiar filtros
+    </button>
+  }
 
   </div>
 </ng-template>
@@ -224,6 +232,7 @@
             [style.--tilt]="cardTilt(card.id)"
             cdkDrag
             [cdkDragData]="card"
+            [cdkDragDisabled]="isHandset()"
             (click)="openDetail(card)"
           >
             <div class="card-top">
@@ -241,7 +250,7 @@
               }
               @if (card.ticket && ticketPrio(card.ticket)) {
                 <span class="prio-badge" [class]="prioClase(ticketPrio(card.ticket))"
-                      matTooltip="Prioridad del ticket">P{{ ticketPrio(card.ticket) }}</span>
+                      matTooltip="Prioridad del ticket">#{{ ticketPrio(card.ticket) }}</span>
               } @else {
                 <span class="prio-badge" [class]="'prio-' + card.priority">{{ $any(PRIORITY_LABELS)[card.priority] }}</span>
               }
@@ -251,6 +260,26 @@
                 </span>
               }
               <span class="grow"></span>
+              @if (isHandset() && canDrag(card)) {
+                <button
+                  mat-icon-button
+                  class="move-btn"
+                  matTooltip="Mover a otra columna"
+                  [matMenuTriggerFor]="moveMenu"
+                  (click)="$event.stopPropagation()"
+                  aria-label="Mover tarjeta a otra columna"
+                >
+                  <mat-icon>drive_file_move</mat-icon>
+                </button>
+                <mat-menu #moveMenu="matMenu">
+                  @for (c of columns(); track c.status) {
+                    <button mat-menu-item [disabled]="c.status === card.status" (click)="moveCard(card, c.status)">
+                      <mat-icon>{{ c.status === card.status ? 'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+                      {{ c.label }}
+                    </button>
+                  }
+                </mat-menu>
+              }
               @if (puedeGestionarTodo()) {
                 <button
                   mat-icon-button

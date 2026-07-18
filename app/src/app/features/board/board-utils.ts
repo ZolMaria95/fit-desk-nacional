@@ -41,6 +41,18 @@ export function statusFromTicketEstado(estado: string): { status: Status; waitin
 export type Priority = 'alta' | 'media' | 'baja';
 export const PRIORITY_LABELS: Record<Priority, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 
+/**
+ * Clase de color del badge de prioridad del ticket según su ORDEN del HelpDesk
+ * (1 = más urgente … 2 = media … ≥3 = baja). Compartida por el Board, la tarjeta
+ * de la lista y el diálogo de conversación para que `#N` se vea igual en todos.
+ */
+export function prioBadgeClase(orden: number | string): string {
+  const n = parseInt(String(orden), 10);
+  if (n <= 1) return 'prio-alta';
+  if (n === 2) return 'prio-media';
+  return 'prio-baja';
+}
+
 // Estado del ticket en el Helpdesk según el estado de la tarea en el board.
 export const HD_ESTADO_POR_STATUS: Record<string, string> = {
   in_progress: 'EN PROCESO',
@@ -145,10 +157,15 @@ export function resolveMember(
 ): ResolvedMember | null {
   if (!id) return null;
   const t = team.find((m) => m.id === id);
-  if (t) return { id: t.id, name: t.name || t.id, color: t.color || colorFor(t.id), label: t.id, role: t.role || '' };
+  if (t) {
+    const name = t.name || '—';
+    return { id: t.id, name, color: t.color || colorFor(t.id), label: initialsFromName(name), role: t.role || '' };
+  }
   const u = hdUsers.find((x) => x.id === id);
-  const name = u ? u.name : id;
-  return { id, name, color: colorFor(id), label: initialsFromName(name), role: u?.role || '' };
+  if (u) return { id, name: u.name, color: colorFor(id), label: initialsFromName(u.name), role: u.role || '' };
+  // Regla #8: nunca mostrar el código de empleado. Si el id no resuelve a un nombre
+  // (usuario fuera del catálogo/equipo), usar un placeholder neutro, no el código.
+  return { id, name: '—', color: colorFor(id), label: '—', role: '' };
 }
 
 // ── Progreso ─────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ export class Login {
   readonly error = signal('');
 
   constructor() {
-    if (this.auth.isAuthenticated()) this.router.navigate(['/board']);
+    if (this.auth.isAuthenticated()) this.router.navigate(['/tickets']);
   }
 
   async submit(): Promise<void> {
@@ -32,7 +32,7 @@ export class Login {
     this.loading.set(true);
     try {
       await this.auth.login(this.usuario.trim(), this.password);
-      this.router.navigate(['/board']);
+      this.router.navigate(['/tickets']);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/401|credenciales/i.test(msg)) this.error.set('Usuario o contraseña incorrectos.');
