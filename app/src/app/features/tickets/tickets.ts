@@ -175,6 +175,15 @@ export class Tickets implements OnDestroy {
       .filter((id): id is string => !!id),
   );
 
+  /** Estados elegibles en "Sin asignar": ni finalizados (Aprobado/Cerrado) NI ENTREGADO
+   *  (un ticket entregado ya no necesita asignación). Va server-side en la consulta. */
+  private readonly sinAsignarStatusIds = computed(() =>
+    this.statusNames()
+      .filter((n) => !esEstadoFinalizado(n) && !n.trim().toUpperCase().includes('ENTREGADO'))
+      .map((n) => this.hd.statusIdOf(n))
+      .filter((id): id is string => !!id),
+  );
+
   // ── Pestaña "Equipo": tickets de los clientes del equipo (o del equipo elegido) ──
   /** Equipos que el usuario puede revisar y si hay más de uno (→ selector). */
   readonly equiposRevisar = this.perfil.equiposRevisar;
@@ -341,8 +350,12 @@ export class Tickets implements OnDestroy {
         .map((n) => this.hd.statusIdOf(n))
         .filter((id): id is string => !!id);
       if (ids.length) f.statusIds = ids;
-    } else if (this.tab() === 'equipo' || this.tab() === 'sinasignar') {
+    } else if (this.tab() === 'equipo') {
       const ids = this.pendingStatusIds();
+      if (ids.length) f.statusIds = ids;
+    } else if (this.tab() === 'sinasignar') {
+      // Sin asignar: además de excluir finalizados, excluye ENTREGADO.
+      const ids = this.sinAsignarStatusIds();
       if (ids.length) f.statusIds = ids;
     }
     // Filtro explícito por asignado (server-side) → ese usuario; si no, la tab "Asignados a mí" usa mi id.
