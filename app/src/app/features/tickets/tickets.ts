@@ -418,6 +418,8 @@ export class Tickets implements OnDestroy {
   async onPage(e: PageEvent): Promise<void> {
     this.pageSize.set(e.pageSize);
     this.pageIndex.set(e.pageIndex);
+    // Al cambiar de página, volver al tope: el usuario no debe subir a mano (bug).
+    this.shell.scrollTop();
     // Sin asignar: todo el equipo ya está cargado → la página se recorta en cliente
     // (pagedRows), sin re-consultar al API.
     if (this.esSinAsignarLocal()) return;

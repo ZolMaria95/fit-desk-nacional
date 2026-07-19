@@ -5,7 +5,16 @@
     [opened]="opened()"
     (openedChange)="drawerOpen.set($event)"
     [disableClose]="fixed()">
-    <div class="drawer-brand">Fit-Desk</div>
+    <div class="drawer-brand">
+      <!-- El ☰ NO desaparece al abrir el sidebar: aquí, dentro del drawer abierto,
+           sirve para ocultarlo. Solo en overlay (en escritorio el panel es fijo). -->
+      @if (!fixed()) {
+        <button mat-icon-button class="drawer-toggle" (click)="drawerOpen.set(false)" aria-label="Ocultar menú">
+          <mat-icon>menu</mat-icon>
+        </button>
+      }
+      <span class="drawer-brand-text">Fit-Desk</span>
+    </div>
 
     <!-- Búsqueda GLOBAL de ticket, disponible en TODAS las pantallas. En Tickets se
          oculta porque esa vista ya trae su propia búsqueda global (con "limpiar"). -->
@@ -94,7 +103,7 @@
       </mat-toolbar>
     }
 
-    <main class="content">
+    <main #contentEl class="content">
       <router-outlet />
     </main>
   </mat-sidenav-content>

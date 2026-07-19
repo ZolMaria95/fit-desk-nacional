@@ -342,3 +342,10 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Síntoma:** al hacer clic en "en board" (Tickets), el modal de la tarea tardaba >3.5 s en abrir.
 **Causa:** `initBoards()` hacía `await syncTicketStatuses()` (sync de estados de ticket contra el HelpDesk, lento) ANTES de llamar a `focusCardFromRoute()` (que abre el modal). Pero el modal solo necesita las stories, que ya están tras `switchBoard()`.
 **Fix:** mover `this.focusCardFromRoute()` a DENTRO de `initBoards`, justo tras `switchBoard` y ANTES del `await syncTicketStatuses()` (fire-and-forget: el sync sigue en paralelo). Se quitó el `.then(() => focusCardFromRoute())` del constructor para no abrirlo dos veces. Medido: ~1.4 s (antes >3.5 s).
+
+### [2026-07-19] `100vh` traba el scroll en móvil; el manifest controla la orientación de la PWA
+**Fuente:** correcciones de móvil en el board (layout `.shell`/`.content` + `manifest.webmanifest`).
+**Hechos:**
+- `height: 100vh` en el contenedor raíz del shell hace que, en navegadores móviles, el final del contenido quede detrás de la barra dinámica del navegador y el scroll interno "se trabe" sin llegar al fondo. Solución: `100dvh` (dynamic viewport height), con `100vh` como fallback para navegadores viejos.
+- Un mat-sidenav-container con scroll interno propio (`.content` con `overflow-y:auto`) se beneficia de `overscroll-behavior: contain` para no encadenar el scroll al body (evita el "rebote y traba" en iOS).
+- El campo `orientation` del `manifest.webmanifest` SÍ controla la orientación cuando la app corre como **PWA instalada** en `display: standalone`: `"any"` sigue la rotación física del teléfono; `"portrait"` la bloquea a vertical. En una pestaña normal del navegador el manifest no aplica (la rotación la decide el SO). Cambiar el manifest puede requerir reinstalar la PWA para que el dispositivo lo tome.

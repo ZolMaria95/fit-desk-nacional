@@ -333,3 +333,22 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ## [2026-07-19] Auto-guardado de conocimiento por hook (Stop)
 - Se automatiza la convención "persistir conocimiento antes de cerrar el turno" con un hook **Stop** (`.claude/hooks/knowledge-reminder.py` + `.claude/settings.json`): si hay cambios de código sin registrar en las bitácoras, bloquea una vez y recuerda documentar. python3 (no hay jq), anti-loop por `stop_hook_active`, salida rápida para cambios triviales. Config de proyecto (commiteada) para que la convención sea durable y visible.
+
+## [2026-07-19] Móvil: PWA bloqueada a vertical + scroll con `dvh` (fix "se traba el scroll" y "se rota sola")
+**Síntomas reportados (móvil, board):** (1) al hacer scroll a veces "se traba" y no deja seguir bajando; (2) la pantalla "se rota a horizontal sola".
+**Causa (1):** `.shell` (mat-sidenav-container) tenía `height: 100vh`. En móvil `100vh` NO descuenta la barra dinámica del navegador → el contenedor de scroll interno (`.content`) se extiende detrás de esa barra y el final del contenido queda inalcanzable (sensación de scroll trabado al fondo).
+**Causa (2):** `manifest.webmanifest` con `"orientation": "any"` → la app instalada (PWA `standalone`) sigue la rotación física del teléfono; al inclinarlo se va a horizontal.
+**Decisión / fix (100% frontend):**
+1. `.shell`: `height: 100dvh` (con `100vh` de fallback) → el alto sigue la barra dinámica del navegador; el scroll llega al fondo.
+2. `.content`: `overscroll-behavior: contain` + `-webkit-overflow-scrolling: touch` → sin "rebote y traba" al límite en iOS.
+3. `manifest.webmanifest`: `"orientation": "portrait"` → la PWA instalada ya no rota a horizontal en ningún dispositivo. **Trade-off aceptado por la dueña:** en tablet el board queda en 1-2 columnas (no 4). Alcance: solo afecta a la PWA instalada en modo standalone (en pestaña de navegador la rotación depende del SO).
+**Pendiente de despliegue:** requiere rebuild del front + redeploy a Pages. El cambio de `orientation` del manifest puede tardar en aplicarse en un dispositivo que ya tenía la PWA instalada (a veces hay que reinstalar/actualizar).
+
+## [2026-07-19] UX (pedido de Juan Pablo): paginar vuelve al tope + ☰ persistente con el drawer abierto
+**Pedidos del jefe:**
+1. "La paginación debe dejarte al top de la página" — al paginar tocaba subir a mano (bug).
+2. "El menú hamburguesa debe seguir disponible con el sidebar abierto para poder ocultarlo" — no debe desaparecer.
+**Fix (100% frontend):**
+1. **Scroll-to-top al paginar:** `ShellService` gana `registerContent(el)` + `scrollTop()`. El `Layout` registra su contenedor de scroll (`.content`, único scroll del shell) vía `viewChild('#contentEl')` en `afterNextRender`. `Tickets.onPage()` llama `shell.scrollTop()` (funciona igual para páginas del API y para "Sin asignar" recortado en cliente). Único paginador de la app = Tickets.
+2. **☰ persistente:** en `over` mode el drawer abierto tapaba el ☰ de la topbar. Se agrega un botón ☰ DENTRO del drawer (`.drawer-brand`, solo cuando `!fixed()`) que hace `drawerOpen.set(false)` → cierra el sidebar. En escritorio (`side`, panel fijo) no aparece porque no aplica.
+**Verificado:** `ng build` OK. Pendiente rebuild+redeploy a Pages.

@@ -1,5 +1,9 @@
 .shell {
-  height: 100vh;
+  height: 100vh; // fallback navegadores viejos
+  // Móvil: `dvh` descuenta la barra dinámica del navegador. Con `100vh` el final
+  // del contenido quedaba detrás de esa barra y el scroll interno "se trababa"
+  // sin dejar llegar al fondo.
+  height: 100dvh;
 }
 
 .drawer {
@@ -12,11 +16,17 @@
 }
 
 .drawer-brand {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-weight: 700;
   letter-spacing: -0.5px;
   font-size: 18px;
-  padding: 16px;
+  padding: 8px 12px;
   color: var(--brand, #048abf);
+
+  .drawer-toggle { color: var(--brand, #048abf); }
+  .drawer-brand-text { margin-left: 2px; }
 }
 
 .drawer-filters {
@@ -145,6 +155,8 @@ mat-sidenav-content.shell-content {
   min-width: 0;
   min-height: 0; // permite que el overflow funcione dentro del flex column
   overflow-y: auto;
+  overscroll-behavior: contain; // el scroll no se encadena al body → sin "rebote y traba" en móvil
+  -webkit-overflow-scrolling: touch; // momentum en iOS
   padding: 20px;
   width: 100%;
   box-sizing: border-box;

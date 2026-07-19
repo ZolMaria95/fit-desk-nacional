@@ -99,6 +99,9 @@ export class Layout {
 
   /** Contenido del shell (para limpiar un `inert` que Material pudo dejar pegado). */
   private readonly shellContent = viewChild<ElementRef<HTMLElement>>('shellContent');
+  /** Contenedor de scroll (`.content`): se registra en ShellService para que las
+   *  vistas puedan volver al tope (p. ej. al paginar). */
+  private readonly contentEl = viewChild<ElementRef<HTMLElement>>('contentEl');
 
   constructor() {
     // Carga los datos (Firebase/localStorage) y arranca el sync en tiempo real.
@@ -145,6 +148,8 @@ export class Layout {
       const el = this.shellContent()?.nativeElement;
       if (el && interactivo) el.removeAttribute('inert');
     });
+    // Registra el contenedor de scroll para que las vistas vuelvan al tope al paginar.
+    afterNextRender(() => this.shell.registerContent(this.contentEl()?.nativeElement ?? null));
     //  2) MutationObserver: quita `inert` apenas Material lo ponga (lo setea tarde,
     //     después del render, por eso el efecto solo no alcanza).
     afterNextRender(() => {
