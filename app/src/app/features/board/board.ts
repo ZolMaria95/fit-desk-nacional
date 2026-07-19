@@ -256,18 +256,19 @@ export class Board implements OnDestroy {
   readonly priorityFilter = signal<PriorityFilter>('all');
   readonly activeClients = signal<Set<string>>(new Set());
   readonly activeAssignees = signal<Set<string>>(new Set());
-  readonly ticketSearch = signal('');
-  // Búsqueda por palabra vía API: `matchedTickets` = números de ticket que coinciden
-  // con el HelpDesk (null = sin búsqueda por texto). El board filtra las cards por
-  // pertenencia a este set. `searchedTerm` = última palabra realmente buscada (para el
-  // hint "pendiente"). La búsqueda por N° sigue siendo local e instantánea.
+  // ── Búsqueda del tablero (dos campos separados) ──
+  // Campo 1: por N° de ticket O código de tarea (TA-NNN). Local e instantáneo (parcial).
+  readonly codeSearch = signal('');
+  // Campo 2: por palabra. Coincide en el texto local de la card (título/descr/cliente) O,
+  // vía API, en el contenido del ticket (`matchedTickets`). Se aplica al pulsar buscar.
+  readonly palabraSearch = signal('');
   readonly matchedTickets = signal<Set<string> | null>(null);
   readonly searchingTickets = signal(false);
-  readonly searchedTerm = signal('');
-  /** Término escrito (N° o palabra) pero aún NO buscado (para el hint "Presiona Enter"). */
+  readonly searchedPalabra = signal('');
+  /** Palabra escrita pero aún NO buscada (para el hint "Presiona Enter"). */
   readonly searchPending = computed(() => {
-    const v = this.ticketSearch().trim();
-    return !!v && v !== this.searchedTerm();
+    const v = this.palabraSearch().trim();
+    return !!v && v !== this.searchedPalabra();
   });
   /** Atajo "Asignados a mí": muestra solo las tareas del usuario en sesión. */
   readonly mineOnly = signal(false);
@@ -394,10 +395,10 @@ export class Board implements OnDestroy {
     const prio = this.priorityFilter();
     const clients = this.activeClients();
     const assignees = this.activeAssignees();
-    // Filtra por el término YA APLICADO (searchedTerm), no por lo que se está tecleando:
-    // la búsqueda (N° o palabra) se aplica solo al pulsar buscar (submitTicketSearch).
-    const term = this.searchedTerm().trim();
-    const isNum = /^\d+$/.test(term); // N° → filtro local; palabra → coincidencia por API
+    // Campo 1 (ticket/código): local e instantáneo. Campo 2 (palabra): se aplica al
+    // pulsar buscar → `searchedPalabra` (texto local) + `matchedTickets` (API).
+    const code = this.codeSearch().trim().toLowerCase();
+    const word = this.searchedPalabra().trim().toLowerCase();
     const matched = this.matchedTickets();
     const mine = this.mineOnly();
     const team = this.teamOnly();
@@ -408,15 +409,19 @@ export class Board implements OnDestroy {
       if (prio !== 'all' && s.priority !== prio) return false;
       if (clients.size > 0 && !(s.client && clients.has(s.client))) return false;
       if (assignees.size > 0 && !(!s.assignee || assignees.has(s.assignee))) return false;
-      if (term) {
-        if (isNum) {
-          // Numérico: coincidencia local por número (admite parciales).
-          if (!(s.ticket && String(s.ticket).includes(term))) return false;
-        } else {
-          // Palabra: solo cards cuyo ticket coincide con el HelpDesk (matchedTickets).
-          // matched=null (aún buscando/sin resultados) → no muestra ninguna.
-          if (!(s.ticket && matched?.has(String(s.ticket)))) return false;
-        }
+      // Campo 1: N° de ticket O código de tarea (TA-NNN = s.id), coincidencia parcial local.
+      if (code) {
+        const t = String(s.ticket || '').toLowerCase();
+        const id = String(s.id || '').toLowerCase();
+        if (!t.includes(code) && !id.includes(code)) return false;
+      }
+      // Campo 2: palabra en el texto local de la card O en el contenido del ticket (API).
+      if (word) {
+        const localHit = [s.title, s.description, s.clientName, s.client].some((x) =>
+          String(x || '').toLowerCase().includes(word),
+        );
+        const apiHit = !!(s.ticket && matched?.has(String(s.ticket)));
+        if (!localHit && !apiHit) return false;
       }
       return true;
     });
@@ -451,7 +456,8 @@ export class Board implements OnDestroy {
       this.mineOnly() ||
       this.selectedAssignees().length > 0 ||
       this.selectedClients().length > 0 ||
-      !!this.ticketSearch().trim(),
+      !!this.codeSearch().trim() ||
+      !!this.palabraSearch().trim(),
   );
   /** Limpia todos los filtros del board (prioridad, mis tareas, asignados, clientes, búsqueda). */
   clearFilters(): void {
@@ -459,46 +465,44 @@ export class Board implements OnDestroy {
     this.mineOnly.set(false);
     this.activeAssignees.set(new Set());
     this.activeClients.set(new Set());
-    this.ticketSearch.set('');
+    this.codeSearch.set('');
+    this.palabraSearch.set('');
     this.matchedTickets.set(null);
     this.searchingTickets.set(false);
-    this.searchedTerm.set('');
+    this.searchedPalabra.set('');
     this.buscarAsignado.set('');
     this.buscarCliente.set('');
   }
 
-  /**
-   * Cambio en la caja del board (cada tecla): SOLO guarda el texto; NO filtra (ni por N°
-   * ni por palabra). La búsqueda se aplica con la orden explícita (`submitTicketSearch`,
-   * con Enter o el ícono). Vaciar la caja sí quita el filtro de inmediato.
-   */
-  onTicketSearchInput(value: string): void {
-    this.ticketSearch.set(value);
-    if (!value.trim()) {
-      // Vaciar → quita el filtro de búsqueda (no es una búsqueda).
-      this.matchedTickets.set(null);
-      this.searchingTickets.set(false);
-      this.searchedTerm.set('');
-    }
-    // Con texto: no filtra; el usuario debe ejecutar submitTicketSearch().
+  /** Campo 1 (ticket/código TA-NNN): filtro LOCAL e instantáneo; solo guarda el texto. */
+  onCodeInput(value: string): void {
+    this.codeSearch.set(value);
   }
 
-  /** Búsqueda EXPLÍCITA (Enter / ícono). N° → filtro local; palabra → API + filtra las cards. */
-  async submitTicketSearch(): Promise<void> {
-    const v = this.ticketSearch().trim();
-    if (!v || /^\d+$/.test(v)) {
-      // Vacío o numérico → filtro local (por `searchedTerm`); no consulta el API.
+  /** Campo 2 (palabra): cada tecla solo guarda; vaciar quita el filtro de palabra. */
+  onPalabraInput(value: string): void {
+    this.palabraSearch.set(value);
+    if (!value.trim()) {
       this.matchedTickets.set(null);
       this.searchingTickets.set(false);
-      this.searchedTerm.set(v);
+      this.searchedPalabra.set('');
+    }
+  }
+
+  /** Búsqueda por palabra (Enter / ícono): coincide en el texto local de la card y,
+   *  además, en el contenido del ticket vía el HelpDesk (`matchedTickets`). */
+  async submitPalabra(): Promise<void> {
+    const v = this.palabraSearch().trim();
+    this.searchedPalabra.set(v);
+    if (!v) {
+      this.matchedTickets.set(null);
+      this.searchingTickets.set(false);
       return;
     }
-    // Palabra → búsqueda por contenido en el HelpDesk; el board filtra por coincidencia.
     this.searchingTickets.set(true);
     this.matchedTickets.set(null);
-    this.searchedTerm.set(v);
     const set = await this.helpdesk.searchTicketNumbers(v);
-    if (this.ticketSearch().trim() !== v) return; // el usuario cambió el término
+    if (this.palabraSearch().trim() !== v) return; // el usuario cambió el término
     this.matchedTickets.set(set);
     this.searchingTickets.set(false);
   }
@@ -768,6 +772,11 @@ export class Board implements OnDestroy {
   }
 
   async deleteCard(card: Story): Promise<void> {
+    // Defensa: una tarea con ticket asociado no se borra (nace del HelpDesk).
+    if (card.ticket) {
+      this.snack.open('Las tareas con ticket asociado no se pueden eliminar.', 'OK', { duration: 3500 });
+      return;
+    }
     const ok = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {
@@ -786,9 +795,17 @@ export class Board implements OnDestroy {
 
   async clearBoard(): Promise<void> {
     const active = this.data.sprints().active;
-    const ids = this.data.getStoriesBySprint(active).map((s) => s.id);
+    const enSprint = this.data.getStoriesBySprint(active);
+    // Solo se borran las tareas SIN ticket; las que tienen ticket nacen del HelpDesk y se conservan.
+    const eliminables = enSprint.filter((s) => !s.ticket);
+    const conTicket = enSprint.length - eliminables.length;
+    const ids = eliminables.map((s) => s.id);
     if (!ids.length) {
-      this.snack.open('No hay tareas en el sprint.', 'OK', { duration: 3000 });
+      this.snack.open(
+        conTicket ? 'Solo hay tareas con ticket asociado (no se pueden borrar).' : 'No hay tareas en el sprint.',
+        'OK',
+        { duration: 3500 },
+      );
       return;
     }
     const ok = await firstValueFrom(
@@ -796,7 +813,7 @@ export class Board implements OnDestroy {
         .open(ConfirmDialog, {
           data: {
             title: 'Borrar board',
-            message: `Vas a eliminar ${ids.length} tarea(s) del sprint activo.\n\nEsta acción NO se puede deshacer.`,
+            message: `Vas a eliminar ${ids.length} tarea(s) sin ticket del sprint activo.${conTicket ? `\n\n(${conTicket} tarea(s) con ticket asociado NO se borran.)` : ''}\n\nEsta acción NO se puede deshacer.`,
             confirmText: 'Borrar todo',
             danger: true,
             requireWord: 'BORRAR',

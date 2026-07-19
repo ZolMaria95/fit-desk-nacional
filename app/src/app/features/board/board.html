@@ -57,14 +57,21 @@
 <!-- Filtros del board: se publican al drawer del shell (ShellService), como en Tickets. -->
 <ng-template #filtersTpl>
   <div class="board-filters-panel">
-  <!-- Búsqueda acotada a ESTE tablero (la búsqueda global vive en la sección Tickets). -->
+  <!-- Búsqueda acotada a ESTE tablero (la búsqueda global vive en el shell / Tickets).
+       Dos campos: por N°/código (TA-NNN, local e instantáneo) y por palabra. -->
   <div class="filter-group">
     <div class="filter-group-title">Búsqueda en el tablero</div>
     <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
-      <mat-label>Ticket o palabra (en este tablero)</mat-label>
-      <input matInput [value]="ticketSearch()" (input)="onTicketSearchInput($any($event.target).value)"
-             (keydown.enter)="submitTicketSearch()" placeholder="N° o palabra…" />
-      <button matSuffix mat-icon-button aria-label="Buscar" (click)="submitTicketSearch()">
+      <mat-label>Ticket o código (TA-…)</mat-label>
+      <input matInput [value]="codeSearch()" (input)="onCodeInput($any($event.target).value)"
+             placeholder="Ej. 33281 o TA-046" />
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+    <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
+      <mat-label>Palabra</mat-label>
+      <input matInput [value]="palabraSearch()" (input)="onPalabraInput($any($event.target).value)"
+             (keydown.enter)="submitPalabra()" placeholder="Ej. factura…" />
+      <button matSuffix mat-icon-button aria-label="Buscar palabra" (click)="submitPalabra()">
         <mat-icon>search</mat-icon>
       </button>
       @if (searchingTickets()) { <mat-hint>Buscando en el HelpDesk…</mat-hint> }
@@ -281,7 +288,9 @@
                   }
                 </mat-menu>
               }
-              @if (puedeGestionarTodo()) {
+              <!-- Las tareas CON ticket asociado no se pueden borrar (nacen del HelpDesk);
+                   solo las tareas propias del board (sin ticket) son eliminables. -->
+              @if (puedeGestionarTodo() && !card.ticket) {
                 <button
                   mat-icon-button
                   class="del-btn"

@@ -304,3 +304,8 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 - **Bug barra fija**: `.topbar` con `position:sticky` se rompía por el `transform` que Material aplica a `.mat-drawer-content`. Fix: `mat-sidenav-content.shell-content { overflow:hidden }` + `.content { overflow-y:auto; min-height:0 }` + `.topbar { flex:0 0 auto }`.
 - **Menú**: se quitan Burndown/Progreso/Consultas del nav (rutas intactas).
 **Estado:** implementado y **verificado con Playwright** (1280 + móvil): todas las mejoras OK, 0 errores de consola, build de producción OK. **Sin cambios de backend → deploy solo a Pages** (no toca Render/Neon).
+
+## [2026-07-18] Follow-ups del lote 2 (buscador del board + borrado de tareas)
+- **Buscador del tablero en dos campos:** (1) **Ticket o código** — local e instantáneo, matchea `s.ticket` (N°) **o** `s.id` (código `TA-NNN`, parcial); (2) **Palabra** — coincide en el texto local de la card (título/descr/cliente) **y** en el contenido del ticket vía HelpDesk (`matchedTickets`), así también encuentra tareas sin ticket. (Antes: un solo campo; N°→local, palabra→solo API, sin código.)
+- **Tareas con ticket asociado NO se pueden borrar:** la × de la card se oculta si `card.ticket` (solo tareas propias sin ticket son eliminables); `deleteCard` y `clearBoard` (Borrar Board) lo refuerzan (guard + solo borran las sin ticket, avisando cuántas con ticket se conservan). Razón: las tareas con ticket nacen del HelpDesk (espejo), no son datos propios del board.
+**Estado:** implementado y verificado con Playwright (2 campos filtran; 0 tarjetas con ticket muestran ×).
