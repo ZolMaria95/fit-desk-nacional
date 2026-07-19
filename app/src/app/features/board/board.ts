@@ -123,8 +123,9 @@ export class Board implements OnDestroy {
     this.helpdesk.getClients();
     this.helpdesk.getTicketStatuses();
     // Al abrir: carga los tableros visibles, entra al del usuario y sincroniza (read-only).
-    // Si venimos con un deep-link (?board&sprint&card) desde Tickets, enfoca esa tarjeta.
-    this.data.ensureInit().then(() => this.initBoards()).then(() => this.focusCardFromRoute());
+    // Si venimos con un deep-link (?board&sprint&card), el modal se abre DENTRO de initBoards
+    // en cuanto están las stories (sin esperar el sync del HelpDesk, que es lento).
+    this.data.ensureInit().then(() => this.initBoards());
     // Roster de mi equipo (para el toggle "Mi equipo"), solo si puedo verlo.
     if (this.data.usesQuarkus() && this.auth.puedeTransferir()) {
       this.transfer.miEquipoMiembros()
@@ -157,6 +158,9 @@ export class Board implements OnDestroy {
       const entrar = target && list.some((b) => b.codigo === target) ? target : list[0]?.codigo;
       if (entrar) await this.data.switchBoard(entrar);
     }
+    // Deep-link "en board": abre el modal EN CUANTO están las stories (tras switchBoard),
+    // sin esperar el sync de estados del HelpDesk (lento). Fire-and-forget → el sync sigue.
+    this.focusCardFromRoute();
     await this.syncTicketStatuses();
   }
 

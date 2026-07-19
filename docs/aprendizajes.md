@@ -337,3 +337,8 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 ### [2026-07-18] `position: sticky` no funciona dentro de `mat-sidenav-content`
 **Causa:** Angular Material aplica `transform` a `.mat-drawer-content` (animaciones del drawer), y un ancestro con `transform` rompe `position: sticky` de los hijos. La barra superior "se escondía" al scrollear.
 **Fix:** que el scroll viva en `.content` (`flex:1; min-height:0; overflow-y:auto`) y el `mat-sidenav-content` NO scrollee (`overflow:hidden`, selector con elemento para ganar especificidad al `overflow:auto` de Material); el `.topbar` queda `flex:0 0 auto`.
+
+### [2026-07-19] Deep-link "en board": abrir el modal sin esperar el sync del HelpDesk
+**Síntoma:** al hacer clic en "en board" (Tickets), el modal de la tarea tardaba >3.5 s en abrir.
+**Causa:** `initBoards()` hacía `await syncTicketStatuses()` (sync de estados de ticket contra el HelpDesk, lento) ANTES de llamar a `focusCardFromRoute()` (que abre el modal). Pero el modal solo necesita las stories, que ya están tras `switchBoard()`.
+**Fix:** mover `this.focusCardFromRoute()` a DENTRO de `initBoards`, justo tras `switchBoard` y ANTES del `await syncTicketStatuses()` (fire-and-forget: el sync sigue en paralelo). Se quitó el `.then(() => focusCardFromRoute())` del constructor para no abrirlo dos veces. Medido: ~1.4 s (antes >3.5 s).
