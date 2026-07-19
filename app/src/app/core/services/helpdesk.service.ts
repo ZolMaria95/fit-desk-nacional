@@ -370,6 +370,57 @@ export class HelpdeskService {
   }
 
   /**
+   * Carga TODAS las páginas de un filtro server-side y las deja en `_tickets`. Se usa
+   * cuando hay que refinar en el cliente algo que el API NO expresa (p. ej. "sin
+   * asignar": el API solo filtra por UN asignado, no por "ninguno"). Trae la 1ª página
+   * (para saber el `total`) y baja el resto EN PARALELO por lotes; así la vista puede
+   * filtrar y paginar client-side con conteo correcto. `pageSize` del API tope = 100.
+   */
+  async loadAllFiltered(
+    f: TicketFilters,
+    sort: { field: string; dir: 'asc' | 'desc' } = { field: 'modified_date', dir: 'desc' },
+  ): Promise<void> {
+    if (this.loading()) return;
+    this.loading.set(true);
+    this.setStatus('Cargando tickets del equipo…', 'loading');
+    try {
+      const LIMIT = 100; // tope del API (200+ → 422)
+      const build = (offset: number) => {
+        let p = new HttpParams().set('limit', String(LIMIT)).set('offset', String(offset)).set(`${sort.field}_order`, sort.dir);
+        if (f.clientIds?.length) p = p.set('client_id', f.clientIds.join(','));
+        if (f.statusId) p = p.set('ticket_status_id', f.statusId);
+        else if (f.statusIds?.length) p = p.set('ticket_status_id', f.statusIds.join(','));
+        if (f.assignedUserId) p = p.set('assigned_user_id', f.assignedUserId);
+        return p;
+      };
+      const fetchPage = (offset: number) =>
+        firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets`, { params: build(offset) }));
+
+      const first = await fetchPage(0);
+      const total = Number(first?.total ?? 0);
+      const raw: any[] = [...(first?.items || [])];
+      // Cap defensivo (no bajar cantidades absurdas si el filtro trajera demasiado).
+      const pages = Math.min(Math.ceil(total / LIMIT), 40); // 40*100 = 4000 tope
+      for (let start = 1; start < pages; start += 5) {
+        const batch: Promise<any>[] = [];
+        for (let pg = start; pg < Math.min(start + 5, pages); pg++) batch.push(fetchPage(pg * LIMIT));
+        (await Promise.all(batch)).forEach((d) => raw.push(...(d?.items || [])));
+      }
+      const items: Ticket[] = raw.map(mapTicket).map(evaluarFechas).map(clasificar);
+      this._tickets.set(items);
+      this._total.set(total);
+      this.hasMore.set(false);
+      this.setStatus(`✓ ${items.length} cargados de ${total} del equipo`, 'ok');
+    } catch (err: any) {
+      const msg = err?.message || '';
+      const esRed = /fetch|failed|load failed|network|0/i.test(msg);
+      this.setStatus(esRed ? 'No se pudo conectar al API.' : `Error: ${msg}`, 'error');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
+  /**
    * Búsqueda por texto libre: consulta `/tickets/tickets/search?q=…` (el API busca la
    * palabra en el contenido del ticket) y deja la página como resultado actual +
    * `total`, EXACTAMENTE igual que `loadFiltered` → la vista y la paginación

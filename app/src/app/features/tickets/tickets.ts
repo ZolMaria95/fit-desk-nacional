@@ -212,18 +212,22 @@ export class Tickets implements OnDestroy {
     // La lista es EXACTAMENTE la página que devuelve el API. Los filtros (cliente,
     // estatus no-finalizado, asignado) van TODOS en la consulta, nunca en el front.
     const page = this.tickets();
-    // "Sin asignar": el API no expresa "sin asignado" como parámetro; se refina en el
-    // cliente sobre la página del equipo (puede dejar páginas parciales — mismo tradeoff
-    // aceptado que el resto de refinamientos que el API no soporta).
+    // "Sin asignar": el API no expresa "sin asignado" (assigned_user_id null) como
+    // parámetro. Cargamos TODO el set del equipo (loadAllFiltered) y refinamos aquí a los
+    // sin asignar; la paginación es EN CLIENTE, 12/página con conteo correcto.
     return this.tab() === 'sinasignar' ? page.filter((t) => !t.usuarioAsignado) : page;
   });
 
-  /** Total server-side de la consulta actual (denominador de "X de Y"). En búsqueda
-   *  por número el universo es ese único resultado (1 si se encontró, 0 si no), no el
-   *  total del listado: así la paginación es 1 sola página y no marca "más resultados". */
-  readonly tabTotal = computed(() =>
-    this.filterTicket() ? (this.remoteResult() ? 1 : 0) : this.hd.total(),
-  );
+  /** ¿"Sin asignar" paginado EN CLIENTE? (todo el equipo cargado; se filtra/pagina aquí). */
+  readonly esSinAsignarLocal = computed(() => this.tab() === 'sinasignar' && !this.filterTicket() && !this.filterTexto());
+
+  /** Total (denominador de "X de Y"). Número → 1/0. Sin asignar (cliente) → nº de sin
+   *  asignar. Resto → total server-side del API. */
+  readonly tabTotal = computed(() => {
+    if (this.filterTicket()) return this.remoteResult() ? 1 : 0;
+    if (this.esSinAsignarLocal()) return this.rows().length;
+    return this.hd.total();
+  });
   /** ¿Hay datos cargados? (para el estado vacío). */
   readonly tabHasData = computed(() => this.tickets().length > 0);
 
@@ -305,7 +309,14 @@ export class Tickets implements OnDestroy {
   // La página ya viene paginada del API; no se recorta en el cliente. El paginador
   // usa el `total` del API; en Pendientes la página puede mostrar menos por el
   // refinamiento de operativos.
-  readonly pagedRows = computed<Ticket[]>(() => this.rows());
+  readonly pagedRows = computed<Ticket[]>(() => {
+    // Sin asignar: la página se recorta EN CLIENTE (todo el equipo ya está cargado).
+    if (this.esSinAsignarLocal()) {
+      const start = this.pageIndex() * this.pageSize();
+      return this.rows().slice(start, start + this.pageSize());
+    }
+    return this.rows(); // resto: el API ya paginó
+  });
   // Paginación basada en tabTotal: en búsqueda por número es 1 sola página.
   readonly paginatorLength = computed(() => this.tabTotal());
   /** Total de páginas (para "Página X de Y"). */
@@ -353,6 +364,12 @@ export class Tickets implements OnDestroy {
       });
       return;
     }
+    // "Sin asignar": el API no filtra por "sin asignado" → cargamos TODO el equipo (todas
+    // las páginas) y la vista filtra/pagina en cliente (12/página con conteo correcto).
+    if (this.tab() === 'sinasignar') {
+      await this.hd.loadAllFiltered(this.buildFilters(), { field: this.sortField(), dir: this.sortDir() });
+      return;
+    }
     await this.hd.loadFiltered(this.buildFilters(), this.pageIndex(), this.pageSize(), {
       field: this.sortField(),
       dir: this.sortDir(),
@@ -382,10 +399,13 @@ export class Tickets implements OnDestroy {
     await this.query();
   }
 
-  /** Navegación del paginador: trae la página pedida del API (una consulta). */
+  /** Navegación del paginador: trae la página del API, o recorta en cliente (sin asignar). */
   async onPage(e: PageEvent): Promise<void> {
     this.pageSize.set(e.pageSize);
     this.pageIndex.set(e.pageIndex);
+    // Sin asignar: todo el equipo ya está cargado → la página se recorta en cliente
+    // (pagedRows), sin re-consultar al API.
+    if (this.esSinAsignarLocal()) return;
     await this.query();
   }
 

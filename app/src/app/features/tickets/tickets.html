@@ -116,7 +116,7 @@
 <!-- Contenido -->
 <div class="hd-header">
   <h2>Tickets Helpdesk</h2>
-  <span class="hd-results">{{ rows().length }} de {{ tabTotal() }}</span>
+  <span class="hd-results">{{ pagedRows().length }} de {{ tabTotal() }}</span>
   <span class="grow"></span>
   <button mat-icon-button class="hd-refresh" (click)="refresh()" [disabled]="loading()"
           matTooltip="Refrescar tickets" aria-label="Refrescar tickets">
