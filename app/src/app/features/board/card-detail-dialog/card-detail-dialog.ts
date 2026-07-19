@@ -97,6 +97,16 @@ export class CardDetailDialog {
   /** Escalar por solicitud: Especialista. */
   readonly puedeEscalar = computed(() => !this.isNew && this.data.usesQuarkus() && this.auth.esEspecialista());
 
+  /** ¿Puede MOVER la tarea de columna? Mismo criterio que el board (canDrag/puedeOperar):
+   *  el asignado (dueño) o MSC001/Supervisor(=Responsable de Equipo). Habilita el selector
+   *  "Estado" del modal (equivalente al botón/menú "Mover" de la tarjeta). */
+  readonly puedeMover = computed(() => {
+    if (this.isNew) return false;
+    if (this.auth.puedeGestionarTodo()) return true; // MSC001 o Supervisor
+    const owner = String(this.story?.assignee || '').trim().toUpperCase();
+    return !!owner && owner === String(this.auth.session()?.id || '').trim().toUpperCase();
+  });
+
   /** Abre el diálogo para transferir la tarea a otro equipo (crea una transferencia PENDIENTE). */
   enviarAotroEquipo(): void {
     if (!this.story) return;

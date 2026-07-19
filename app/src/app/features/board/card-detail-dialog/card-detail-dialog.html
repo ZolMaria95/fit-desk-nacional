@@ -114,8 +114,16 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="grow">
-      <mat-label>Estado</mat-label>
-      <input matInput [value]="STATUS_LABELS[status]" readonly />
+      <mat-label>Estado (mover)</mat-label>
+      @if (puedeMover()) {
+        <mat-select [(ngModel)]="status">
+          @for (s of STATUSES; track s) {
+            <mat-option [value]="s" [disabled]="salioDeTodo && s === 'todo'">{{ STATUS_LABELS[s] }}</mat-option>
+          }
+        </mat-select>
+      } @else {
+        <input matInput [value]="STATUS_LABELS[status]" readonly />
+      }
     </mat-form-field>
   </div>
 

@@ -309,9 +309,11 @@ export class Tickets implements OnDestroy {
     const n = this.filterTicket().trim();
     if (!n) return null;
     const st = this.data.stories().find((s) => String(s.ticket) === n);
-    if (!st) return { enBoard: false, board: '', asignado: '' };
-    const m = st.assignee ? resolveMember(st.assignee, this.data.team(), this.hd.hdUsers()) : null;
-    return { enBoard: true, board: st.board || '', asignado: m?.name || '' };
+    // "lo lleva" = el asignado del TICKET en el API (nombreAsignado del resultado remoto),
+    // NO el de la tarea del board (que puede diferir). Regla #8: es un nombre, no el código.
+    const asignado = this.remoteResult()?.nombreAsignado || '';
+    if (!st) return { enBoard: false, board: '', asignado };
+    return { enBoard: true, board: st.board || '', asignado };
   });
 
   // ── Paginación server-side ──

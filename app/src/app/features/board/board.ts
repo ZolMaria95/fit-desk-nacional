@@ -167,13 +167,19 @@ export class Board implements OnDestroy {
     if (!cardId) return;
     const sprint = p.get('sprint');
     if (sprint) this.setSprint(sprint);
-    // La data carga async y la tarjeta se renderiza después: se sondea el DOM hasta ~3s.
+    // La data carga async: se sondea hasta ~3s por la story del deep-link.
     for (let i = 0; i < 15; i++) {
-      const el = document.getElementById('card-' + cardId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('card-highlight');
-        setTimeout(() => el.classList.remove('card-highlight'), 2200);
+      const story = this.data.stories().find((s) => s.id === cardId);
+      if (story) {
+        // Resalta la tarjeta si está renderizada (puede estar oculta por filtros) …
+        const el = document.getElementById('card-' + cardId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('card-highlight');
+          setTimeout(() => el.classList.remove('card-highlight'), 2200);
+        }
+        // … y abre su modal de detalle (lo que pidió el usuario al hacer clic en "en board").
+        this.openDetail(story);
         return;
       }
       await new Promise((r) => setTimeout(r, 200));
