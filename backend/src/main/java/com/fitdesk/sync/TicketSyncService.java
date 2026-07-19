@@ -13,6 +13,7 @@ import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fitdesk.http.HttpRetry;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -43,6 +44,7 @@ public class TicketSyncService {
     String base;
 
     private final HttpClient client = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(15))
             .build();
 
@@ -94,7 +96,8 @@ public class TicketSyncService {
             if (bearer != null && !bearer.isBlank()) {
                 rb.header("Authorization", bearer.startsWith("Bearer ") ? bearer : "Bearer " + bearer);
             }
-            HttpResponse<String> r = client.send(rb.build(), HttpResponse.BodyHandlers.ofString());
+            // GET idempotente → reintenta fallos de conexión transitorios (stale keep-alive).
+            HttpResponse<String> r = HttpRetry.send(client, rb.build(), HttpResponse.BodyHandlers.ofString());
             if (r.statusCode() != 200) {
                 LOG.warnf("Sync: HelpDesk devolvió HTTP %d en offset %d", r.statusCode(), offset);
                 return null;

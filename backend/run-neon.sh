@@ -28,4 +28,6 @@ export QUARKUS_DATASOURCE_PASSWORD="$PASS"
 export QUARKUS_DATASOURCE_JDBC_URL="jdbc:postgresql://${HOSTONLY}/${DB}?sslmode=require&currentSchema=public"
 
 echo "→ Quarkus contra Neon:  ${USER}@${HOSTONLY}/${DB}  (schema=public)"
-exec java -jar target/quarkus-app/quarkus-run.jar
+# keepalive del pool HttpClient del JDK acotado (< idle del HelpDesk/LB) para no reusar
+# conexiones que el servidor ya cerró → evita "HTTP/1.1 header parser received no bytes".
+exec java -Djdk.httpclient.keepalive.timeout=20 -jar target/quarkus-app/quarkus-run.jar

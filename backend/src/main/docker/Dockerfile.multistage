@@ -25,4 +25,7 @@ EXPOSE 8080
 ENV QUARKUS_HTTP_HOST=0.0.0.0
 # MaxRAMPercentage acota el heap al contenedor (p.ej. plan free de 512 MB de Render);
 # el JVM detecta el límite del cgroup y deja margen para off-heap/metaspace.
-CMD ["java", "-XX:MaxRAMPercentage=65.0", "-jar", "quarkus-run.jar"]
+# jdk.httpclient.keepalive.timeout: acota el keep-alive del pool del HttpClient del JDK por
+# debajo del idle del HelpDesk/LB, para no reutilizar conexiones que el servidor ya cerró
+# ("HTTP/1.1 header parser received no bytes"). El retry idempotente cubre el resto.
+CMD ["java", "-XX:MaxRAMPercentage=65.0", "-Djdk.httpclient.keepalive.timeout=20", "-jar", "quarkus-run.jar"]

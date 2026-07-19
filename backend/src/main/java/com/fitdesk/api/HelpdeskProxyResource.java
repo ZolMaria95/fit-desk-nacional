@@ -14,6 +14,8 @@ import java.util.Set;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import com.fitdesk.http.HttpRetry;
+
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -56,7 +58,10 @@ public class HelpdeskProxyResource {
             "access-control-allow-origin", "access-control-allow-credentials",
             "access-control-allow-methods", "access-control-allow-headers");
 
+    // HTTP/1.1 explícito: el HelpDesk sirve 1.1 igualmente; fijarlo evita el intento H2 por
+    // ALPN en cada conexión nueva y da un comportamiento de pool/keep-alive predecible.
     private final HttpClient client = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(15))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
@@ -116,7 +121,9 @@ public class HelpdeskProxyResource {
         }
 
         try {
-            HttpResponse<byte[]> resp = client.send(rb.build(), HttpResponse.BodyHandlers.ofByteArray());
+            // Reintenta SOLO fallos de conexión transitorios y SOLO métodos idempotentes
+            // (GET/DELETE/PUT/…); POST/PATCH nunca se reintentan. Ver HttpRetry.
+            HttpResponse<byte[]> resp = HttpRetry.send(client, rb.build(), HttpResponse.BodyHandlers.ofByteArray());
             Response.ResponseBuilder out = Response.status(resp.statusCode());
             resp.headers().map().forEach((name, vals) -> {
                 if (SKIP_RESP.contains(name.toLowerCase())) {
