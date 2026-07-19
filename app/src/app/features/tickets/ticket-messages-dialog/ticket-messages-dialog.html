@@ -14,8 +14,8 @@
     <button class="chip chip-estatus chip-btn"
             [style.background]="header().estatus ? estadoStyle(header().estatus).badgeBg : null"
             [style.color]="header().estatus ? estadoStyle(header().estatus).badgeText : null"
-            [matMenuTriggerFor]="estadoMenu" [disabled]="changingStatus() || sessionExpired()"
-            matTooltip="Cambiar estado del ticket">
+            [matMenuTriggerFor]="estadoMenu" [disabled]="changingStatus() || sessionExpired() || (soloLectura() && !puedeEstadoTerminal())"
+            [matTooltip]="soloLectura() && !puedeEstadoTerminal() ? 'Ticket cerrado — solo el responsable de equipo puede cambiar el estado' : 'Cambiar estado del ticket'">
       {{ header().estatus || 'Sin estado' }}<mat-icon class="chip-caret">arrow_drop_down</mat-icon>
     </button>
     @if (header().orden && header().orden !== 999) {
@@ -31,12 +31,22 @@
     }
   </mat-menu>
 
-  @if (header().fecha || header().creador) {
+  @if (header().fecha || header().fechaMod || header().creador) {
     <div class="conv-byline">
-      @if (header().fecha) { <span class="bl-item"><mat-icon>event</mat-icon>{{ header().fecha }}</span> }
-      @if (header().creador) { <span class="bl-item"><mat-icon>person</mat-icon>{{ header().creador }}</span> }
+      @if (header().fecha) { <span class="bl-item" matTooltip="Fecha de ingreso"><mat-icon>event</mat-icon>{{ header().fecha }}</span> }
+      @if (header().fechaMod) { <span class="bl-item" matTooltip="Última modificación"><mat-icon>update</mat-icon>{{ header().fechaMod }}</span> }
+      @if (header().creador) { <span class="bl-item" matTooltip="Creador"><mat-icon>person</mat-icon>{{ header().creador }}</span> }
     </div>
   }
+
+  <div class="conv-assignee">
+    <span class="bl-item" matTooltip="Asignado"><mat-icon>assignment_ind</mat-icon>{{ header().asignado || 'Sin asignar' }}</span>
+    <button mat-icon-button class="assignee-edit" (click)="cambiarAsignado()"
+            [disabled]="soloLectura() || asignando() || sessionExpired()"
+            matTooltip="Cambiar asignado" aria-label="Cambiar asignado">
+      <mat-icon>person_add</mat-icon>
+    </button>
+  </div>
 
   @if (ticketAttachments().length) {
     <div class="ticket-attach">
@@ -100,6 +110,12 @@
 </mat-dialog-content>
 
 @if (!sessionExpired()) {
+@if (soloLectura()) {
+  <div class="composer-readonly">
+    <mat-icon>lock</mat-icon>
+    <span>Ticket cerrado — solo lectura. No se puede responder.</span>
+  </div>
+} @else {
 <div class="composer" [class.drag-over]="dragOver()"
      (dragover)="onDragOver($event)" (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
   <div class="composer-drop-hint">
@@ -127,6 +143,9 @@
     <button mat-icon-button matTooltip="Bloque de código" (mousedown)="$event.preventDefault()" (click)="codeBlock()" [disabled]="sending()">
       <mat-icon>code</mat-icon>
     </button>
+    <button mat-icon-button matTooltip="Quitar formato" (mousedown)="$event.preventDefault()" (click)="removeFormat()" [disabled]="sending()">
+      <mat-icon>format_clear</mat-icon>
+    </button>
     <span class="spacer"></span>
     <button mat-icon-button matTooltip="Abrir editor ampliado" (click)="openComposer()" [disabled]="sending()">
       <mat-icon>open_in_full</mat-icon>
@@ -144,8 +163,12 @@
       @if (composerFiles.length) {
         <div class="files">
           @for (f of composerFiles; track $index) {
-            <span class="file-chip">
-              <mat-icon>insert_drive_file</mat-icon>
+            <span class="file-chip" [class.has-thumb]="previewUrl(f)">
+              @if (previewUrl(f); as u) {
+                <img class="file-thumb" [src]="u" alt="" />
+              } @else {
+                <mat-icon>insert_drive_file</mat-icon>
+              }
               <span class="file-name">{{ f.name }}</span>
               <button type="button" class="file-remove" aria-label="Quitar adjunto"
                       (click)="removeFile(f)" [disabled]="sending()">✕</button>
@@ -161,6 +184,7 @@
     </button>
   </div>
 </div>
+}
 }
 
 @if (lightbox(); as url) {

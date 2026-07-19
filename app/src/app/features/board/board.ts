@@ -2,6 +2,7 @@ import { Component, OnDestroy, TemplateRef, afterNextRender, computed, inject, s
 import { toSignal } from '@angular/core/rxjs-interop';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom, map } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -91,6 +92,7 @@ export class Board implements OnDestroy {
   private readonly transfer = inject(TransferenciasService);
   private readonly shell = inject(ShellService);
   private readonly breakpoints = inject(BreakpointObserver);
+  private readonly route = inject(ActivatedRoute);
 
   /** Pantalla pequeña (móvil/tablet angosto): se DESACTIVA el arrastre y las cards
    *  cambian de columna con el botón/menú "Mover" (drag&drop solo en escritorio). */
@@ -121,7 +123,8 @@ export class Board implements OnDestroy {
     this.helpdesk.getClients();
     this.helpdesk.getTicketStatuses();
     // Al abrir: carga los tableros visibles, entra al del usuario y sincroniza (read-only).
-    this.data.ensureInit().then(() => this.initBoards());
+    // Si venimos con un deep-link (?board&sprint&card) desde Tickets, enfoca esa tarjeta.
+    this.data.ensureInit().then(() => this.initBoards()).then(() => this.focusCardFromRoute());
     // Roster de mi equipo (para el toggle "Mi equipo"), solo si puedo verlo.
     if (this.data.usesQuarkus() && this.auth.puedeTransferir()) {
       this.transfer.miEquipoMiembros()
@@ -145,13 +148,36 @@ export class Board implements OnDestroy {
   readonly boards = computed(() => this.data.boards());
   readonly currentBoard = computed(() => this.data.currentBoard());
 
-  /** Carga los tableros que el usuario puede ver y entra al primero (su equipo). */
+  /** Carga los tableros que el usuario puede ver y entra al primero (o al del deep-link). */
   private async initBoards(): Promise<void> {
     if (this.data.usesQuarkus()) {
       const list = await this.data.loadBoards(this.auth.session()?.id ?? null);
-      if (list.length) await this.data.switchBoard(list[0].codigo);
+      // Si el deep-link pide un tablero que el usuario puede ver, entrar a ese; si no, el primero.
+      const target = this.route.snapshot.queryParamMap.get('board');
+      const entrar = target && list.some((b) => b.codigo === target) ? target : list[0]?.codigo;
+      if (entrar) await this.data.switchBoard(entrar);
     }
     await this.syncTicketStatuses();
+  }
+
+  /** Deep-link desde Tickets ("en board"): fija el sprint de la tarea y la resalta. */
+  private async focusCardFromRoute(): Promise<void> {
+    const p = this.route.snapshot.queryParamMap;
+    const cardId = p.get('card');
+    if (!cardId) return;
+    const sprint = p.get('sprint');
+    if (sprint) this.setSprint(sprint);
+    // La data carga async y la tarjeta se renderiza después: se sondea el DOM hasta ~3s.
+    for (let i = 0; i < 15; i++) {
+      const el = document.getElementById('card-' + cardId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('card-highlight');
+        setTimeout(() => el.classList.remove('card-highlight'), 2200);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
   }
 
   /** Selector de tablero: cambia de board y re-sincroniza los estados de ticket del nuevo. */

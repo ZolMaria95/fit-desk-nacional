@@ -15,3 +15,15 @@ export function esEstadoFinalizado(estado: string | null | undefined): boolean {
     || e.includes('CERRADO POR EL CLIENTE')
     || e.includes('CERRADO POR FALTA DE RESPUESTA');
 }
+
+/**
+ * ¿El ticket está en un estado TERMINAL de "solo lectura"? En estos estados no se
+ * puede responder ni asignar; cambiar de estado queda reservado al Responsable de
+ * Equipo/Admin (el permiso se decide en la vista, no aquí). Cubre los finalizados
+ * (`esEstadoFinalizado`) + "Cotización rechazada" (= `COTIZACION NO ACEPTADA`, el
+ * único estado con "NO ACEPTADA" → match sin acentos, robusto ante el catálogo).
+ */
+export function esSoloLectura(estado: string | null | undefined): boolean {
+  if (esEstadoFinalizado(estado)) return true;
+  return (estado || '').toUpperCase().includes('NO ACEPTADA');
+}

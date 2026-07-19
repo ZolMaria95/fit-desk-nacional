@@ -329,3 +329,11 @@ Además `editorToMessageHtml` (al ENVIAR) aplanaba `<div>` **y** `<p>` a `<br>` 
 3. `POST /git/commits` con `parents:[<sha gh-pages actual>]`.
 4. `PATCH /git/refs/heads/gh-pages` con `{sha, force:true}`.
 Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sale en `dist/app/browser/` (application builder). Verificar: `raw.githubusercontent.com/.../gh-pages/index.html` debe referenciar el `main-*.js` recién compilado.
+
+### [2026-07-18] La tarea YA tiene código legible `TA-NNN` (`Tarea.codigo`), no un id aleatorio
+**Fuente:** al implementar el deep-link "en board", el `story.id` resultó ser `TA-183`.
+**Hecho:** `Tarea.codigo` (String, `@Column(unique=true)`) es el código de negocio; `LegacyReadResource.stories()` lo emite como `id` de la story (`s.put("id", t.codigo)`). Lo **genera el frontend** como correlativo **global** (no por tablero) al crear la tarea (`upsertTarea(codigo)` en `LegacyWriteService`). Por eso un "TA-01 por tablero" chocaría con la unicidad global. Para mostrar "el código" basta pintar `card.id` en tareas sin ticket.
+
+### [2026-07-18] `position: sticky` no funciona dentro de `mat-sidenav-content`
+**Causa:** Angular Material aplica `transform` a `.mat-drawer-content` (animaciones del drawer), y un ancestro con `transform` rompe `position: sticky` de los hijos. La barra superior "se escondía" al scrollear.
+**Fix:** que el scroll viva en `.content` (`flex:1; min-height:0; overflow-y:auto`) y el `mat-sidenav-content` NO scrollee (`overflow:hidden`, selector con elemento para ganar especificidad al `overflow:auto` de Material); el `.topbar` queda `flex:0 0 auto`.

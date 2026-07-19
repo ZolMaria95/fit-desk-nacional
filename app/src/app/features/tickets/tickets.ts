@@ -10,12 +10,15 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { HelpdeskService, TicketFilters } from '../../core/services/helpdesk.service';
 import { ShellService } from '../../core/services/shell.service';
 import { PerfilService } from '../../core/services/perfil.service';
+import { SearchService, GlobalSearch } from '../../core/services/search.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { resolveMember } from '../board/board-utils';
 import { CardDetailDialog } from '../board/card-detail-dialog/card-detail-dialog';
 import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-dialog';
@@ -26,20 +29,8 @@ import { CLIENTES_VALIDOS } from './helpdesk.constants';
 import { Ticket } from './ticket-utils';
 import { esEstadoFinalizado } from '../../core/helpdesk-estados';
 
-// Orden de tabs: Pendientes (default) primero, Estadísticas al final.
-type Tab = 'equipo' | 'asignados' | 'generales' | 'estadisticas';
-
-interface StatRow {
-  key: string;
-  count: number;
-  pct: string;
-  color: string;
-}
-
-/** Ticket finalizado (aprobado/cerrado) → fuera de las tabs operativas. */
-function esFinalizado(t: Ticket): boolean {
-  return esEstadoFinalizado(t.estatus);
-}
+// Orden de tabs: Equipo (default), Sin asignar, Asignados a mí, Todos los clientes.
+type Tab = 'equipo' | 'sinasignar' | 'asignados' | 'generales';
 
 /** Vista Tickets (grid de cards del Helpdesk). Port de js/helpdesk-panel.js. */
 @Component({
@@ -67,6 +58,8 @@ export class Tickets implements OnDestroy {
   private readonly snack = inject(MatSnackBar);
   private readonly shell = inject(ShellService);
   private readonly perfil = inject(PerfilService);
+  private readonly router = inject(Router);
+  private readonly search = inject(SearchService);
 
   /** Panel de filtros que se publica al drawer del shell. */
   readonly filtersTpl = viewChild<TemplateRef<unknown>>('filtersTpl');
@@ -79,6 +72,8 @@ export class Tickets implements OnDestroy {
   readonly clients = this.hd.clients;
   /** Estados elegibles en el menú: nunca se permite cambiar a ABIERTO. */
   readonly statusOptions = computed(() => this.statusNames().filter((s) => s.trim().toUpperCase() !== 'ABIERTO'));
+  /** ¿Puede cambiar el estado de tickets cerrados? (Responsable de Equipo/Admin). */
+  readonly puedeTransferir = this.auth.puedeTransferir;
 
   // ── Estado de la vista ──
   readonly tab = signal<Tab>('equipo');
@@ -122,7 +117,14 @@ export class Tickets implements OnDestroy {
     // Espera los catálogos de clientes Y estados (para mapear válidos→client_id y
     // no-finalizados→ticket_status_id) y luego consulta fresca. Así Pendientes filtra
     // TODO server-side desde la primera carga. El botón ↻ vuelve a llamar a refresh().
-    Promise.all([this.hd.getClients(), this.hd.getTicketStatuses(), this.perfil.cargarEquiposRevisar()]).then(() => this.refresh());
+    Promise.all([this.hd.getClients(), this.hd.getTicketStatuses(), this.perfil.cargarEquiposRevisar()]).then(() => {
+      this.refresh();
+      // Búsqueda global lanzada desde el shell ANTES de montar esta vista (navegación).
+      const pend = this.search.takePending();
+      if (pend) this.aplicarBusquedaGlobal(pend);
+    });
+    // Búsqueda global lanzada con la vista YA montada (ya estás en /tickets).
+    this.search.submissions.pipe(takeUntilDestroyed()).subscribe((s) => this.aplicarBusquedaGlobal(s));
     // Los overlays (notas/acciones/pendientes) se cargan en `data.ensureInit()` (lo
     // dispara el layout). La señal se inicializó vacía en el constructor; al resolver
     // la carga hay que RE-leerla, si no las notas nunca se pintan aunque existan.
@@ -136,6 +138,18 @@ export class Tickets implements OnDestroy {
     this.pendientes.set({ ...this.data.getHdPendientes() });
   }
 
+  /** Aplica una búsqueda global lanzada desde el shell (reusa la búsqueda de la vista). */
+  private aplicarBusquedaGlobal(s: GlobalSearch): void {
+    if (s.kind === 'ticket') {
+      this.ticketInput.set(s.value);
+      this.submitTicket();
+    } else {
+      this.palabraInput.set(s.value);
+      this.submitPalabra();
+    }
+    this.search.takePending(); // consumida
+  }
+
   ngOnDestroy(): void {
     this.shell.clear();
   }
@@ -144,10 +158,6 @@ export class Tickets implements OnDestroy {
     return String(this.auth.session()?.id || '').trim().toUpperCase();
   }
 
-  /** Tickets operativos: clientes válidos y no finalizados (refinamiento de Pendientes). */
-  private readonly operativos = computed(() =>
-    this.tickets().filter((t) => CLIENTES_VALIDOS.has(t.clienteRaw) && !esFinalizado(t)),
-  );
 
   /** client_id de los clientes válidos (CLIENTES_VALIDOS → id vía catálogo del API).
    *  Permite filtrar Pendientes por esos clientes EN la consulta (páginas llenas). */
@@ -201,7 +211,11 @@ export class Tickets implements OnDestroy {
     if (this.filterTicket()) return this.remoteResult() ? [this.remoteResult()!] : [];
     // La lista es EXACTAMENTE la página que devuelve el API. Los filtros (cliente,
     // estatus no-finalizado, asignado) van TODOS en la consulta, nunca en el front.
-    return this.tickets();
+    const page = this.tickets();
+    // "Sin asignar": el API no expresa "sin asignado" como parámetro; se refina en el
+    // cliente sobre la página del equipo (puede dejar páginas parciales — mismo tradeoff
+    // aceptado que el resto de refinamientos que el API no soporta).
+    return this.tab() === 'sinasignar' ? page.filter((t) => !t.usuarioAsignado) : page;
   });
 
   /** Total server-side de la consulta actual (denominador de "X de Y"). En búsqueda
@@ -299,40 +313,14 @@ export class Tickets implements OnDestroy {
   /** ¿Hay más páginas después de la actual? En búsqueda por número nunca hay más. */
   readonly hayMasPaginas = computed(() => !this.filterTicket() && this.pageIndex() + 1 < this.totalPages());
 
-  readonly stats = computed(() => {
-    const all = this.operativos();
-    const total = all.length;
-    const acc = (sel: (t: Ticket) => string) => {
-      const m = new Map<string, number>();
-      all.forEach((t) => m.set(sel(t), (m.get(sel(t)) || 0) + 1));
-      return m;
-    };
-    const toRows = (m: Map<string, number>): StatRow[] =>
-      [...m.entries()]
-        .filter(([, v]) => v > 0)
-        .sort((a, b) => b[1] - a[1])
-        .map(([key, count]) => ({
-          key,
-          count,
-          pct: total ? ((count / total) * 100).toFixed(1) + '%' : '0%',
-          color: 'inherit',
-        }));
-    return {
-      total,
-      porCliente: toRows(acc((t) => t.clienteRaw)),
-      porEstatus: toRows(acc((t) => t.estatus)),
-    };
-  });
-
-
   // ── Acciones ──
   /** Filtros server-side desde la tab + filtros activos. */
   private buildFilters(): TicketFilters {
     const f: TicketFilters = {};
     if (this.filterClientes().length) {
       f.clientIds = this.filterClientes(); // selección explícita del usuario
-    } else if (this.tab() === 'equipo') {
-      f.clientIds = this.equipoClientIds(); // Equipo: solo los clientes del equipo (o del equipo elegido)
+    } else if (this.tab() === 'equipo' || this.tab() === 'sinasignar') {
+      f.clientIds = this.equipoClientIds(); // Equipo/Sin asignar: solo los clientes del equipo
     }
     // Estatus SIEMPRE server-side: filtro explícito → esos estados (lista por comas);
     // Pendientes sin filtro → lista de todos los estados NO finalizados (excluye
@@ -342,7 +330,7 @@ export class Tickets implements OnDestroy {
         .map((n) => this.hd.statusIdOf(n))
         .filter((id): id is string => !!id);
       if (ids.length) f.statusIds = ids;
-    } else if (this.tab() === 'equipo') {
+    } else if (this.tab() === 'equipo' || this.tab() === 'sinasignar') {
       const ids = this.pendingStatusIds();
       if (ids.length) f.statusIds = ids;
     }
@@ -357,10 +345,6 @@ export class Tickets implements OnDestroy {
 
   /** Consulta la página actual: búsqueda por palabra, filtrada server-side, o carga amplia. */
   private async query(): Promise<void> {
-    if (this.tab() === 'estadisticas') {
-      await this.hd.loadAll();
-      return;
-    }
     // Búsqueda por palabra: global (ignora los filtros de tab), paginada server-side.
     if (this.filterTexto()) {
       await this.hd.searchTickets(this.filterTexto(), this.pageIndex(), this.pageSize(), {
@@ -546,6 +530,13 @@ export class Tickets implements OnDestroy {
 
   openConversation(t: Ticket): void {
     this.dialog.open(TicketMessagesDialog, { data: { ticket: t }, width: '720px', maxWidth: '96vw' });
+  }
+
+  /** Va a la tarea del board que corresponde a este ticket (si existe) y la resalta. */
+  irAlBoard(t: Ticket): void {
+    const st = this.data.stories().find((s) => String(s.ticket) === String(t.ticket));
+    if (!st) return;
+    this.router.navigate(['/board'], { queryParams: { board: st.board || '', sprint: st.sprint || '', card: st.id } });
   }
 
   openAssign(t: Ticket): void {

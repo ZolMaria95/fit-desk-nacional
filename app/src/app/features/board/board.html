@@ -222,6 +222,7 @@
           @let due = dueInfo(card.dueDate, card.status);
 
           <mat-card
+            [id]="'card-' + card.id"
             class="story-card"
             [class.not-mine]="!canDrag(card)"
             [class.overdue]="due.overdue"
@@ -232,14 +233,14 @@
             [style.--tilt]="cardTilt(card.id)"
             cdkDrag
             [cdkDragData]="card"
-            [cdkDragDisabled]="isHandset()"
+            [cdkDragDisabled]="isHandset() || !canDrag(card)"
             (click)="openDetail(card)"
           >
             <div class="card-top">
               @if (esReunion(card)) {
                 <span class="reunion-badge"><mat-icon inline>groups</mat-icon> {{ subtipoLabel(card.subtipo) }}</span>
               } @else {
-                <span class="card-ticket">#{{ card.ticket || '—' }}</span>
+                <span class="card-ticket">{{ card.ticket ? '#' + card.ticket : card.id }}</span>
                 @if (card.ticket) {
                   <button class="card-copy" (click)="copiarTicket(card.ticket, $event)"
                           [matTooltip]="ticketCopiado() === card.ticket ? 'Copiado' : 'Copiar número'"
@@ -260,7 +261,7 @@
                 </span>
               }
               <span class="grow"></span>
-              @if (isHandset() && canDrag(card)) {
+              @if (canDrag(card)) {
                 <button
                   mat-icon-button
                   class="move-btn"

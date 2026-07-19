@@ -7,6 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { clientStyle, colorFor, prioBadgeClase, shortName } from '../../board/board-utils';
 import { Ticket } from '../ticket-utils';
 import { estadoStyle, fmtIngreso, fmtMod, tipoStyle } from '../tickets-card-utils';
+import { esSoloLectura } from '../../../core/helpdesk-estados';
 
 /**
  * Card presentacional de un ticket (grid responsive). No inyecta servicios:
@@ -28,6 +29,9 @@ export class TicketCard {
   readonly yaEnBoard = input(false);
   /** Muestra el badge de "días sin movimiento" (lo usa Mi Panel). */
   readonly mostrarDias = input(false);
+  /** ¿El usuario puede cambiar el estado de un ticket cerrado? (Responsable/Admin).
+   *  El card es presentacional: el contenedor pasa el permiso (auth.puedeTransferir). */
+  readonly puedeCambiarEstadoCerrado = input(false);
 
   readonly verConversacion = output<void>();
   readonly crearTarea = output<void>();
@@ -36,6 +40,11 @@ export class TicketCard {
   readonly guardarNota = output<string>();
   readonly toggleAccion = output<void>();
   readonly togglePendiente = output<void>();
+  /** "en board" → ir a la tarea del board (lo resuelve el contenedor). */
+  readonly irAlBoard = output<void>();
+
+  /** Ticket en estado terminal (cerrado/aprobado/cotización rechazada) → solo lectura. */
+  readonly soloLectura = computed(() => esSoloLectura(this.ticket().estatus));
 
   readonly estado = computed(() => estadoStyle(this.ticket().estatus));
   readonly tipo = computed(() => tipoStyle(this.ticket().tipo));

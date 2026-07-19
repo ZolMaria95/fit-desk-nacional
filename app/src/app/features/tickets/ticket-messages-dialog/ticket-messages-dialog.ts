@@ -14,8 +14,10 @@ import { HelpdeskService } from '../../../core/services/helpdesk.service';
 import { ComposeDialog } from '../compose-dialog/compose-dialog';
 import { EMPLEADOS } from '../helpdesk.constants';
 import { Ticket, clipboardToHtml, editorToMessageHtml, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
-import { estadoStyle, fmtIngreso } from '../tickets-card-utils';
+import { estadoStyle, fmtIngreso, fmtMod } from '../tickets-card-utils';
 import { prioBadgeClase } from '../../board/board-utils';
+import { esSoloLectura } from '../../../core/helpdesk-estados';
+import { AssignTicketDialog } from '../assign-ticket-dialog/assign-ticket-dialog';
 
 interface ConvMsg {
   /** id del mensaje (ObjectId del API); vacío si el API no lo trajo. */
@@ -71,7 +73,11 @@ export class TicketMessagesDialog {
       asunto: t?.asunto || '',
       orden: t?.orden ?? 999,
       fecha: t?.fechaIngreso ? fmtIngreso(t.fechaIngreso) : '',
+      // Última modificación (mismo formateo que la tarjeta de la lista).
+      fechaMod: t?.fechaMod ? fmtMod(t.fechaMod) : '',
       creador: t?.nombreIngreso || '',
+      // Asignado actual (nombre; nunca el código — regla #8). '' → "Sin asignar".
+      asignado: t?.nombreAsignado || '',
     };
   }
   readonly loading = signal(true);
@@ -81,6 +87,11 @@ export class TicketMessagesDialog {
   // el catálogo y el mismo endpoint que la lista de Tickets.
   readonly statusOptions = computed(() => this.hd.statusNames().filter((s) => s.trim().toUpperCase() !== 'ABIERTO'));
   readonly changingStatus = signal(false);
+  // Ticket en estado terminal (Aprobado/Cerrado/Cotización rechazada): solo lectura.
+  // No se puede responder ni asignar; cambiar de estado queda solo para Responsable/Admin.
+  readonly soloLectura = computed(() => esSoloLectura(this.header().estatus));
+  readonly puedeEstadoTerminal = computed(() => this.auth.puedeTransferir());
+  readonly asignando = signal(false);
   readonly messages = signal<ConvMsg[]>([]);
   readonly ticketAttachments = signal<string[]>([]);
   readonly lightbox = signal<string | null>(null);
@@ -189,6 +200,25 @@ export class TicketMessagesDialog {
     }
   }
 
+  /** Abre el modal de asignación (reusa AssignTicketDialog) y refresca el header al asignar. */
+  async cambiarAsignado(): Promise<void> {
+    if (this.soloLectura() || this.asignando() || !this.ticketObj) return;
+    this.asignando.set(true);
+    const ok = await firstValueFrom(
+      this.dialog
+        .open(AssignTicketDialog, { data: { ticket: this.ticketObj }, width: '480px', maxWidth: '95vw', autoFocus: false })
+        .afterClosed(),
+    );
+    this.asignando.set(false);
+    if (!ok) return; // cancelado
+    // Recarga el header para reflejar el nuevo asignado (el propio modal ya avisó por snackbar).
+    const raw = await this.hd.fetchTicketRaw(this.ticketId);
+    if (raw) {
+      this.ticketObj = mapTicket(raw);
+      this.header.set(this.headerFrom(this.ticketObj));
+    }
+  }
+
   private esEmpleado(m: any): boolean {
     const role = String(m.entry_user_role || '').trim().toUpperCase();
     if (role) return !role.includes('CLIENTE');
@@ -273,12 +303,42 @@ export class TicketMessagesDialog {
 
   onFiles(e: Event): void {
     const input = e.target as HTMLInputElement;
+    this.revokeAllPreviews(); // el input reemplaza la lista → libera previews viejos
     this.composerFiles = input.files ? [...input.files] : [];
   }
 
   /** Quita un adjunto de la lista (botón ✕ junto al archivo). */
   removeFile(file: File): void {
+    this.revokePreview(file);
     this.composerFiles = this.composerFiles.filter((f) => f !== file);
+  }
+
+  // ── Previsualización de adjuntos imagen (antes de enviar) ──
+  // URLs de objeto cacheadas por File; se revocan al quitar el archivo o tras enviar.
+  private previewUrls = new Map<File, string>();
+
+  /** URL para previsualizar un adjunto imagen (o '' si el archivo no es imagen). */
+  previewUrl(f: File): string {
+    if (!f.type.startsWith('image/')) return '';
+    let u = this.previewUrls.get(f);
+    if (!u) {
+      u = URL.createObjectURL(f);
+      this.previewUrls.set(f, u);
+    }
+    return u;
+  }
+
+  private revokePreview(f: File): void {
+    const u = this.previewUrls.get(f);
+    if (u) {
+      URL.revokeObjectURL(u);
+      this.previewUrls.delete(f);
+    }
+  }
+
+  private revokeAllPreviews(): void {
+    this.previewUrls.forEach((u) => URL.revokeObjectURL(u));
+    this.previewUrls.clear();
   }
 
   // ── Arrastrar y soltar archivos sobre el área de mensaje ──
@@ -320,6 +380,12 @@ export class TicketMessagesDialog {
   /** Marca la selección como bloque de código (monoespaciado, conserva sangría). */
   codeBlock(): void {
     insertCodeBlock(this.composerInput().nativeElement);
+  }
+
+  /** Quita el formato (negrita/cursiva/subrayado/etc.) del texto seleccionado. */
+  removeFormat(): void {
+    this.composerInput().nativeElement.focus();
+    document.execCommand('removeFormat', false);
   }
 
   /**
@@ -410,6 +476,7 @@ export class TicketMessagesDialog {
     this.sending.set(false);
     if (ok) {
       el.innerHTML = '';
+      this.revokeAllPreviews();
       this.composerFiles = [];
       this.sendStatus.set('Enviado ✓');
       this.load();

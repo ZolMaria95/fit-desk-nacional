@@ -3,8 +3,11 @@ import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { BreakpointObserver } from '@angular/cdk/layout';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatDialog } from '@angular/material/dialog';
@@ -14,6 +17,7 @@ import { AuthService } from '../core/services/auth.service';
 import { DataService } from '../core/services/data.service';
 import { HelpdeskService } from '../core/services/helpdesk.service';
 import { ShellService } from '../core/services/shell.service';
+import { SearchService } from '../core/services/search.service';
 import { PerfilService } from '../core/services/perfil.service';
 import { PerfilDialog } from '../features/perfil/perfil-dialog';
 import { ReminderAlertDialog, ReminderItem } from '../features/pendientes/reminder-alert-dialog/reminder-alert-dialog';
@@ -31,8 +35,11 @@ import { ReminderAlertDialog, ReminderItem } from '../features/pendientes/remind
     RouterLink,
     RouterLinkActive,
     NgTemplateOutlet,
+    FormsModule,
     MatToolbarModule,
     MatButtonModule,
+    MatFormFieldModule,
+    MatInputModule,
     MatListModule,
     MatSidenavModule,
     MatIconModule,
@@ -50,6 +57,7 @@ export class Layout {
   private readonly destroyRef = inject(DestroyRef);
   readonly shell = inject(ShellService);
   readonly perfil = inject(PerfilService);
+  private readonly search = inject(SearchService);
 
   /** Evita apilar varias alertas de recordatorio a la vez. */
   private alertOpen = false;
@@ -74,6 +82,14 @@ export class Layout {
    *  `inert` pegado al navegar en círculo. En `side` Material no aplica focus-trap/inert.) */
   readonly fixed = computed(() => this.isDesktop());
   readonly mode = computed<'side' | 'over'>(() => (this.fixed() ? 'side' : 'over'));
+  /** URL actual: para ocultar la búsqueda global del shell cuando ya estás en Tickets
+   *  (esa vista trae su propia búsqueda global con "limpiar"). */
+  private readonly currentUrl = signal(this.router.url);
+  readonly enTickets = computed(() => this.currentUrl().startsWith('/tickets'));
+  /** Campos de la búsqueda global del shell (disponible en TODAS las pantallas). */
+  readonly gTicket = signal('');
+  readonly gPalabra = signal('');
+
   /** Estado manual del drawer (botón ☰) cuando es overlay; en modo fijo se ignora. */
   readonly drawerOpen = signal(false);
   /** Abierto = fijo (side, siempre abierto) o abierto manualmente en overlay. Derivar
@@ -143,15 +159,36 @@ export class Layout {
       this.destroyRef.onDestroy(() => obs.disconnect());
     });
 
-    // En overlay, cerrar el drawer al navegar.
+    // Al navegar: refresca la URL (para `enTickets`) y, en overlay, cierra el drawer.
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(() => {
+      .subscribe((e) => {
+        this.currentUrl.set((e as NavigationEnd).urlAfterRedirects);
         if (!this.fixed()) this.drawerOpen.set(false);
       });
+  }
+
+  /** Búsqueda global por N° de ticket desde el shell → va a Tickets y la ejecuta. */
+  buscarTicketGlobal(): void {
+    const v = this.gTicket().trim();
+    if (!v) return;
+    this.search.buscar('ticket', v);
+    this.gTicket.set('');
+    this.router.navigate(['/tickets']);
+    if (!this.fixed()) this.drawerOpen.set(false);
+  }
+
+  /** Búsqueda global por palabra desde el shell → va a Tickets y la ejecuta. */
+  buscarPalabraGlobal(): void {
+    const v = this.gPalabra().trim();
+    if (!v) return;
+    this.search.buscar('palabra', v);
+    this.gPalabra.set('');
+    this.router.navigate(['/tickets']);
+    if (!this.fixed()) this.drawerOpen.set(false);
   }
 
   private static readonly ALERTED_KEY = 'fit-daily_alerted';

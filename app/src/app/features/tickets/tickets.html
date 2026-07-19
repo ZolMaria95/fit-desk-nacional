@@ -133,13 +133,13 @@
 
 <div class="hd-tabs">
   <button class="hd-tab" [class.active]="tab() === 'equipo'" (click)="setTab('equipo')">Equipo</button>
+  <button class="hd-tab" [class.active]="tab() === 'sinasignar'" (click)="setTab('sinasignar')">Sin asignar</button>
   <button class="hd-tab" [class.active]="tab() === 'asignados'" (click)="setTab('asignados')">Asignados a mí</button>
   <button class="hd-tab" [class.active]="tab() === 'generales'" (click)="setTab('generales')">Todos los clientes</button>
-  <button class="hd-tab" [class.active]="tab() === 'estadisticas'" (click)="setTab('estadisticas')">Estadísticas</button>
 </div>
 
 <!-- Selector de equipo (solo si el usuario puede revisar más de uno: responsable regional). -->
-@if (tab() === 'equipo' && multiEquipo()) {
+@if ((tab() === 'equipo' || tab() === 'sinasignar') && multiEquipo()) {
   <div class="hd-equipo-sel">
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
       <mat-label>Equipo a revisar</mat-label>
@@ -153,26 +153,6 @@
   </div>
 }
 
-@if (tab() === 'estadisticas') {
-  @let s = stats();
-  <div class="hd-stats-header">RESUMEN EJECUTIVO — Total tickets activos: <strong>{{ s.total }}</strong></div>
-  <div class="hd-stats-grid">
-    @for (block of [{ t: 'Por Cliente', rows: s.porCliente }, { t: 'Por Estatus', rows: s.porEstatus }]; track block.t) {
-      <div class="hd-stats-block">
-        <div class="hd-stats-title">{{ block.t }}</div>
-        <table class="hd-stats-tbl">
-          <thead><tr><th>{{ block.t.split(' ')[1] }}</th><th>Tickets</th><th>% Total</th></tr></thead>
-          <tbody>
-            @for (r of block.rows; track r.key) {
-              <tr><td [style.color]="r.color">{{ r.key }}</td><td class="num">{{ r.count }}</td><td class="num">{{ r.pct }}</td></tr>
-            }
-          </tbody>
-          <tfoot><tr><td>TOTAL</td><td class="num">{{ s.total }}</td><td class="num">100%</td></tr></tfoot>
-        </table>
-      </div>
-    }
-  </div>
-} @else {
   <!-- Búsqueda global de ticket: ¿tiene tarea en algún tablero y quién la lleva? -->
   @if (filterTicket() && !searching() && ticketEnBoard(); as tb) {
     @if (tb.enBoard) {
@@ -206,13 +186,15 @@
           [esAccion]="isAction(t)"
           [esPendiente]="isPending(t)"
           [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
+          [puedeCambiarEstadoCerrado]="puedeTransferir()"
           (verConversacion)="openConversation(t)"
           (crearTarea)="openTicketTask(t)"
           (asignar)="openAssign(t)"
           (cambiarEstado)="changeStatus(t, $event)"
           (guardarNota)="onGuardarNota(t, $event)"
           (toggleAccion)="toggleAction(t)"
-          (togglePendiente)="togglePending(t)" />
+          (togglePendiente)="togglePending(t)"
+          (irAlBoard)="irAlBoard(t)" />
       }
     </div>
 
@@ -233,4 +215,3 @@
       aria-label="Páginas de tickets">
     </mat-paginator>
   }
-}

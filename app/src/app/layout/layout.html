@@ -7,6 +7,30 @@
     [disableClose]="fixed()">
     <div class="drawer-brand">Fit-Desk</div>
 
+    <!-- Búsqueda GLOBAL de ticket, disponible en TODAS las pantallas. En Tickets se
+         oculta porque esa vista ya trae su propia búsqueda global (con "limpiar"). -->
+    @if (!enTickets()) {
+      <div class="drawer-search">
+        <div class="drawer-search-title">Buscar ticket</div>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="ds-field">
+          <mat-label>N° de ticket</mat-label>
+          <input matInput inputmode="numeric" [ngModel]="gTicket()" (ngModelChange)="gTicket.set($event)"
+                 (keydown.enter)="buscarTicketGlobal()" placeholder="Ej. 33281" />
+          <button matSuffix mat-icon-button aria-label="Buscar ticket" (click)="buscarTicketGlobal()">
+            <mat-icon>search</mat-icon>
+          </button>
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="ds-field">
+          <mat-label>Palabra</mat-label>
+          <input matInput [ngModel]="gPalabra()" (ngModelChange)="gPalabra.set($event)"
+                 (keydown.enter)="buscarPalabraGlobal()" placeholder="Ej. crédito" />
+          <button matSuffix mat-icon-button aria-label="Buscar palabra" (click)="buscarPalabraGlobal()">
+            <mat-icon>search</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+    }
+
     @if (shell.filters(); as tpl) {
       <div class="drawer-filters">
         <ng-container *ngTemplateOutlet="tpl"></ng-container>
@@ -16,9 +40,6 @@
     <mat-nav-list class="drawer-nav" (click)="drawerOpen.set(false)">
       <h3 matSubheader>Scrum</h3>
       <a mat-list-item routerLink="/board" routerLinkActive="active">Board</a>
-      <a mat-list-item routerLink="/burndown" routerLinkActive="active">Burndown</a>
-      <a mat-list-item routerLink="/progreso" routerLinkActive="active">Progreso</a>
-      <a mat-list-item routerLink="/consultas" routerLinkActive="active">Consultas</a>
 
       <h3 matSubheader>Helpdesk</h3>
       <a mat-list-item routerLink="/tickets" routerLinkActive="active">Tickets</a>

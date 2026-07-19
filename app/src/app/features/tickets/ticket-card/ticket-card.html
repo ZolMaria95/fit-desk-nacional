@@ -17,7 +17,8 @@
       }
       <span class="tc-spacer"></span>
       @if (yaEnBoard()) {
-        <span class="tc-en-board" matTooltip="Este ticket ya tiene una tarea en el board"><mat-icon>task_alt</mat-icon> en board</span>
+        <button type="button" class="tc-en-board" (click)="$event.stopPropagation(); irAlBoard.emit()"
+                matTooltip="Ir a la tarea en el board"><mat-icon>task_alt</mat-icon> en board</button>
       } @else {
         <button class="tc-crear" (click)="$event.stopPropagation(); crearTarea.emit()" matTooltip="Crear tarea con este ticket">
           <mat-icon>add_task</mat-icon><span class="tc-crear-txt">Crear tarea</span>
@@ -89,8 +90,15 @@
 </div>
 
 <mat-menu #menu="matMenu">
-  <button mat-menu-item (click)="asignar.emit()"><mat-icon>person_add</mat-icon> Asignar / reasignar</button>
-  <button mat-menu-item [matMenuTriggerFor]="estadoMenu"><mat-icon>swap_horiz</mat-icon> Cambiar estado</button>
+  <button mat-menu-item [disabled]="soloLectura()" (click)="asignar.emit()"
+          [matTooltip]="soloLectura() ? 'Ticket cerrado — no se puede reasignar' : ''">
+    <mat-icon>person_add</mat-icon> Asignar / reasignar
+  </button>
+  <button mat-menu-item [matMenuTriggerFor]="estadoMenu"
+          [disabled]="soloLectura() && !puedeCambiarEstadoCerrado()"
+          [matTooltip]="soloLectura() && !puedeCambiarEstadoCerrado() ? 'Ticket cerrado — solo el responsable de equipo puede cambiar el estado' : ''">
+    <mat-icon>swap_horiz</mat-icon> Cambiar estado
+  </button>
 </mat-menu>
 
 <mat-menu #estadoMenu="matMenu">
