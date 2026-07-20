@@ -182,6 +182,10 @@ export class TicketMessagesDialog {
 
   /** Cierra la conversación y va al login (sesión expirada). */
   goToLogin(): void {
+    // Limpia la sesión ANTES de navegar: si quedó una sesión sin token válido,
+    // `isAuthenticated()` seguía en true y el login rebotaba a /tickets (el botón
+    // "Iniciar sesión" no llevaba a ningún lado).
+    this.auth.clearSession();
     this.dialogRef.close();
     this.router.navigate(['/login']);
   }

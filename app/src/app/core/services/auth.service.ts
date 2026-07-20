@@ -230,7 +230,9 @@ export class AuthService {
    */
   async verifySession(): Promise<boolean> {
     const t = this.token;
-    if (!t) return false;
+    // Sin token válido la sesión es inutilizable: límpiala para que `isAuthenticated()`
+    // pase a false (si no, el login rebotaría a /tickets y no dejaría re-autenticarse).
+    if (!t) { this.clearSession(); return false; }
     try {
       const r = await fetch(`${this.base}/users/me`, { headers: { Authorization: `Bearer ${t}` } });
       if (r.status === 401 || r.status === 403) {
