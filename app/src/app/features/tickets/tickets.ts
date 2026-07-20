@@ -403,6 +403,10 @@ export class Tickets implements OnDestroy {
   /** Recarga desde la primera página (botón refrescar / auto-consulta al entrar). */
   async refresh(): Promise<void> {
     this.pageIndex.set(0);
+    // Si el catálogo de estados quedó vacío (blip transitorio en la 1ª carga), el ↻
+    // lo reconsulta: getTicketStatuses ya no memoiza el vacío, así se recupera sin
+    // recargar la página ("Cambiar estado" volvía a mostrar "Catálogo no disponible").
+    if (!this.statusNames().length) this.hd.getTicketStatuses();
     await this.query();
     this.syncOverlays(); // re-lee notas/acciones/pendientes ya cargados
   }

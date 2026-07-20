@@ -659,7 +659,16 @@ export class HelpdeskService {
 
   /** Catálogo de estados del API: { 'EN PROCESO': '003', ... }. Consulta + cache. */
   getTicketStatuses(): Promise<Record<string, string>> {
-    return (this.statusesPromise ??= this.fetchAllStatuses());
+    if (this.statusesPromise) return this.statusesPromise;
+    const p = this.fetchAllStatuses().then((map) => {
+      // NO memoizar un catálogo vacío: un fallo transitorio (cold start de Render,
+      // 502, red) no debe dejar "Catálogo no disponible" toda la sesión. Al liberar
+      // la promesa, la próxima llamada (botón ↻, re-navegar a Tickets) reconsulta.
+      if (!map || !Object.keys(map).length) this.statusesPromise = null;
+      return map;
+    });
+    this.statusesPromise = p;
+    return p;
   }
 
   /** ticket_status_id de un estado por su nombre (para filtrar server-side). */
@@ -669,27 +678,33 @@ export class HelpdeskService {
 
   private async fetchAllStatuses(): Promise<Record<string, string>> {
     const endpoints = ['/ticket-statuses/catalog', '/ticket-statuses'];
-    for (const ep of endpoints) {
-      try {
-        const data = await firstValueFrom(
-          this.http.get<any>(`${this.base}${ep}`, { context: new HttpContext().set(HD_SAFE, true) }),
-        );
-        const items: any[] = Array.isArray(data) ? data : data?.items || data?.data || data?.statuses || data?.results || [];
-        if (!items.length) continue;
-        const map: Record<string, string> = {};
-        for (const c of items) {
-          const id = String(c.ticket_status_id ?? c.id ?? c.status_id ?? c.code ?? '').trim();
-          const name = String(c.description || c.status_description || c.name || c.estado || c.status || '').trim().toUpperCase();
-          if (id && name) map[name] = id;
+    // Hasta 2 rondas: el backend en Render (free tier) puede tardar o dar 502 en el
+    // primer hit tras estar inactivo (cold start). Un reintento corto evita que un
+    // blip transitorio deje el catálogo vacío ("Cambiar estado" → "no disponible").
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const ep of endpoints) {
+        try {
+          const data = await firstValueFrom(
+            this.http.get<any>(`${this.base}${ep}`, { context: new HttpContext().set(HD_SAFE, true) }),
+          );
+          const items: any[] = Array.isArray(data) ? data : data?.items || data?.data || data?.statuses || data?.results || [];
+          if (!items.length) continue;
+          const map: Record<string, string> = {};
+          for (const c of items) {
+            const id = String(c.ticket_status_id ?? c.id ?? c.status_id ?? c.code ?? '').trim();
+            const name = String(c.description || c.status_description || c.name || c.estado || c.status || '').trim().toUpperCase();
+            if (id && name) map[name] = id;
+          }
+          if (!Object.keys(map).length) continue;
+          this.statusMap = map;
+          this.statusNames.set(Object.keys(map));
+          this.saveStatusCache(map);
+          return map;
+        } catch {
+          /* prueba el siguiente endpoint / la próxima ronda */
         }
-        if (!Object.keys(map).length) continue;
-        this.statusMap = map;
-        this.statusNames.set(Object.keys(map));
-        this.saveStatusCache(map);
-        return map;
-      } catch {
-        /* prueba el siguiente endpoint */
       }
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 800)); // respiro antes de reintentar
     }
     return this.statusMap;
   }
