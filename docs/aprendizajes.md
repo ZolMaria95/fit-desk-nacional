@@ -371,3 +371,11 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Síntoma:** al escribir mucho texto en el compositor del modal de conversación, el área de texto crecía y empujaba la fila de acciones (Enviar/adjuntos) fuera de la pantalla.
 **Causa:** `.composer-input` tenía `max-height: none` y confiaba en que el tope del `.composer` (55vh) + `flex-shrink` lo acotara; en la práctica el input crecía con el contenido y la fila de Enviar quedaba por debajo del área visible (y en móvil, agravado por usar `vh` en vez de `dvh`, que no descuenta la barra del navegador).
 **Fix (SCSS):** techo propio al área de texto — `.composer-input { max-height: 30vh; max-height: 30dvh; overflow-y:auto }` → scrollea internamente y la fila de acciones (`flex:0 0 auto`) siempre queda visible dentro del `.composer`. Además `:host` y `.composer` usan `dvh` además de `vh` (móvil). `ng build` OK.
+
+### 📌 REGLA (UI) — la barra de acciones (Enviar) SIEMPRE visible
+**Origen:** el botón "Enviar" del compositor de tickets se ocultó dos veces al crecer el texto; la dueña lo pidió como regla (2026-07-20).
+**Regla:** en cualquier diálogo/panel con un área de texto que crece (contenteditable/textarea) y una barra de acciones (Enviar, adjuntos, guardar…):
+1. El área de texto DEBE tener techo de alto (`max-height` + `overflow-y: auto`) para scrollear internamente y NUNCA empujar los botones fuera de pantalla.
+2. Los topes de alto usan `dvh` además de `vh` (móvil: descuenta la barra dinámica del navegador).
+3. La fila de acciones va `flex: 0 0 auto` (nunca se encoge).
+**Verificación:** con texto largo en móvil, "Enviar" debe quedar visible sin scrollear el diálogo entero.
