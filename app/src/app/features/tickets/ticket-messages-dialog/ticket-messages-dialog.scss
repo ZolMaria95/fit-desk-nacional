@@ -7,6 +7,7 @@
   // (se acota a la pantalla en viewports cortos). El techo es 88vh.
   min-height: min(520px, 88vh);
   max-height: 88vh;
+  max-height: 88dvh; // móvil: descuenta la barra dinámica del navegador
   overflow: hidden;
 }
 
@@ -442,6 +443,7 @@
   display: flex;
   flex-direction: column;
   max-height: 55vh;
+  max-height: 55dvh; // móvil: descuenta la barra dinámica del navegador
   border-top: 1px solid var(--mat-sys-outline-variant);
   padding: 8px 16px 12px;
 
@@ -523,7 +525,11 @@
   width: 100%;
   box-sizing: border-box;
   min-height: 44px;
-  max-height: none; // el alto efectivo lo limita el composer (55vh); aquí solo scroll
+  // Techo propio del área de texto: con mucho texto NO crece sin límite (empujaba
+  // "Enviar" fuera de pantalla); a partir de aquí scrollea internamente y la fila de
+  // acciones (Enviar/adjuntos) siempre queda visible dentro del composer.
+  max-height: 30vh;
+  max-height: 30dvh;
   overflow-y: auto;
   font: inherit;
   font-size: 14px;
