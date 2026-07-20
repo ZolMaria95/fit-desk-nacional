@@ -307,6 +307,13 @@ export class TicketMessagesDialog {
     this.composerFiles = input.files ? [...input.files] : [];
   }
 
+  /** Abre el lightbox con un adjunto imagen del compositor (antes de enviar), para
+   *  verificar que se cargó el archivo correcto. No aplica a adjuntos no-imagen. */
+  openFilePreview(f: File): void {
+    const u = this.previewUrl(f);
+    if (u) this.lightbox.set(u);
+  }
+
   /** Quita un adjunto de la lista (botón ✕ junto al archivo). */
   removeFile(file: File): void {
     this.revokePreview(file);

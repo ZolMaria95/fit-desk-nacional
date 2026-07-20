@@ -165,11 +165,15 @@
           @for (f of composerFiles; track $index) {
             <span class="file-chip" [class.has-thumb]="previewUrl(f)">
               @if (previewUrl(f); as u) {
-                <img class="file-thumb" [src]="u" alt="" />
+                <button type="button" class="file-open" (click)="openFilePreview(f)"
+                        matTooltip="Ver adjunto" aria-label="Ver adjunto">
+                  <img class="file-thumb" [src]="u" alt="" />
+                  <span class="file-name">{{ f.name }}</span>
+                </button>
               } @else {
                 <mat-icon>insert_drive_file</mat-icon>
+                <span class="file-name">{{ f.name }}</span>
               }
-              <span class="file-name">{{ f.name }}</span>
               <button type="button" class="file-remove" aria-label="Quitar adjunto"
                       (click)="removeFile(f)" [disabled]="sending()">✕</button>
             </span>
