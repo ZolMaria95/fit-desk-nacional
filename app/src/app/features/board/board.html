@@ -223,7 +223,7 @@
         (cdkDropListDropped)="drop($event, col.status)"
       >
         @for (card of col.cards; track card.id) {
-          @let member = resolveMember(card.assignee);
+          @let member = assigneeView(card);
           @let cl = clientOf(card.client);
           @let cs = clientStyle(cl);
           @let due = dueInfo(card.dueDate, card.status);

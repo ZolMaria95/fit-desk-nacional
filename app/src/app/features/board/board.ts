@@ -108,6 +108,10 @@ export class Board implements OnDestroy {
   /** Prioridad viva del ticket (orden numérico del HelpDesk) por ticketId, poblada en el sync.
    *  Las tarjetas con ticket muestran ESTE valor en vez de la prioridad interna Alta/Media/Baja. */
   readonly ticketPrioMap = signal<Record<string, string>>({});
+  /** Asignado VIVO del ticket (hid + nombre) por ticketId, poblado en el sync. Las tarjetas
+   *  CON ticket usan ESTE asignado (el del HelpDesk manda) en vez del guardado en la tarea.
+   *  SOLO LECTURA: no se persiste ni se re-empuja al HelpDesk (el board solo consulta). */
+  readonly ticketAssigneeMap = signal<Record<string, { id: string; name: string }>>({});
 
   /** Toggle "Mi equipo" (solo RE/ADMIN): incluye en el board las tareas foráneas de mi gente. */
   readonly teamOnly = signal(false);
@@ -209,6 +213,7 @@ export class Board implements OnDestroy {
     // Solo tarjetas del sprint activo con ticket → volumen acotado. Sigue siendo read-only.
     const cache = this.data.usesQuarkus() ? await this.data.getTicketEspejoCache() : null;
     const prios: Record<string, string> = {};
+    const asignados: Record<string, { id: string; name: string }> = {};
     await Promise.all(
       conTicket.map(async (s) => {
         const raw = (await this.helpdesk.fetchTicketRaw(s.ticket)) ?? (cache ? cache[s.ticket] : null);
@@ -216,6 +221,13 @@ export class Board implements OnDestroy {
         // Prioridad/orden del ticket (la del HelpDesk), para mostrarla en la tarjeta.
         const prio = String(raw.priority ?? '').trim();
         if (prio) prios[s.ticket] = prio;
+        // Asignado VIVO del ticket (el HelpDesk manda): hid + nombre. SOLO LECTURA — no se
+        // guarda en la tarea ni se re-empuja. Se registra SIEMPRE (aunque venga vacío) para
+        // que la tarjeta muestre "Sin asignar" si el ticket no tiene asignado.
+        asignados[s.ticket] = {
+          id: String(raw.assigned_user_id ?? raw.usuarioAsignado ?? '').trim().toUpperCase(),
+          name: String(raw.assigned_person ?? raw.nombreAsignado ?? '').trim(),
+        };
         // El cliente de una tarea con ticket lo define el ticket (id + nombre, para
         // mostrar el nombre aunque el cliente no esté en el catálogo).
         const clientId = String(raw.client_id ?? '').trim();
@@ -239,6 +251,7 @@ export class Board implements OnDestroy {
       }),
     );
     this.ticketPrioMap.set(prios);
+    this.ticketAssigneeMap.set(asignados);
     this.syncing.set(false);
   }
 
@@ -253,6 +266,29 @@ export class Board implements OnDestroy {
   // ── Helpers expuestos al template ──
   readonly resolveMember = (id: string | null | undefined) =>
     resolveMember(id, this.data.team(), this.helpdesk.hdUsers());
+
+  /** Asignado EFECTIVO de una tarjeta. Para tareas CON ticket YA sincronizado, el del ticket
+   *  (el HelpDesk manda; solo lectura). Si no, el guardado en la tarea. Se usa en el display,
+   *  los filtros y los permisos → el board "consulta" el asignado del ticket, no lo guarda. */
+  effAssignee(card: Story): string {
+    if (card.ticket) {
+      const a = this.ticketAssigneeMap()[card.ticket];
+      if (a) return a.id; // ticket sincronizado: su asignado manda (aunque sea '' = sin asignar)
+    }
+    return String(card.assignee || '').trim();
+  }
+
+  /** Nombre + color del asignado efectivo (para pintar la card), o null si "Sin asignar". */
+  assigneeView(card: Story): { name: string; color: string } | null {
+    const id = this.effAssignee(card);
+    if (!id) return null;
+    const m = this.resolveMember(id); // nunca null con id truthy (usa placeholder '—')
+    if (m && m.name && m.name !== '—') return { name: m.name, color: m.color };
+    // Asignado del ticket fuera del roster: usa el nombre que trae el propio ticket.
+    const tName = card.ticket ? this.ticketAssigneeMap()[card.ticket]?.name : '';
+    if (tName) return { name: tName, color: colorFor(id) };
+    return m ? { name: m.name, color: m.color } : null;
+  }
   readonly dueInfo = dueInfo;
   readonly progColor = progColor;
   readonly clientStyle = clientStyle;
@@ -349,7 +385,7 @@ export class Board implements OnDestroy {
       if (yaEsta.has(s.id)) return false;
       if ((s.board || 'CUENCA') === (board || 'CUENCA')) return false; // solo tarjetas de OTRO tablero
       if (s.status === 'done' && s.approved && (s.approvedDate || '') < cutoffStr) return false;
-      const a = String(s.assignee || '').trim().toUpperCase();
+      const a = this.effAssignee(s).toUpperCase();
       if (!a) return false;
       if (mine && a === me) return true; // "Asignados a mí": mis tarjetas foráneas
       if (team && teamSet.has(a)) return true; // "Mi equipo": tarjetas foráneas de mi gente
@@ -373,7 +409,7 @@ export class Board implements OnDestroy {
 
   /** Empleados asignados en el board (para el multi-select), ordenados por nombre. */
   readonly assigneeChips = computed(() => {
-    const ids = [...new Set(this.visibleStories().map((s) => s.assignee).filter(Boolean))] as string[];
+    const ids = [...new Set(this.visibleStories().map((s) => this.effAssignee(s)).filter(Boolean))] as string[];
     return ids
       .map((id) => this.resolveMember(id))
       .filter((m): m is NonNullable<typeof m> => !!m)
@@ -414,11 +450,12 @@ export class Board implements OnDestroy {
     const team = this.teamOnly();
     const me = this.myId;
     const filtered = this.cardsSource().filter((s) => {
+      const ea = this.effAssignee(s); // asignado efectivo (del ticket si lo tiene)
       // "Asignados a mí" recorta a mis tareas; si además está "Mi equipo", no se recorta (gana equipo).
-      if (mine && !team && String(s.assignee || '').trim().toUpperCase() !== me) return false;
+      if (mine && !team && ea.toUpperCase() !== me) return false;
       if (prio !== 'all' && s.priority !== prio) return false;
       if (clients.size > 0 && !(s.client && clients.has(s.client))) return false;
-      if (assignees.size > 0 && !(!s.assignee || assignees.has(s.assignee))) return false;
+      if (assignees.size > 0 && !(!ea || assignees.has(ea))) return false;
       // Campo 1: N° de ticket O código de tarea (TA-NNN = s.id), coincidencia parcial local.
       if (code) {
         const t = String(s.ticket || '').toLowerCase();
@@ -592,8 +629,10 @@ export class Board implements OnDestroy {
   // ── Drag & drop ──
   /** Mover la tarea y marcar sus checks: el asignado, el Helpdesk (MSC001) o un Supervisor. */
   puedeOperar(card: Story): boolean {
-    if (this.puedeGestionarTodo()) return true; // MSC001 o Supervisor
-    const owner = String(card.assignee || '').trim().toUpperCase();
+    if (this.puedeGestionarTodo()) return true; // MSC001 o Supervisor (= responsable de equipo)
+    // Solo mueven la card el DUEÑO y el responsable de equipo. El dueño de una tarea es el
+    // ASIGNADO DEL TICKET (asignado efectivo): el board lo consulta, no guarda su propio dueño.
+    const owner = this.effAssignee(card).toUpperCase();
     return !!owner && owner === this.myId;
   }
   canDrag(card: Story): boolean {
