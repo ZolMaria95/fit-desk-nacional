@@ -70,6 +70,8 @@ export interface TicketFilters {
    *  `ticket_status_id=1,2,3` — misma forma de lista por comas que `client_id`. */
   statusIds?: string[];
   assignedUserId?: string;
+  /** Tipo de ticket (`ticket_type_id`, p. ej. 001=INCIDENCIA). '' = todos. */
+  typeId?: string;
 }
 
 const HD_CLIENTS_LS_KEY = 'fit-daily_hd_clients';
@@ -353,6 +355,7 @@ export class HelpdeskService {
       if (f.statusId) params = params.set('ticket_status_id', f.statusId);
       else if (f.statusIds?.length) params = params.set('ticket_status_id', f.statusIds.join(','));
       if (f.assignedUserId) params = params.set('assigned_user_id', f.assignedUserId);
+      if (f.typeId) params = params.set('ticket_type_id', f.typeId);
       const data = await firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets`, { params }));
       const items: Ticket[] = (data?.items || []).map(mapTicket).map(evaluarFechas).map(clasificar);
       this._tickets.set(items);
@@ -391,6 +394,7 @@ export class HelpdeskService {
         if (f.statusId) p = p.set('ticket_status_id', f.statusId);
         else if (f.statusIds?.length) p = p.set('ticket_status_id', f.statusIds.join(','));
         if (f.assignedUserId) p = p.set('assigned_user_id', f.assignedUserId);
+        if (f.typeId) p = p.set('ticket_type_id', f.typeId);
         return p;
       };
       const fetchPage = (offset: number) =>

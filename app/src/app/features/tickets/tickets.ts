@@ -25,7 +25,7 @@ import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-d
 import { AssignTicketDialog } from './assign-ticket-dialog/assign-ticket-dialog';
 import { PendienteDateDialog, PendienteDateResult } from '../pendientes/pendiente-date-dialog/pendiente-date-dialog';
 import { TicketCard } from './ticket-card/ticket-card';
-import { CLIENTES_VALIDOS } from './helpdesk.constants';
+import { CLIENTES_VALIDOS, TIPO_NOMBRE } from './helpdesk.constants';
 import { Ticket } from './ticket-utils';
 import { esEstadoFinalizado } from '../../core/helpdesk-estados';
 
@@ -83,6 +83,7 @@ export class Tickets implements OnDestroy {
   readonly filterClientes = signal<string[]>([]); // client_ids (server-side, multi); [] = todos
   readonly filterEstatus = signal<string[]>([]); // nombres de estado (server-side, multi); [] = todos
   readonly filterAsignado = signal(''); // assigned_user_id (server-side); '' = todos
+  readonly filterTipo = signal(''); // ticket_type_id (server-side); '' = todos
   // Dos búsquedas GLOBALES independientes (puntos 1 y 7): por N° de ticket y por palabra.
   readonly ticketInput = signal(''); // texto crudo del campo "Ticket" (N°)
   readonly palabraInput = signal(''); // texto crudo del campo "Palabra"
@@ -247,6 +248,8 @@ export class Tickets implements OnDestroy {
   // cargada): así se puede elegir cualquier cliente/estatus, no solo los visibles.
   readonly optClientes = computed(() => this.clients()); // {id, name}[]
   readonly optEstatus = computed(() => [...this.statusNames()].sort());
+  /** Tipos de ticket (catálogo estático: 001=INCIDENCIA, 002=REQUERIMIENTO, 003=CONSULTA). */
+  readonly optTipos = Object.entries(TIPO_NOMBRE).map(([id, name]) => ({ id, name }));
 
   // Búsqueda dentro de cada filtro (selects con muchas opciones).
   readonly buscarCliente = signal('');
@@ -284,6 +287,7 @@ export class Tickets implements OnDestroy {
         this.filterClientes().length ||
         this.filterEstatus().length ||
         this.filterAsignado() ||
+        this.filterTipo() ||
         this.filterTicket() ||
         this.filterTexto() ||
         this.remoteResult()
@@ -365,6 +369,10 @@ export class Tickets implements OnDestroy {
       f.assignedUserId = this.filterAsignado();
     } else if (this.tab() === 'asignados') {
       f.assignedUserId = this.myId;
+    }
+    // Tipo de ticket (server-side): combina con cliente/estatus/asignado en la misma consulta.
+    if (this.filterTipo()) {
+      f.typeId = this.filterTipo();
     }
     return f;
   }
@@ -470,10 +478,18 @@ export class Tickets implements OnDestroy {
     await this.query();
   }
 
+  /** Cambio del filtro por Tipo → reconsulta server-side desde la página 0. */
+  async onTipoChange(id: string): Promise<void> {
+    this.filterTipo.set(id || '');
+    this.pageIndex.set(0);
+    await this.query();
+  }
+
   async clearFilters(): Promise<void> {
     this.filterClientes.set([]);
     this.filterEstatus.set([]);
     this.filterAsignado.set('');
+    this.filterTipo.set('');
     this.ticketInput.set('');
     this.palabraInput.set('');
     this.clearSearchState();

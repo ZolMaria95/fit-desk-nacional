@@ -398,3 +398,8 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 ### [2026-07-22] Conversación de ticket: modo "lectura ampliada" (ver más mensajes)
 **Qué:** en el diálogo de conversación (`ticket-messages-dialog`) se agregó un botón `fullscreen` (en la barra del composer y en la barra de solo-lectura) que amplía el área de lectura de mensajes a TODO el modal; un botón `fullscreen_exit` en el encabezado (arriba a la derecha) vuelve al modal normal. Pedido por la dueña ("necesitamos ver más mensajes en el área").
 **Cómo:** señal `readerExpanded` + `host: { '[class.reader-expanded]': 'readerExpanded()' }`. En `:host(.reader-expanded)` se ocultan `.conv-summary`, `.composer` y `.composer-readonly` con `display:none`; `.conv-body` (ya `flex:1 1 auto`, `max-height:none`) absorbe el espacio. **Clave:** se oculta el composer por CSS (no se quita del DOM con `@if`) para no perder el borrador/edición en curso ni romper `viewChild.required('composerInput')`.
+
+### [2026-07-22] Tickets: filtro por Tipo (ticket_type_id) — catálogo estático
+**Qué:** se agregó el filtro "Tipo" a la vista Tickets (faltaba; ya estaban Cliente/Estatus/Asignado). Va server-side como `ticket_type_id` y **combina** con los demás en la misma consulta (AND), igual que `client_id`/`assigned_user_id`.
+**Catálogo:** los tipos NO se piden al API; salen del mapa estático `TIPO_NOMBRE` en `features/tickets/helpdesk.constants.ts` → `001=INCIDENCIA, 002=REQUERIMIENTO, 003=CONSULTA`. El `Ticket.tipoId` ya venía mapeado desde `ticket_type_id`.
+**Dónde:** `TicketFilters.typeId` + `loadFiltered`/`loadAllFiltered` (helpdesk.service); `filterTipo`/`onTipoChange`/`buildFilters` (tickets.ts); select "Tipo" (tickets.html). Single-select con "Todos".

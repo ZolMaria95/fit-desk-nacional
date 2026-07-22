@@ -80,6 +80,16 @@
     </mat-form-field>
 
     <mat-form-field appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Tipo</mat-label>
+      <mat-select [value]="filterTipo()" (selectionChange)="onTipoChange($event.value)">
+        <mat-option value="">Todos</mat-option>
+        @for (t of optTipos; track t.id) {
+          <mat-option [value]="t.id">{{ t.name }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" subscriptSizing="dynamic">
       <mat-label>Asignado</mat-label>
       <mat-select #asigSel [value]="filterAsignado()" (selectionChange)="onAsignadoChange($event.value)" (closed)="buscarAsignado.set('')">
         <div class="sel-search" (click)="$event.stopPropagation()">
