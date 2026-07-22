@@ -373,3 +373,13 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 - `effAssignee(card)`: para tareas CON ticket ya sincronizado devuelve el asignado del ticket; si no, el guardado en la tarea (`card.assignee`). No escribe nada.
 - Se usa `effAssignee` en: **display** (`assigneeView` → card, con fallback al nombre del ticket si el hid no está en el roster), **chips/opciones** del filtro de consultor, **filtros** "Asignados a mí"/"Mi equipo"/por-consultor (incluye las foráneas de `cardsSource`), y **permisos** `puedeOperar`/`canDrag` (el asignado efectivo es quien puede mover/certificar; MSC001/Supervisor siguen con override).
 **Alcance decidido:** la dueña aprobó "mostrar Y filtrar"; se extendió también a permisos por coherencia (evita "se ve mío pero no puedo moverlo" y viceversa). El diálogo de detalle (asignación EXPLÍCITA que sí puede empujar al HelpDesk) queda igual. `ng build` OK; verificación end-to-end pendiente (requiere sesión).
+
+## [2026-07-20] ⭐ REGLA DE ORO: toda ESCRITURA al API del HelpDesk es síncrona (await + confirmar)
+**Regla (pedida por la dueña):** ninguna comunicación con el API del HelpDesk puede ser "asíncrona" en el sentido de *fire-and-forget*. Todo lo que se GUARDE hacia el API (asignar, reasignar, cambiar estado, enviar mensaje/adjunto, etc.) debe **esperar la respuesta y CONFIRMAR el éxito** antes de considerar la acción hecha o reflejarla en la UI.
+**Qué implica (interpretación de ingeniería; NO es XHR bloqueante literal):**
+- Siempre `await` la escritura y comprobar el resultado (ok/estado). Si falla, avisar al usuario y NO dejar la UI como si hubiera guardado.
+- Prohibido el patrón optimista: actualizar el estado local / cerrar el diálogo ASUMIENDO éxito antes de que el API responda.
+- Prohibido disparar la escritura sin `await` (p. ej. `this.hd.setTicketStatus(...)` suelto, o `.then()` sin manejar el fallo) cuando el resultado afecta lo que ve el usuario.
+- Las LECTURAS pueden seguir siendo asíncronas normales; la regla es sobre GUARDAR (escrituras).
+- El board sigue siendo SOLO LECTURA contra el HelpDesk salvo acción explícita; cuando esa acción explícita escribe, debe ser síncrona/confirmada.
+**Pendiente:** auditar el código para detectar escrituras al HelpDesk que hoy sean fire-and-forget/optimistas y volverlas síncronas/confirmadas.

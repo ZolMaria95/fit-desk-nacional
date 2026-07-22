@@ -1,0 +1,186 @@
+========================================================================
+FIT-DESK — ¿QUÉ ES? (contexto del proyecto para explicárselo a una IA)
+========================================================================
+
+RESUMEN EN UNA FRASE
+--------------------
+Fit-Desk (también llamado "fitscrum" o "Fit-Daily") es un gestor Scrum/Kanban
+que organiza el trabajo de un equipo de consultores sobre los tickets de un
+HelpDesk EXTERNO. La app NO es dueña de los tickets: solo los consulta y les
+pone una capa de gestión (tablero, sprints, asignaciones, notas, recordatorios).
+
+Empresa dueña de la app: Soft Warehouse SA.
+Los tickets vienen del HelpDesk de Fit-Bank.
+Los clientes finales son COAC / cooperativas de ahorro y crédito (financieras),
+en Ecuador. Originalmente estaba limitada a la ciudad de Cuenca; se está llevando
+a alcance NACIONAL (multi-regional, multi-equipo).
+
+
+EL PROBLEMA QUE RESUELVE
+-----------------------
+Un equipo de consultores atiende incidencias/requerimientos de cooperativas.
+Esas solicitudes viven como "tickets" en un HelpDesk externo (de Fit-Bank).
+El HelpDesk por sí solo no da una vista tipo Scrum/Kanban ni control de sprints,
+asignaciones internas, prioridades del tablero, recordatorios, etc.
+Fit-Desk se conecta al HelpDesk (solo lectura para traer datos, y escrituras
+puntuales como cambiar estado o asignar) y encima construye:
+  - un tablero Kanban con columnas (Por hacer / En progreso / Revisión / Hecho),
+  - sprints,
+  - filtros por consultor, cliente, prioridad,
+  - notas, marcas de "acción"/"pendiente", recordatorios con alarma,
+  - conversación del ticket (mensajes + adjuntos) dentro de la app.
+
+
+CÓMO SE RELACIONA CON EL HELPDESK (idea central)
+------------------------------------------------
+- El HELPDESK es la FUENTE DE VERDAD de los tickets: número, cliente, asunto,
+  estado, prioridad, ASIGNADO, adjuntos, conversación.
+- Una "tarea" del tablero (board) puede estar asociada a un ticket. Cuando lo
+  está, los datos del ticket MANDAN: la tarea muestra el cliente, el estado y el
+  ASIGNADO del ticket (el board solo CONSULTA; no guarda su propio asignado ni
+  reescribe la asignación del HelpDesk salvo por acción explícita del usuario).
+- El sincronizado board↔HelpDesk es SOLO LECTURA por defecto (lee estado,
+  cliente, prioridad y asignado del ticket). Las escrituras al HelpDesk (cambiar
+  estado, reasignar) ocurren solo por acción explícita.
+
+
+CONCEPTOS / ENTIDADES CLAVE
+---------------------------
+- Ticket: la solicitud en el HelpDesk (número p. ej. 33281). Tiene cliente,
+  asunto, estado (EN PROCESO, ENTREGADO, APROBADO, CERRADO, …), prioridad y
+  un usuario asignado.
+- Tarea / Story (en el board): tarjeta del Kanban. Puede tener o no un ticket
+  asociado. Tiene un código de negocio TA-NNN (correlativo global). Campos:
+  estado/columna, prioridad, progreso, fecha límite, asignado, etc.
+- Sprint: iteración con fechas y capacidad; es único por tablero.
+- Board / Tablero: un tablero por equipo (multi-equipo / matricial a nivel
+  nacional).
+- Cliente: una COAC/cooperativa (p. ej. "COAC PRUEBAS HELPDESK").
+- Consultor / Empleado: identificado por un código tipo hid (p. ej. MSC001,
+  JPHP001). REGLA de UI: se muestran NOMBRES, nunca el código; el código solo
+  como tooltip.
+
+
+ROLES Y PERMISOS (resumido)
+---------------------------
+- MSC001: usuario "Helpdesk"/administrador de arranque (bootstrap).
+- Supervisor (= "Responsable de Equipo"): puede gestionar todo su equipo.
+- Roles de plataforma (derivados del backend): ADMIN, RESPONSABLE_EQUIPO,
+  ESPECIALISTA.
+- Reglas típicas:
+  * El DUEÑO de una tarea es el ASIGNADO DEL TICKET.
+  * Mover/operar una tarjeta del board: SOLO el dueño (asignado del ticket) y el
+    responsable de equipo (Supervisor) / Helpdesk (MSC001).
+  * "Borrar board" completo: solo MSC001.
+  * Las tareas CON ticket no se pueden borrar (nacen del HelpDesk); solo las
+    tareas propias del board (sin ticket) son eliminables.
+
+
+PANTALLAS / VISTAS PRINCIPALES
+------------------------------
+- Board: el Kanban (arrastrar en escritorio; en móvil se mueve con un menú
+  "Mover" porque el drag está desactivado en pantallas chicas).
+- Tickets: listado de tickets del HelpDesk con filtros (cliente, estado,
+  asignado, "Sin asignar"), paginación, y tarjetas con acciones (marcar acción/
+  pendiente, nota, ver conversación, asignar, cambiar estado, "crear tarea" o
+  "en board").
+- HelpDesk Semanal, Mi Panel, Pendientes (con recordatorios/alarma), Bandeja
+  (transferencias entre equipos), Administración.
+
+
+ARQUITECTURA TÉCNICA
+--------------------
+Frontend:
+  - Angular 22 (standalone components, SIGNALS, zoneless), Angular Material.
+  - PWA (instalable), routing por HASH (#/...), desplegado en GitHub Pages.
+  - Se conecta al HelpDesk a través de un proxy backend (ruta /api/v1/...).
+  - Autenticación contra el HelpDesk: access_token (Bearer) + refresh_token;
+    la sesión se guarda en localStorage.
+
+Backend / datos (en migración, patrón "Strangler Fig"):
+  - ACTUAL: datos del board en Firebase Realtime Database; front en GitHub Pages.
+  - OBJETIVO: backend Quarkus (Java 21) + PostgreSQL (Neon en la nube / AWS RDS),
+    todo en contenedores (AWS ECS Fargate). El proxy del HelpDesk vive en ese
+    backend (hoy desplegado en Render).
+  - Regla de oro de la migración: NO afectar lo que está vivo en Firebase ni lo
+    desplegado, mientras se construye lo nuevo en paralelo. El corte (cutover) es
+    la última fase.
+
+Despliegue:
+  - Front: GitHub Pages (se publica con un script que sube el build por la Git
+    Data API de GitHub).
+  - Backend/proxy: Render (nota: el free tier tiene "cold start" —el primer
+    request tras inactividad puede tardar o fallar temporalmente).
+
+
+REGLAS DE NEGOCIO / UX IMPORTANTES (ejemplos)
+---------------------------------------------
+- Mostrar nombres de consultor/cliente, nunca el código interno.
+- El asignado que se ve en una tarea con ticket es el del TICKET (el board solo
+  consulta, no guarda asignados).
+- En un área de texto que crece (p. ej. escribir un mensaje), la barra de
+  acciones (botón "Enviar") debe quedar SIEMPRE visible (el texto scrollea
+  internamente, no empuja el botón fuera de pantalla).
+- La app es responsive: en móvil el board es de una columna y el drag&drop se
+  reemplaza por un menú "Mover".
+
+
+ENVÍO DE TAREAS/TICKETS ENTRE EQUIPOS (transferencias y solicitudes)
+-------------------------------------------------------------------
+Como el alcance es NACIONAL y MATRICIAL (varios equipos/tableros), una tarea que
+lleva un equipo a veces debe pasar a otro. Hay DOS flujos, ambos "request-based"
+(con aceptación/aprobación, no un cambio silencioso). Se gestionan en la vista
+"Bandeja" y solo funcionan en el modo nuevo (backend Quarkus). El actor que
+ejecuta viaja en el header X-Actor-Hid (identidad interina hasta usar el token).
+
+1) TRANSFERENCIA (enviar una tarea a otro equipo)
+   - Quién puede iniciarla: Responsable de Equipo (Supervisor) o ADMIN
+     (permiso "puedeTransferir"). Se dispara desde el board (diálogo "transferir").
+   - Qué se envía: una Tarea (por su código TA-NNN) a un EQUIPO DESTINO, con un
+     motivo. IMPORTANTE: la tarea NO cambia de tablero: sigue "viviendo" en el
+     board de su equipo de origen; lo que cambia es a QUÉ equipo/persona queda
+     dirigida.
+   - Estados: PENDIENTE -> ACEPTADA / RECHAZADA -> COMPLETADA.
+   - Cómo fluye:
+       a. Origen crea la transferencia (queda PENDIENTE).
+       b. El equipo DESTINO la ve en sus "entrantes" y puede:
+            - ACEPTAR, asignándola a un miembro suyo (asignadoDestinoHid), o
+            - RECHAZAR con un motivo.
+       c. Al aceptar, la tarea queda dirigida a esa persona del equipo destino
+          (aunque físicamente siga en el board de origen).
+   - El origen ve sus "salientes"; el destino ve sus "entrantes".
+   - Efecto en el board: el toggle "Mi equipo" muestra también las tarjetas
+     FORÁNEAS (de otros tableros) que, por una transferencia aceptada, quedaron
+     dirigidas a gente de mi equipo. Así quien la recibe la trabaja sin cambiar
+     de tablero.
+
+2) SOLICITUD (un Especialista escala al Responsable de Equipo)
+   - Por qué existe: un ESPECIALISTA es un ejecutor acotado que NO puede
+     transferir ni reasignar por su cuenta; en su lugar crea una SOLICITUD para
+     que el Responsable de Equipo la resuelva.
+   - Qué pide: sobre una tarea (TA-NNN), tipo REASIGNACION o TRANSFERENCIA, con
+     motivo, y opcionalmente sugiriendo equipo destino y/o a quién asignarla.
+   - Estados: PENDIENTE -> APROBADA / RECHAZADA.
+   - Cómo fluye:
+       a. El Especialista crea la solicitud (PENDIENTE).
+       b. El Responsable de Equipo la ve en sus "entrantes" y puede APROBAR
+          (ajustando si quiere el asignado o el equipo destino) o RECHAZAR con
+          motivo.
+       c. Si aprueba una solicitud de tipo TRANSFERENCIA, se genera la
+          Transferencia real (que luego sigue el flujo del punto 1).
+
+En resumen: la SOLICITUD es el "pedir permiso/escalar" del Especialista; la
+TRANSFERENCIA es el envío real de la tarea a otro equipo, que el equipo destino
+acepta o rechaza. Todo queda con trazabilidad (quién, cuándo, motivo, estado).
+
+
+QUÉ NO ES
+---------
+- No es el HelpDesk. No crea ni "posee" los tickets; solo los orquesta.
+- No es un CRM ni un sistema contable; es gestión de trabajo (Scrum/Kanban) sobre
+  soporte/desarrollo para cooperativas.
+
+========================================================================
+Fin. (Documento de contexto; puede pegarse tal cual a una IA para que entienda
+de qué trata Fit-Desk antes de pedirle ayuda sobre el proyecto.)
+========================================================================

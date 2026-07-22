@@ -1,0 +1,171 @@
+========================================================================
+FIT-DESK — MODELO DE DATOS DEL BOARD (tablas y relaciones)
+Base de datos: PostgreSQL 16
+========================================================================
+
+PROPÓSITO
+---------
+Este documento describe las tablas que guardan el tablero (board) de Fit-Desk y
+cómo se relacionan entre sí. Es el modelo con el que se persiste el trabajo del
+equipo (tareas, sprints, asignaciones) construido sobre los tickets del HelpDesk.
+El esquema ya está implementado en el backend (PostgreSQL, con migraciones
+versionadas). Nombres de tablas y columnas en español.
+
+CONVENCIONES
+------------
+- Toda tabla tiene: id (clave primaria autogenerada), y salvo catálogos,
+  creado_en / actualizado_en (marcas de tiempo).
+- Los campos "helpdesk_*" son el "puente" hacia el HelpDesk externo (por ejemplo
+  el código del usuario o del cliente en el HelpDesk).
+- FK = "clave foránea" = relación: una fila apunta a otra tabla.
+
+
+========================================================================
+1) ORGANIZACIÓN Y PERSONAS
+========================================================================
+
+REGIONAL
+  Qué es: la regional / zona (por ejemplo CUENCA). Base para el alcance nacional.
+  Campos clave: codigo, nombre, activo.
+
+EQUIPO
+  Qué es: un equipo de trabajo dentro de una regional.
+  Relación: pertenece a una REGIONAL.
+  Campos clave: codigo, nombre. (codigo único dentro de la regional)
+
+USUARIO
+  Qué es: un consultor / empleado. El login vive en el HelpDesk; aquí se guarda
+    su identidad y datos para el board.
+  Puente: helpdesk_user_id (su código en el HelpDesk, tipo MSC001).
+  Campos clave: nombre, email, alias, color.
+
+ROL
+  Qué es: catálogo de roles. Valores: CONSULTOR, DESPACHADOR, RESPONSABLE_EQUIPO,
+    ESPECIALISTA, GERENCIA, ADMIN.
+
+CLIENTE
+  Qué es: una cooperativa (COAC), el cliente final.
+  Relación: tiene un EQUIPO responsable (quién lo atiende).
+  Puente: helpdesk_client_id.
+  Campos clave: codigo, nombre, color.
+
+ASIGNACION  (autorización = quién puede ver/hacer qué)
+  Qué es: define los permisos de un usuario. La regla es:
+    USUARIO  ×  ROL  ×  ALCANCE  ×  VIGENCIA.
+  Relación: apunta a un USUARIO, a un ROL, y a UN alcance según su tipo:
+    - EQUIPO   -> un equipo
+    - CLIENTE  -> un cliente
+    - REGIONAL -> una regional
+    - GLOBAL   -> todo (sin referencia)
+  Vigencia: vigente_desde / vigente_hasta (permisos temporales).
+  Regla de negocio: sin una Asignación, el usuario no ve nada ("default deny").
+
+
+========================================================================
+2) EL TABLERO (SCRUM / KANBAN)
+========================================================================
+
+BOARD
+  Qué es: un tablero. Hay un tablero por equipo.
+  Relación: pertenece a un EQUIPO.
+  Campos clave: codigo, nombre.
+
+SPRINT
+  Qué es: una iteración de trabajo con fechas y capacidad.
+  Relación: pertenece a un BOARD (los sprints son propios de cada tablero).
+  Campos clave: nombre, estado (planned / active / completed), capacidad,
+    objetivo, fecha_inicio, fecha_fin.
+
+WORKFLOW_ESTADO
+  Qué es: catálogo de columnas del tablero (Por hacer, En progreso, Revisión,
+    Hecho). Cada una tiene un orden y una categoría.
+
+TAREA   ← ENTIDAD CENTRAL DEL BOARD (la tarjeta / historia)
+  Qué es: cada tarjeta del tablero. Puede o no estar asociada a un ticket.
+  Código de negocio: codigo (por ejemplo TA-001), único.
+  Relaciones (a qué apunta cada tarea):
+    - BOARD            -> el tablero dueño (obligatorio)
+    - SPRINT           -> el sprint actual (opcional)
+    - WORKFLOW_ESTADO  -> la columna donde está (obligatorio)
+    - USUARIO          -> a quién está asignada (puede ser de OTRO equipo)
+    - CLIENTE          -> la cooperativa
+    - TICKET_ESPEJO    -> el ticket del HelpDesk asociado (opcional: hay tareas
+                          sin ticket, como reuniones)
+  Campos clave: titulo, descripcion, prioridad, puntos, progreso (0–100),
+    aprobado / fecha_aprobacion, esperando_cliente / fecha_esperando,
+    fecha_limite.
+  Tipo de tarea: tipo (DESARROLLO_SOPORTE por defecto, o REUNION). Las reuniones
+    usan además: subtipo (CAPACITACION / PRESENTACION), tema, link, inicio, fin.
+
+
+========================================================================
+3) ESPEJO DEL HELPDESK (los tickets, en solo lectura)
+========================================================================
+
+TICKET_ESPEJO
+  Qué es: una COPIA liviana del encabezado del ticket del HelpDesk (sin la
+    conversación ni los adjuntos, que se leen en vivo). Sirve para relacionar la
+    tarea con su ticket y mostrar sus datos.
+  Puente: helpdesk_ticket_id (el número del ticket).
+  Relación: apunta al CLIENTE del ticket.
+  Campos clave: asunto, estado_origen, prioridad,
+    asignado_hd (el asignado REAL del ticket en el HelpDesk),
+    fecha_ingreso, fecha_modificacion, last_synced_at (última sincronización).
+  Nota: el asignado que se muestra en el board proviene de aquí (el ticket manda);
+    el HelpDesk es la fuente de verdad.
+
+
+========================================================================
+4) ENVÍO DE TAREAS ENTRE EQUIPOS
+========================================================================
+
+TRANSFERENCIA
+  Qué es: el envío de una tarea de un equipo a otro. IMPORTANTE: la tarea NO
+    cambia de tablero; solo cambia a qué equipo/persona queda dirigida.
+  Relaciones: apunta a la TAREA, al EQUIPO origen y al EQUIPO destino, y a los
+    USUARIOS que la despacharon / la recibieron (auditoría).
+  Estado: PENDIENTE -> ACEPTADA / RECHAZADA -> COMPLETADA.
+  Al aceptar: se guarda a quién se asignó en el equipo destino (asignado_destino).
+
+SOLICITUD   (escalado del Especialista al Responsable de Equipo)
+  Qué es: un Especialista NO puede transferir/reasignar por su cuenta; en su lugar
+    crea una solicitud para que el Responsable de Equipo la resuelva.
+  Relaciones: apunta a la TAREA y al USUARIO solicitante; opcionalmente sugiere un
+    EQUIPO destino y/o un USUARIO asignado; guarda quién la resolvió y, si generó
+    una transferencia, a qué TRANSFERENCIA.
+  Tipo: REASIGNACION o TRANSFERENCIA.
+  Estado: PENDIENTE -> APROBADA / RECHAZADA.
+
+
+========================================================================
+MAPA DE RELACIONES (resumen visual)
+========================================================================
+
+  REGIONAL ──< EQUIPO ──< BOARD ──< SPRINT
+                 │           │
+                 │           └──< TAREA >── WORKFLOW_ESTADO
+                 │                  │
+   EQUIPO ──< CLIENTE ──< TAREA     ├──> USUARIO        (asignado_a)
+                 │                  └──> TICKET_ESPEJO  (opcional) >── CLIENTE
+                 │
+   USUARIO ──< ASIGNACION >── ROL
+             (alcance: EQUIPO / CLIENTE / REGIONAL / GLOBAL)
+
+   TAREA ──< TRANSFERENCIA >── EQUIPO (origen y destino), USUARIO (despachadores)
+   TAREA ──< SOLICITUD      >── USUARIO (solicitante) ─(al aprobar)─> TRANSFERENCIA
+
+  Leyenda:  A ──< B   = "una A tiene muchas B"   (B pertenece a A)
+            B ──> C   = "cada B apunta a una C"
+
+
+========================================================================
+NOTA
+========================================================================
+Además de estas tablas del board, el sistema tiene tablas auxiliares para las
+"capas" sobre los tickets (notas, marcas de acción, pendientes, consultas), la
+rotación semanal del HelpDesk, la foto de perfil del usuario y el catálogo de
+roles. No forman parte del núcleo del tablero, por eso no se detallan aquí.
+
+El esquema completo está versionado en el backend (migraciones SQL), de modo que
+cualquier cambio queda registrado y es reproducible.
+========================================================================

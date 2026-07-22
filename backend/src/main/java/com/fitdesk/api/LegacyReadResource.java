@@ -448,7 +448,7 @@ public class LegacyReadResource {
         return (a != null && a.alcanceEquipo != null) ? a.alcanceEquipo.nombre : null;
     }
 
-    // ── /ticket-espejo → { "<nº>": {ticket_id, client_id, cliente, assigned_user_id, estado} } ──
+    // ── /ticket-espejo → { "<nº>": {ticket_id, client_id, cliente, assigned_user_id, estado, priority} } ──
     // Caché de encabezados (sync de TicketEspejo) en la MISMA forma que el board espera del
     // ticket crudo del HelpDesk, para que lea el estado de Postgres y no pegue por tarjeta.
     @GET
@@ -462,6 +462,7 @@ public class LegacyReadResource {
             m.put("cliente", e.cliente != null ? e.cliente.nombre : null);
             m.put("assigned_user_id", e.asignadoHd);
             m.put("estado", e.estadoOrigen);
+            m.put("priority", e.prioridad);
             out.put(e.helpdeskTicketId, m);
         }
         return out;
