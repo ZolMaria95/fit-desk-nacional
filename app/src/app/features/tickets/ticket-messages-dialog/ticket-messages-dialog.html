@@ -1,6 +1,12 @@
 <div class="conv-head" mat-dialog-title>
   <span class="conv-head-label">TICKET</span>
   <span class="spacer"></span>
+  @if (readerExpanded()) {
+    <button mat-icon-button class="reader-restore" (click)="readerExpanded.set(false)"
+            matTooltip="Volver al modal" aria-label="Volver al modal">
+      <mat-icon>fullscreen_exit</mat-icon>
+    </button>
+  }
   <button mat-icon-button mat-dialog-close aria-label="Cerrar"><mat-icon>close</mat-icon></button>
 </div>
 
@@ -114,6 +120,11 @@
   <div class="composer-readonly">
     <mat-icon>lock</mat-icon>
     <span>Ticket cerrado — solo lectura. No se puede responder.</span>
+    <span class="spacer"></span>
+    <button mat-icon-button matTooltip="Ampliar lectura de mensajes" aria-label="Ampliar lectura de mensajes"
+            (click)="readerExpanded.set(true)">
+      <mat-icon>fullscreen</mat-icon>
+    </button>
   </div>
 } @else {
 <div class="composer" [class.drag-over]="dragOver()"
@@ -147,6 +158,10 @@
       <mat-icon>format_clear</mat-icon>
     </button>
     <span class="spacer"></span>
+    <button mat-icon-button matTooltip="Ampliar lectura de mensajes" aria-label="Ampliar lectura de mensajes"
+            (click)="readerExpanded.set(true)" [disabled]="sending()">
+      <mat-icon>fullscreen</mat-icon>
+    </button>
     <button mat-icon-button matTooltip="Abrir editor ampliado" (click)="openComposer()" [disabled]="sending()">
       <mat-icon>open_in_full</mat-icon>
     </button>

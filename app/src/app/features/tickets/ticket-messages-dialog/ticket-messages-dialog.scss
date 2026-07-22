@@ -187,10 +187,25 @@
   color: var(--mat-sys-on-surface-variant);
   font-size: 13px;
 
+  .spacer { flex: 1; }
+
   mat-icon {
     font-size: 18px;
     width: 18px;
     height: 18px;
+  }
+}
+
+// ── Lectura ampliada ──────────────────────────────────────────────────
+// El botón "Ampliar lectura" del composer hace que la conversación (`.conv-body`,
+// ya `flex: 1 1 auto`) ocupe TODO el modal: se ocultan el resumen y el composer
+// (por CSS, sin quitarlos del DOM → no se pierde el borrador ni la edición en curso).
+// El botón "Volver al modal" del encabezado la desactiva.
+:host(.reader-expanded) {
+  .conv-summary,
+  .composer,
+  .composer-readonly {
+    display: none;
   }
 }
 

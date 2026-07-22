@@ -46,6 +46,7 @@ export interface TicketMessagesData {
   imports: [MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatProgressBarModule, MatTooltipModule],
   templateUrl: './ticket-messages-dialog.html',
   styleUrl: './ticket-messages-dialog.scss',
+  host: { '[class.reader-expanded]': 'readerExpanded()' },
 })
 export class TicketMessagesDialog {
   private readonly hd = inject(HelpdeskService);
@@ -117,6 +118,10 @@ export class TicketMessagesDialog {
   readonly editingId = signal<string | null>(null);
   // Resaltado del área de mensaje mientras se arrastran archivos encima.
   readonly dragOver = signal(false);
+  /** Lectura ampliada: la conversación ocupa TODO el modal (oculta resumen y composer)
+   *  para ver más mensajes. El botón de "volver" del encabezado la desactiva. El composer
+   *  se oculta por CSS (no se quita del DOM) → no se pierde el borrador ni la edición. */
+  readonly readerExpanded = signal(false);
 
   constructor() {
     this.load();
