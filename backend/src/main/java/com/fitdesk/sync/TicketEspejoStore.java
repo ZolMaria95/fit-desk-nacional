@@ -59,6 +59,29 @@ public class TicketEspejoStore {
         return new int[] { ins, upd };
     }
 
+    /**
+     * Refresco puntual del asignado de UN ticket en el espejo (write-through de la
+     * reasignación). Tras confirmar la escritura al HelpDesk, el board —que deriva el
+     * dueño de la tarea del ticket— queda correcto YA, sin esperar el sync completo.
+     * Upsert por helpdesk_ticket_id; si la fila no existe la crea mínima (el sync
+     * completo rellenará el resto). hid vacío/nulo ⇒ ticket sin asignar.
+     */
+    @Transactional
+    public void upsertAssignee(String ticketId, String hid) {
+        if (ticketId == null || ticketId.isBlank()) {
+            return;
+        }
+        String num = ticketId.trim();
+        TicketEspejo e = TicketEspejo.findByHelpdeskTicketId(num);
+        if (e == null) {
+            e = new TicketEspejo();
+            e.helpdeskTicketId = num;
+            e.persist();
+        }
+        e.asignadoHd = upper(hid == null || hid.isBlank() ? null : hid.trim());
+        e.lastSyncedAt = OffsetDateTime.now();
+    }
+
     /** Resuelve el cliente por helpdesk_client_id y, si no, por nombre. Null si no está (otra regional). */
     private Cliente resolveCliente(String clientId, String nombre) {
         if (clientId != null) {

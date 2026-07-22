@@ -75,9 +75,18 @@ public class LegacyReadResource {
             // assignee = id del HelpDesk (no el local): session.id es el id del HelpDesk,
             // así "Asignados a mí" y el sync board→ticket comparan el mismo espacio de id.
             // El nombre lo resuelve el board vía hdUsers; la escritura acepta ambos.
-            s.put("assignee", t.asignadoA != null
-                    ? (t.asignadoA.helpdeskUserId != null ? t.asignadoA.helpdeskUserId : t.asignadoA.codigoLocal)
-                    : null);
+            //
+            // FUENTE DE VERDAD del asignado (SoT):
+            //  · Tarea CON ticket → manda el TICKET (proyección viva en ticket_espejo.asignado_hd,
+            //    vía el FK tarea→ticketEspejo). Si el ticket se reasigna afuera, el board sigue al
+            //    ticket sin tocar la tarea; si el ticket no tiene asignado, la tarea queda "sin
+            //    asignar" (NO hereda el dueño viejo guardado en la tarea).
+            //  · Tarea SIN ticket (reunión/local) → manda el asignado guardado en la tarea.
+            s.put("assignee", t.ticketEspejo != null
+                    ? t.ticketEspejo.asignadoHd
+                    : (t.asignadoA != null
+                        ? (t.asignadoA.helpdeskUserId != null ? t.asignadoA.helpdeskUserId : t.asignadoA.codigoLocal)
+                        : null));
             s.put("client", t.cliente != null ? t.cliente.codigo : null);
             s.put("ticket", t.ticketEspejo != null ? t.ticketEspejo.helpdeskTicketId : "");
             s.put("dueDate", ds(t.fechaLimite));

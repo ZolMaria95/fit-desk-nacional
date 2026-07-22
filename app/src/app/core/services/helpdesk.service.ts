@@ -645,9 +645,28 @@ export class HelpdeskService {
         }),
       );
       this.updateTicketAssignee(ticketId, want);
+      // Write-through al espejo del backend: la escritura AUTORITATIVA (HelpDesk) ya se
+      // confirmó (regla de oro). Refrescamos el asignado del ticket en Postgres para que el
+      // board —que deriva el dueño de la tarea del ticket— lo refleje YA, sin esperar el sync
+      // completo. Best-effort: si falla (o estamos en modo Firebase), el sync completo reconcilia.
+      await this.refreshEspejoAssignee(ticketId, want);
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /** Refresca el asignado de un ticket en el espejo de Quarkus (write-through de la reasignación). */
+  private async refreshEspejoAssignee(ticketId: string, hid: string): Promise<void> {
+    if (environment.dataBackend !== 'quarkus' || !environment.quarkusApiUrl) return;
+    try {
+      await firstValueFrom(
+        this.http.put(`${environment.quarkusApiUrl}/api/legacy/ticket-espejo/${ticketId}/assignee`, {
+          assigned_user_id: hid,
+        }),
+      );
+    } catch {
+      // No fatal: el HelpDesk (fuente de verdad) ya quedó confirmado; el sync completo reconcilia.
     }
   }
 

@@ -379,3 +379,14 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 2. Los topes de alto usan `dvh` además de `vh` (móvil: descuenta la barra dinámica del navegador).
 3. La fila de acciones va `flex: 0 0 auto` (nunca se encoge).
 **Verificación:** con texto largo en móvil, "Enviar" debe quedar visible sin scrollear el diálogo entero.
+
+### [2026-07-22] `Tarea` ya tiene FK directo a `TicketEspejo` → derivar el asignado no necesita JOIN manual
+**Hecho del código:** `Tarea.ticketEspejo` es un `@ManyToOne` (`ticket_espejo_id`); el read model ya lo usaba para el nº de ticket (`t.ticketEspejo.helpdeskTicketId`) y el estado (`t.ticketEspejo.estadoOrigen`). Por eso "el dueño de la tarea = el asignado del ticket" se resuelve leyendo `t.ticketEspejo.asignadoHd` — Hibernate carga la relación; no hace falta JOIN ni consulta extra. Si `t.ticketEspejo == null`, la tarea no tiene ticket (reunión/local) y manda su `asignado_a`.
+**Fuente:** `backend/.../core/Tarea.java:36`, `LegacyReadResource.stories()`.
+
+### [2026-07-22] Tres entornos de build; el board "vivo" corre en cloud (Quarkus), NO en prod (Firebase)
+**Hecho:** `angular.json` define 3 configs vía fileReplacements:
+- `production` → `environment.prod.ts`: `dataBackend:'firebase'`, `quarkusApiUrl:''` → prod legacy en GitHub Pages, intacta (Strangler Fig).
+- `quarkus` → `environment.quarkus.ts`: `localhost:8080` (dev local).
+- `cloud` → `environment.cloud.ts`: `dataBackend:'quarkus'`, `quarkusApiUrl:'https://fit-desk.onrender.com'` → **este** es el que se publica en Pages y consume Quarkus (Render) + Neon (Postgres).
+**Implicación:** los cambios al read model / write paths de `/api/legacy/*` afectan al despliegue **cloud** (build `ng build -c cloud`), no a la prod Firebase. Código que dependa del backend Quarkus debe guardarse con `environment.dataBackend === 'quarkus'` para ser no-op en modo Firebase.

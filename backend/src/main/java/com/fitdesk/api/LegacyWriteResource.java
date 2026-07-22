@@ -2,6 +2,7 @@ package com.fitdesk.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fitdesk.legacy.LegacyWriteService;
+import com.fitdesk.sync.TicketEspejoStore;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -27,6 +28,9 @@ public class LegacyWriteResource {
 
     @Inject
     LegacyWriteService write;
+
+    @Inject
+    TicketEspejoStore espejo;
 
     // ── Stories ──────────────────────────────────────────────────────────
     @PATCH
@@ -107,6 +111,21 @@ public class LegacyWriteResource {
     @PUT
     @Path("/solNotes")
     public Response putSolNotes(JsonNode node) {
+        return Response.ok().build();
+    }
+
+    // ── Ticket espejo ────────────────────────────────────────────────────
+    /**
+     * Refresco puntual del asignado de un ticket en el espejo (write-through de la
+     * reasignación). El front lo llama TRAS confirmar la escritura al HelpDesk, para
+     * que el board —que deriva el dueño de la tarea del ticket— quede correcto YA, sin
+     * esperar el sync completo. Body: {"assigned_user_id":"MSC010"} (vacío ⇒ sin asignar).
+     */
+    @PUT
+    @Path("/ticket-espejo/{id}/assignee")
+    public Response putTicketEspejoAssignee(@PathParam("id") String id, JsonNode body) {
+        JsonNode v = body != null ? body.get("assigned_user_id") : null;
+        espejo.upsertAssignee(id, v != null && !v.isNull() ? v.asText() : null);
         return Response.ok().build();
     }
 }
