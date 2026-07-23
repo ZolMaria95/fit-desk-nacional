@@ -1,0 +1,214 @@
+{
+  "total": 19,
+  "filas": [
+    {
+      "tarea": "TA-160",
+      "ticket": "33235",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "CERRADO POR EL CLIENTE",
+      "cliente": "COAC LA DOLOROSA DURAN",
+      "espejo": "(vacio)",
+      "helpdeskReal": "KIMA001",
+      "nombre": "KEVIN ISMAEL MOLINA ARPI"
+    },
+    {
+      "tarea": "TA-174",
+      "ticket": "33280",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "VAZCREDIT",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JFQV001",
+      "nombre": "JOEL FABRICIO QUINTUÑA VASQUEZ"
+    },
+    {
+      "tarea": "TA-175",
+      "ticket": "33279",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "VAZCREDIT",
+      "espejo": "(vacio)",
+      "helpdeskReal": "KVAZQUEZ",
+      "nombre": "KARLA VAZQUEZ"
+    },
+    {
+      "tarea": "TA-176",
+      "ticket": "33286",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "KIMA001",
+      "nombre": "KEVIN ISMAEL MOLINA ARPI"
+    },
+    {
+      "tarea": "TA-180",
+      "ticket": "33293",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "CERRADO POR EL CLIENTE",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "KIMA001",
+      "nombre": "KEVIN ISMAEL MOLINA ARPI"
+    },
+    {
+      "tarea": "TA-182",
+      "ticket": "33284",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "ENTREGADO",
+      "cliente": "PADRE JULIAN LORENTE",
+      "espejo": "(vacio)",
+      "helpdeskReal": "MSC001",
+      "nombre": "MARIA SOL CONTRERAS"
+    },
+    {
+      "tarea": "TA-183",
+      "ticket": "33281",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "ENTREGADO",
+      "cliente": "PADRE JULIAN LORENTE",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JPHP001",
+      "nombre": "JUAN PABLO HUIRACOCHA PIEDRA"
+    },
+    {
+      "tarea": "TA-184",
+      "ticket": "33272",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "COAC LA DOLOROSA DURAN",
+      "espejo": "(vacio)",
+      "helpdeskReal": "KACG001",
+      "nombre": "KEVIN ANDRÉS CALDERÓN GARCÍA"
+    },
+    {
+      "tarea": "TA-185",
+      "ticket": "33298",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "COAC LA DOLOROSA DURAN",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JFQV001",
+      "nombre": "JOEL FABRICIO QUINTUÑA VASQUEZ"
+    },
+    {
+      "tarea": "TA-187",
+      "ticket": "33296",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "APBM001",
+      "nombre": "BERNAL MOLINA ANDRÉS PAÚL"
+    },
+    {
+      "tarea": "TA-188",
+      "ticket": "33300",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "ENTREGADO",
+      "cliente": "COAC CAPCPE GUALAQUIZA",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JPHP001",
+      "nombre": "JUAN PABLO HUIRACOCHA PIEDRA"
+    },
+    {
+      "tarea": "TA-189",
+      "ticket": "32970",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "COTIZACIÓN ACEPTADA",
+      "cliente": "COAC LA DOLOROSA DURAN",
+      "espejo": "(vacio)",
+      "helpdeskReal": "ORLR001",
+      "nombre": "OCHOA RODAS LINA ROSA"
+    },
+    {
+      "tarea": "TA-190",
+      "ticket": "33296",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "APROBADO",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "APBM001",
+      "nombre": "BERNAL MOLINA ANDRÉS PAÚL"
+    },
+    {
+      "tarea": "TA-191",
+      "ticket": "33306",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "INSTALADO PARA CERTIFICACIÓN",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "ORLR001",
+      "nombre": "OCHOA RODAS LINA ROSA"
+    },
+    {
+      "tarea": "TA-192",
+      "ticket": "29740",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "INSTALADO PARA CERTIFICACIÓN",
+      "cliente": "COAC CAPCPE GUALAQUIZA",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JGRV001",
+      "nombre": "JUAN GABRIEL REYES VIDAL"
+    },
+    {
+      "tarea": "TA-193",
+      "ticket": "33322",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "INSTALADO PARA CERTIFICACIÓN",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JPHP001",
+      "nombre": "JUAN PABLO HUIRACOCHA PIEDRA"
+    },
+    {
+      "tarea": "TA-194",
+      "ticket": "33321",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "ABIERTO",
+      "cliente": "COAC CACEL",
+      "espejo": "(vacio)",
+      "helpdeskReal": "CUC001",
+      "nombre": "CLEIRA ULLOA CÁRDENAS"
+    },
+    {
+      "tarea": "TA-195",
+      "ticket": "33325",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "ABIERTO",
+      "cliente": "VAZCREDIT",
+      "espejo": "(vacio)",
+      "helpdeskReal": "JPHP001",
+      "nombre": "JUAN PABLO HUIRACOCHA PIEDRA"
+    },
+    {
+      "tarea": "TA-196",
+      "ticket": "29309",
+      "board": "CUENCA",
+      "sprint": "SP-04",
+      "estado": "EN PROCESO",
+      "cliente": "COAC SEÑOR DE GIRON",
+      "espejo": "(vacio)",
+      "helpdeskReal": "KVAZQUEZ",
+      "nombre": "KARLA VAZQUEZ"
+    }
+  ]
+}

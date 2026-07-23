@@ -216,10 +216,29 @@ public class LegacyWriteService {
             e.helpdeskTicketId = ticket;
             e.cliente = t.cliente;
             e.asunto = t.titulo;
+            // SEMILLA del asignado: al crear la tarea desde un ticket, el `assignee` que trae
+            // la story ES el del ticket (el board lo precarga del HelpDesk) y ya se aplicó a
+            // t.asignadoA antes de llegar aquí. Sin esta semilla la fila nacía con asignado_hd
+            // NULL y, como el read model deriva el dueño de esa columna, la tarea quedaba sin
+            // dueño hasta el siguiente sync completo. El sync la sobrescribe con el valor
+            // autoritativo del HelpDesk.
+            e.asignadoHd = hidDe(t.asignadoA);
             e.lastSyncedAt = OffsetDateTime.now();
             e.persist();
+        } else if (e.asignadoHd == null || e.asignadoHd.isBlank()) {
+            // Fila esqueleto creada antes sin asignado: se rellena el hueco (no se pisa un
+            // valor existente del HelpDesk, solo se completa lo que estaba vacío).
+            e.asignadoHd = hidDe(t.asignadoA);
         }
         return e;
+    }
+
+    /** helpdesk_user_id (mayúsculas) del usuario, o null. Mismo espacio de id que el espejo. */
+    private static String hidDe(Usuario u) {
+        if (u == null || u.helpdeskUserId == null || u.helpdeskUserId.isBlank()) {
+            return null;
+        }
+        return u.helpdeskUserId.trim().toUpperCase();
     }
 
     // ── Sprints ──────────────────────────────────────────────────────────
