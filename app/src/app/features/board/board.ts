@@ -30,6 +30,7 @@ import { SprintDialog } from './sprint-dialog/sprint-dialog';
 import {
   HD_ESTADO_ESPERANDO,
   HD_ESTADO_POR_STATUS,
+  PRIORITY_FILTER_LABELS,
   PRIORITY_LABELS,
   Priority,
   STATUSES,
@@ -309,6 +310,7 @@ export class Board implements OnDestroy {
   readonly cardTilt = cardTilt;
   readonly STATUS_LABELS = STATUS_LABELS;
   readonly PRIORITY_LABELS = PRIORITY_LABELS;
+  readonly PRIORITY_FILTER_LABELS = PRIORITY_FILTER_LABELS;
   readonly PRIORITY_FILTERS: PriorityFilter[] = ['all', 'alta', 'media', 'baja'];
 
   // ── Filtros (signals locales) ──

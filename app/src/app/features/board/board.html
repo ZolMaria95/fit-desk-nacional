@@ -90,7 +90,7 @@
       aria-label="Filtrar por prioridad"
     >
       @for (p of PRIORITY_FILTERS; track p) {
-        <mat-button-toggle [value]="p">{{ p === 'all' ? 'Todas' : PRIORITY_LABELS[p] }}</mat-button-toggle>
+        <mat-button-toggle [value]="p">{{ p === 'all' ? 'Todas' : PRIORITY_FILTER_LABELS[p] }}</mat-button-toggle>
       }
     </mat-button-toggle-group>
 

@@ -40,11 +40,17 @@ export function statusFromTicketEstado(estado: string): { status: Status; waitin
 
 export type Priority = 'alta' | 'media' | 'baja';
 /**
- * Etiquetas de prioridad por el ORDEN del HelpDesk (no "Alta/Media/Baja"): la banda
- * se nombra por su rango numérico, que es el lenguaje real del ticket.
- *   1 = máxima · 2-10 = media · >10 = baja
+ * Etiqueta CUALITATIVA de la prioridad. La usan la tarjeta de una tarea SIN ticket
+ * (que no tiene un orden numérico real detrás) y el selector del diálogo de detalle.
  */
-export const PRIORITY_LABELS: Record<Priority, string> = { alta: '1', media: '2-10', baja: '>10' };
+export const PRIORITY_LABELS: Record<Priority, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+
+/**
+ * Etiqueta del FILTRO: la misma banda nombrada por su rango numérico, que es el
+ * lenguaje real del ticket (1 · 2-10 · >10). Las tareas sin ticket se filtran por su
+ * equivalente: Alta↔1, Media↔2-10, Baja↔>10 (misma clave `Priority`).
+ */
+export const PRIORITY_FILTER_LABELS: Record<Priority, string> = { alta: '1', media: '2-10', baja: '>10' };
 
 /** Banda de prioridad a partir del ORDEN del HelpDesk: 1 · 2-10 · >10. */
 export function prioBanda(orden: number | string): Priority {
