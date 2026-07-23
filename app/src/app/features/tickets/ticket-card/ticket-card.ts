@@ -7,7 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { clientStyle, colorFor, prioBadgeClase, shortName } from '../../board/board-utils';
 import { Ticket } from '../ticket-utils';
 import { estadoStyle, fmtIngreso, fmtMod, tipoStyle } from '../tickets-card-utils';
-import { esSoloLectura } from '../../../core/helpdesk-estados';
+import { esEstadoCerrado, esSoloLectura } from '../../../core/helpdesk-estados';
 
 /**
  * Card presentacional de un ticket (grid responsive). No inyecta servicios:
@@ -45,6 +45,8 @@ export class TicketCard {
 
   /** Ticket en estado terminal (cerrado/aprobado/cotización rechazada) → solo lectura. */
   readonly soloLectura = computed(() => esSoloLectura(this.ticket().estatus));
+  /** Grupo CERRADO (cerrado / NO APLICA) → la card se sombrea en gris (apagada). */
+  readonly esCerrado = computed(() => esEstadoCerrado(this.ticket().estatus));
 
   readonly estado = computed(() => estadoStyle(this.ticket().estatus));
   readonly tipo = computed(() => tipoStyle(this.ticket().tipo));

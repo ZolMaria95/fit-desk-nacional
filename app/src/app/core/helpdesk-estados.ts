@@ -19,6 +19,17 @@ export function esEstadoFinalizado(estado: string | null | undefined): boolean {
 }
 
 /**
+ * ¿El estado pertenece al grupo CERRADO? (CERRADO POR EL CLIENTE / POR FALTA DE
+ * RESPUESTA / NO APLICA). Es el SUBCONJUNTO de los terminales que se pinta y se
+ * sombrea en GRIS: la card se ve apagada. APROBADO NO entra (mantiene su verde).
+ * Fuente única del criterio "cerrado" para color (`estadoStyle`) y sombreado (card).
+ */
+export function esEstadoCerrado(estado: string | null | undefined): boolean {
+  const e = (estado || '').toUpperCase();
+  return e.includes('CERRADO') || e.includes('NO APLICA');
+}
+
+/**
  * ¿El ticket está en un estado TERMINAL de "solo lectura"? En estos estados no se
  * puede responder ni asignar; cambiar de estado queda reservado al Responsable de
  * Equipo/Admin (el permiso se decide en la vista, no aquí). Cubre los finalizados

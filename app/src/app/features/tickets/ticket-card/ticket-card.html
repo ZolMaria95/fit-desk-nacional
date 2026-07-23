@@ -2,6 +2,7 @@
   class="ticket-card"
   [class.is-accion]="esAccion()"
   [class.is-pendiente]="esPendiente()"
+  [class.is-cerrado]="esCerrado()"
   (click)="verConversacion.emit()">
 
   <div class="tc-head" [style.background]="cliente().bg" [style.borderLeftColor]="cliente().accent">

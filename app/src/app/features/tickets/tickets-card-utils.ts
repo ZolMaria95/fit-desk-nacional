@@ -1,6 +1,8 @@
 // Estilos y formato para las cards de tickets (grid responsive).
 // Solo modo claro (la app es light-only por decisión vigente).
 
+import { esEstadoCerrado } from '../../core/helpdesk-estados';
+
 export interface BadgeStyle {
   headerBg: string;
   badgeBg: string;
@@ -14,9 +16,8 @@ export interface BadgeStyle {
 export function estadoStyle(estatus: string): BadgeStyle {
   const e = (estatus || '').toUpperCase();
   if (e.includes('APROBADO')) return { headerBg: '#DDEFD9', badgeBg: '#97C98A', badgeText: '#1B5E20' };
-  // NO APLICA va con los cerrados: mismo grupo terminal (finalizado + solo lectura).
-  // Gris NEUTRO (sin tinte cálido): es el color del grupo cerrado.
-  if (e.includes('CERRADO') || e.includes('NO APLICA')) return { headerBg: '#F0F0F0', badgeBg: '#D0D0D0', badgeText: '#444444' };
+  // Grupo CERRADO (incluye NO APLICA): gris NEUTRO, sin tinte cálido.
+  if (esEstadoCerrado(e)) return { headerBg: '#F0F0F0', badgeBg: '#D0D0D0', badgeText: '#444444' };
   if (e.includes('ENTREGADO')) return { headerBg: '#DDF3F1', badgeBg: '#9FE0D8', badgeText: '#0C5046' };
   if (e.includes('INSTALADO') || e.includes('CERTIFICAC')) return { headerBg: '#E3EFFB', badgeBg: '#B5D4F4', badgeText: '#0C447C' };
   if (e.includes('INFO PENDIENTE')) return { headerBg: '#FAEEDA', badgeBg: '#FAC775', badgeText: '#633806' };

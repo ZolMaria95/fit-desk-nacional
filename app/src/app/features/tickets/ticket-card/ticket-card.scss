@@ -25,6 +25,16 @@
   &.is-pendiente {
     border-left: 4px solid #9c27b0;
   }
+
+  // Grupo CERRADO (cerrado / NO APLICA): la card se ve APAGADA en gris, porque no
+  // hay nada que accionar sobre ella. `grayscale` neutraliza de una sola vez el
+  // tinte de cliente del encabezado —que viene por estilo INLINE y no se puede
+  // pisar desde una clase— y el color de los badges. No se baja la opacidad: el
+  // gris ya comunica "cerrado" y así el texto no pierde contraste.
+  &.is-cerrado {
+    background: #f2f2f2;
+    filter: grayscale(1);
+  }
 }
 
 // ── Cabecera (coloreada por cliente) ──
