@@ -76,17 +76,19 @@ public class LegacyReadResource {
             // así "Asignados a mí" y el sync board→ticket comparan el mismo espacio de id.
             // El nombre lo resuelve el board vía hdUsers; la escritura acepta ambos.
             //
-            // FUENTE DE VERDAD del asignado (SoT):
-            //  · Tarea CON ticket → manda el TICKET (proyección viva en ticket_espejo.asignado_hd,
-            //    vía el FK tarea→ticketEspejo). Si el ticket se reasigna afuera, el board sigue al
-            //    ticket sin tocar la tarea; si el ticket no tiene asignado, la tarea queda "sin
-            //    asignar" (NO hereda el dueño viejo guardado en la tarea).
+            // FUENTE DE VERDAD del asignado (SoT) — COALESCE(espejo, tarea):
+            //  · Tarea CON ticket → manda el TICKET (ticket_espejo.asignado_hd, vía el FK
+            //    tarea→ticketEspejo): si se reasigna afuera, el board sigue al ticket.
+            //  · Si el espejo NO trae asignado, se CONSERVA el guardado en la tarea. El HelpDesk
+            //    deja el ticket sin asignado al cerrarlo/aprobarlo, así que derivar el vacío
+            //    BORRABA el dueño de tareas ya cerradas — y con él el permiso de moverlas
+            //    (puedeOperar/canDrag usan el asignado efectivo). Nunca se pierde el dueño.
             //  · Tarea SIN ticket (reunión/local) → manda el asignado guardado en la tarea.
-            s.put("assignee", t.ticketEspejo != null
-                    ? t.ticketEspejo.asignadoHd
-                    : (t.asignadoA != null
-                        ? (t.asignadoA.helpdeskUserId != null ? t.asignadoA.helpdeskUserId : t.asignadoA.codigoLocal)
-                        : null));
+            String hdAsignado = t.ticketEspejo != null ? t.ticketEspejo.asignadoHd : null;
+            String localAsignado = t.asignadoA != null
+                    ? (t.asignadoA.helpdeskUserId != null ? t.asignadoA.helpdeskUserId : t.asignadoA.codigoLocal)
+                    : null;
+            s.put("assignee", (hdAsignado != null && !hdAsignado.isBlank()) ? hdAsignado : localAsignado);
             s.put("client", t.cliente != null ? t.cliente.codigo : null);
             s.put("ticket", t.ticketEspejo != null ? t.ticketEspejo.helpdeskTicketId : "");
             s.put("dueDate", ds(t.fechaLimite));

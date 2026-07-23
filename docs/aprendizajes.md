@@ -403,3 +403,9 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Qué:** se agregó el filtro "Tipo" a la vista Tickets (faltaba; ya estaban Cliente/Estatus/Asignado). Va server-side como `ticket_type_id` y **combina** con los demás en la misma consulta (AND), igual que `client_id`/`assigned_user_id`.
 **Catálogo:** los tipos NO se piden al API; salen del mapa estático `TIPO_NOMBRE` en `features/tickets/helpdesk.constants.ts` → `001=INCIDENCIA, 002=REQUERIMIENTO, 003=CONSULTA`. El `Ticket.tipoId` ya venía mapeado desde `ticket_type_id`.
 **Dónde:** `TicketFilters.typeId` + `loadFiltered`/`loadAllFiltered` (helpdesk.service); `filterTipo`/`onTipoChange`/`buildFilters` (tickets.ts); select "Tipo" (tickets.html). Single-select con "Todos".
+
+### [2026-07-22] REGRESIÓN: derivar el asignado del espejo "aunque esté vacío" borró dueños
+**Síntoma:** tras desplegar la derivación del asignado, 19 de 159 tareas con ticket (11%) quedaron **sin dueño** en el board. Peor: como `puedeOperar`/`canDrag` usan el asignado efectivo, esas tarjetas quedaron sin nadie que pudiera moverlas.
+**Causa:** el análisis pedía `COALESCE(ticket_espejo.asignado_hd, tarea.asignado_a)`, pero se implementó más duro: "si la tarea tiene ticket, manda el espejo **aunque venga null**". El HelpDesk **limpia `assigned_user_id` al cerrar/aprobar** un ticket (22 de 162 filas del espejo tienen el asignado vacío, casi todas en APROBADO/CERRADO/ENTREGADO) → derivar ese vacío borró el dueño guardado.
+**Fix:** volver al COALESCE — si el espejo no trae asignado, se conserva `tarea.asignado_a`. Se sigue el ticket cuando el ticket SÍ tiene asignado (que es el caso de la reasignación, el objetivo original) y nunca se pierde el dueño.
+**Lección:** al cambiar una lectura a "derivada", verificar la **cobertura real del dato de origen** en producción antes de desplegar (contar nulos), no solo que la derivación funcione.
