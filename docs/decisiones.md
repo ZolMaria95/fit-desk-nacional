@@ -404,3 +404,12 @@ Desplegado: backend `zolmaria/fitdesk-backend:latest` (digest `sha256:ed036e17�
 - Conversación y card: `soloLectura` → sin responder ni asignar; cambiar de estado solo Responsable de Equipo/Admin.
 - Badge: se agrupa con los CERRADO (mismo color) en `tickets-card-utils.estadoStyle`.
 **Nota:** el match es por inclusión y en mayúsculas, así que tolera variantes del texto del catálogo.
+
+## [2026-07-22] La prioridad del board se nombra y filtra por el ORDEN del HelpDesk (1 · 2-10 · >10)
+**Decisión (pedida por la dueña):** el filtro de prioridad del board deja de decir "Alta/Media/Baja" y pasa a nombrar las bandas por su rango numérico real del ticket: **1** (máxima), **2-10** (media), **>10** (baja). Y el filtrado usa ese número, no el `alta/media/baja` guardado en la tarea.
+**Implementación:**
+- `prioBanda(orden)` en board-utils: 1 → alta, 2-10 → media, >10 → baja. Fuente única del corte.
+- `PRIORITY_LABELS` = `{alta:'1', media:'2-10', baja:'>10'}`.
+- `prioBadgeClase` ahora delega en `prioBanda`. **Corrige una incoherencia previa:** solo el `2` exacto se pintaba de "media", así que un orden 3-10 salía de color "baja" aunque cayera en la banda media.
+- `board.prioBandaDe(card)`: banda efectiva = la del ORDEN del ticket si está sincronizado (el mismo número que se ve en la tarjeta); si no hay ticket (reunión/local) o no se ha sincronizado, la prioridad guardada de la tarea. El filtro compara contra esa banda.
+**Alcance:** `PRIORITY_LABELS` también alimenta el badge de las tarjetas sin ticket y el selector de prioridad del diálogo de detalle, así que ahí también se lee 1 / 2-10 / >10 (vocabulario único en toda la vista).

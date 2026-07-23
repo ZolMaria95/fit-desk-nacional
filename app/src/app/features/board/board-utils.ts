@@ -39,7 +39,21 @@ export function statusFromTicketEstado(estado: string): { status: Status; waitin
 }
 
 export type Priority = 'alta' | 'media' | 'baja';
-export const PRIORITY_LABELS: Record<Priority, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
+/**
+ * Etiquetas de prioridad por el ORDEN del HelpDesk (no "Alta/Media/Baja"): la banda
+ * se nombra por su rango numérico, que es el lenguaje real del ticket.
+ *   1 = máxima · 2-10 = media · >10 = baja
+ */
+export const PRIORITY_LABELS: Record<Priority, string> = { alta: '1', media: '2-10', baja: '>10' };
+
+/** Banda de prioridad a partir del ORDEN del HelpDesk: 1 · 2-10 · >10. */
+export function prioBanda(orden: number | string): Priority {
+  const n = parseInt(String(orden), 10);
+  if (!Number.isFinite(n)) return 'media';
+  if (n <= 1) return 'alta';
+  if (n <= 10) return 'media';
+  return 'baja';
+}
 
 /**
  * Clase de color del badge de prioridad del ticket según su ORDEN del HelpDesk
@@ -47,10 +61,9 @@ export const PRIORITY_LABELS: Record<Priority, string> = { alta: 'Alta', media: 
  * de la lista y el diálogo de conversación para que `#N` se vea igual en todos.
  */
 export function prioBadgeClase(orden: number | string): string {
-  const n = parseInt(String(orden), 10);
-  if (n <= 1) return 'prio-alta';
-  if (n === 2) return 'prio-media';
-  return 'prio-baja';
+  // Mismo corte que el filtro (1 · 2-10 · >10): antes solo el 2 exacto era "media" y
+  // un orden 3-10 se pintaba de baja, incoherente con la banda por la que se filtra.
+  return 'prio-' + prioBanda(orden);
 }
 
 // Estado del ticket en el Helpdesk según el estado de la tarea en el board.

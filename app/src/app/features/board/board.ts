@@ -43,6 +43,7 @@ import {
   dueInfo,
   pastel,
   prioBadgeClase,
+  prioBanda,
   progColor,
   resolveMember,
   roundUp5,
@@ -260,6 +261,18 @@ export class Board implements OnDestroy {
     return ticketId ? this.ticketPrioMap()[ticketId] || '' : '';
   }
 
+  /**
+   * Banda de prioridad EFECTIVA de una tarjeta, que es por la que se filtra:
+   *  · Tarea con ticket sincronizado → la banda del ORDEN del HelpDesk (1 · 2-10 · >10),
+   *    el mismo número que se pinta en la tarjeta.
+   *  · Tarea sin ticket (reunión/local) o ticket aún sin sincronizar → la prioridad
+   *    guardada de la tarea, que ya vive en el mismo espacio de bandas.
+   */
+  prioBandaDe(card: Story): Priority {
+    const orden = this.ticketPrio(card.ticket);
+    return orden ? prioBanda(orden) : (card.priority as Priority);
+  }
+
   /** Clase de color del badge según el orden del ticket (1 = más urgente … ≥3 = baja). */
   readonly prioClase = prioBadgeClase;
 
@@ -453,7 +466,7 @@ export class Board implements OnDestroy {
       const ea = this.effAssignee(s); // asignado efectivo (del ticket si lo tiene)
       // "Asignados a mí" recorta a mis tareas; si además está "Mi equipo", no se recorta (gana equipo).
       if (mine && !team && ea.toUpperCase() !== me) return false;
-      if (prio !== 'all' && s.priority !== prio) return false;
+      if (prio !== 'all' && this.prioBandaDe(s) !== prio) return false;
       if (clients.size > 0 && !(s.client && clients.has(s.client))) return false;
       if (assignees.size > 0 && !(!ea || assignees.has(ea))) return false;
       // Campo 1: N° de ticket O código de tarea (TA-NNN = s.id), coincidencia parcial local.
