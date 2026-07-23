@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, afterNextRender, afterRenderEffect, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, afterRenderEffect, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
@@ -104,6 +104,17 @@ export class Layout {
   private readonly contentEl = viewChild<ElementRef<HTMLElement>>('contentEl');
 
   constructor() {
+    // Si la sesión se PIERDE estando ya dentro (token vencido, 401, logout en otra
+    // pestaña), el `authGuard` NO vuelve a correr: solo se evalúa al navegar. El
+    // usuario quedaba atrapado —sin bloque de usuario, sin botón "Cerrar sesión" y
+    // sin redirección—, viendo errores del API y sin forma de volver al login. Este
+    // effect lo saca al login en cuanto la sesión desaparece.
+    effect(() => {
+      if (!this.auth.session() && !this.router.url.startsWith('/login')) {
+        this.dialog.closeAll();
+        this.router.navigate(['/login']);
+      }
+    });
     // Carga los datos (Firebase/localStorage) y arranca el sync en tiempo real.
     this.data.ensureInit().then(() => {
       this.data.startStreaming();

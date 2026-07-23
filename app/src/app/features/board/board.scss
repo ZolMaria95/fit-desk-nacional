@@ -323,6 +323,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  // Los chips (reunión / prioridad / equipo foráneo) son `white-space: nowrap` y en el
+  // ancho de una columna del kanban (~170px útiles) no caben los tres en una línea: sin
+  // wrap, el chip de equipo se salía FUERA de la tarjeta (medido: 259px de contenido en
+  // 170px). Con wrap bajan de línea y la fila crece de ~44px a ~76px.
+  flex-wrap: wrap;
+  row-gap: 4px;
   margin-bottom: 4px;
 
   .grow { flex: 1; }
@@ -395,6 +401,10 @@
   color: #fff;
   background: #6c5ce7;
   white-space: nowrap;
+  // Tope de seguridad: un nombre de equipo muy largo no puede pasarse de la tarjeta
+  // (el nombre completo sigue en el tooltip).
+  max-width: 100%;
+  overflow: hidden;
 
   mat-icon {
     font-size: 13px;

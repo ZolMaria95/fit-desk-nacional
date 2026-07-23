@@ -62,6 +62,22 @@ export interface HdClient {
   name: string;
 }
 
+/**
+ * Mensaje de error a partir del ESTADO HTTP, no del texto. La regla anterior hacía
+ * `/fetch|failed|network|0/.test(err.message)` y ese `0` casaba con CUALQUIER estado
+ * que lo contuviera (401, 403, 500…): una sesión vencida se anunciaba como "No se
+ * pudo conectar al API", que despistaba (parecía caída del servidor y no relogueo).
+ * `status` 0/ausente = no hubo respuesta: red caída, CORS o servidor inalcanzable.
+ */
+function mensajeError(err: any): string {
+  const st = Number(err?.status ?? 0);
+  if (!st) return 'No se pudo conectar al API.';
+  if (st === 401) return 'Tu sesión expiró. Vuelve a iniciar sesión.';
+  if (st === 403) return 'No tienes permiso para ver estos tickets.';
+  if (st >= 500) return `El servidor falló (HTTP ${st}). Vuelve a intentar.`;
+  return `Error HTTP ${st}.`;
+}
+
 /** Filtros server-side de la consulta de tickets (los acepta el API). */
 export interface TicketFilters {
   clientIds?: string[];
@@ -293,9 +309,7 @@ export class HelpdeskService {
       const total = this._tickets().length;
       this.setStatus(this.hasMore() ? `${total} tickets cargados` : `✓ ${total} tickets`, 'ok');
     } catch (err: any) {
-      const msg = err?.message || '';
-      const esRed = /fetch|failed|load failed|network|0/i.test(msg);
-      this.setStatus(esRed ? 'No se pudo conectar al API.' : `Error: ${msg}`, 'error');
+      this.setStatus(mensajeError(err), 'error');
     } finally {
       this.loading.set(false);
     }
@@ -318,9 +332,7 @@ export class HelpdeskService {
       this.hasMore.set(pages[pages.length - 1].length === SIZE);
       this.setStatus(`✓ ${tickets.length} tickets`, 'ok');
     } catch (err: any) {
-      const msg = err?.message || '';
-      const esRed = /fetch|failed|load failed|network|0/i.test(msg);
-      this.setStatus(esRed ? 'No se pudo conectar al API.' : `Error: ${msg}`, 'error');
+      this.setStatus(mensajeError(err), 'error');
     } finally {
       this.loading.set(false);
     }
@@ -364,9 +376,7 @@ export class HelpdeskService {
       // El total es el universo del API (paginado); items.length es lo realmente traído.
       this.setStatus(`✓ ${items.length} cargados de ${this._total()} del sistema`, 'ok');
     } catch (err: any) {
-      const msg = err?.message || '';
-      const esRed = /fetch|failed|load failed|network|0/i.test(msg);
-      this.setStatus(esRed ? 'No se pudo conectar al API.' : `Error: ${msg}`, 'error');
+      this.setStatus(mensajeError(err), 'error');
     } finally {
       this.loading.set(false);
     }
@@ -416,9 +426,7 @@ export class HelpdeskService {
       this.hasMore.set(false);
       this.setStatus(`✓ ${items.length} cargados de ${total} del equipo`, 'ok');
     } catch (err: any) {
-      const msg = err?.message || '';
-      const esRed = /fetch|failed|load failed|network|0/i.test(msg);
-      this.setStatus(esRed ? 'No se pudo conectar al API.' : `Error: ${msg}`, 'error');
+      this.setStatus(mensajeError(err), 'error');
     } finally {
       this.loading.set(false);
     }
@@ -454,9 +462,7 @@ export class HelpdeskService {
       this.hasMore.set((pageIndex + 1) * pageSize < this._total());
       this.setStatus(`✓ ${items.length} de ${this._total()} coinciden con "${term}"`, 'ok');
     } catch (err: any) {
-      const msg = err?.message || '';
-      const esRed = /fetch|failed|load failed|network|0/i.test(msg);
-      this.setStatus(esRed ? 'No se pudo conectar al API.' : `Error: ${msg}`, 'error');
+      this.setStatus(mensajeError(err), 'error');
     } finally {
       this.loading.set(false);
     }
