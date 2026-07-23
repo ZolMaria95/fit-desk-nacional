@@ -633,15 +633,18 @@
 }
 
 // ── Responsive ─────────────────────────────────────────────────────
+// `minmax(0, 1fr)` en vez de `1fr`: `1fr` tiene mínimo min-content, así que una
+// tarjeta con contenido largo estira la columna más allá de la pantalla. Preventivo
+// (hoy no se desborda), mismo criterio que el grid de Tickets.
 @media (max-width: 1024px) {
   .kanban {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 600px) {
   .kanban {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .client-select {
     width: 100%;

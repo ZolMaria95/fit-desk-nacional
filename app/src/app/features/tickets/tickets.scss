@@ -210,7 +210,13 @@
 // A partir de tablet vuelven a caber varias.
 .ticket-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  // `minmax(0, 1fr)` y NO `1fr`: `1fr` equivale a `minmax(auto, 1fr)`, cuyo mínimo es
+  // el min-content de la tarjeta. Con una nota o un badge largo la columna se estiraba
+  // por encima del ancho de la pantalla (en móvil la card llegaba a 628px en 390px de
+  // viewport) y se salían de vista el asunto y los botones Ver/⋮. El 0 deja que la
+  // columna se ajuste al contenedor y que el contenido recorte/envuelva dentro.
+  // Los breakpoints de abajo ya usaban minmax(0, 1fr); faltaba aquí.
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
 }
