@@ -14,7 +14,8 @@ export interface BadgeStyle {
 export function estadoStyle(estatus: string): BadgeStyle {
   const e = (estatus || '').toUpperCase();
   if (e.includes('APROBADO')) return { headerBg: '#DDEFD9', badgeBg: '#97C98A', badgeText: '#1B5E20' };
-  if (e.includes('CERRADO')) return { headerBg: '#F1EFE8', badgeBg: '#D3D1C7', badgeText: '#444441' };
+  // NO APLICA va con los cerrados: mismo grupo terminal (finalizado + solo lectura).
+  if (e.includes('CERRADO') || e.includes('NO APLICA')) return { headerBg: '#F1EFE8', badgeBg: '#D3D1C7', badgeText: '#444441' };
   if (e.includes('ENTREGADO')) return { headerBg: '#DDF3F1', badgeBg: '#9FE0D8', badgeText: '#0C5046' };
   if (e.includes('INSTALADO') || e.includes('CERTIFICAC')) return { headerBg: '#E3EFFB', badgeBg: '#B5D4F4', badgeText: '#0C447C' };
   if (e.includes('INFO PENDIENTE')) return { headerBg: '#FAEEDA', badgeBg: '#FAC775', badgeText: '#633806' };

@@ -395,3 +395,12 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ### Deploy + verificación (2026-07-22)
 Desplegado: backend `zolmaria/fitdesk-backend:latest` (digest `sha256:ed036e17…`) a Render (V12 aplicada al arrancar); frontend `-c cloud` a Pages (gh-pages `7bcb42d`). Commit fuente `bc76df7`. **Verificado contra la API de prod:** las 158 tareas con ticket tienen `story.assignee` == `ticket_espejo.asignado_hd` (0 divergencias) → derivación viva; `PUT /api/legacy/ticket-espejo/{id}/assignee` responde 200 (prueba idempotente). **Pendiente de frescura:** el sync completo del espejo (`POST /api/admin/sync/tickets`) es MANUAL — el front NO lo dispara. Reasignaciones pasadas que no estén en el espejo se reflejan en tarjetas fuera del sprint activo solo tras correr ese sync (las del sprint activo ya se corrigen por el fetch en vivo del board).
+
+## [2026-07-22] El estado "NO APLICA" entra al grupo TERMINAL (finalizado + solo lectura)
+**Decisión (pedida por la dueña):** el estado `NO APLICA` del HelpDesk se trata igual que los cerrados: cuenta como **finalizado** y deja el ticket en **solo lectura** (no se puede responder ni asignar).
+**Implementación:** una sola línea en la fuente única de verdad `core/helpdesk-estados.ts` → `esEstadoFinalizado()` ahora incluye `NO APLICA`. Como `esSoloLectura()` delega en ella, ambas condiciones salen del mismo cambio. Efectos automáticos, sin tocar nada más:
+- Board: `statusFromTicketEstado` → columna **Done** con el check "Finalizado" marcado.
+- Tickets: queda excluido de las listas de estados NO finalizados que van server-side (pestaña Equipo, Sin asignar, Pendientes).
+- Conversación y card: `soloLectura` → sin responder ni asignar; cambiar de estado solo Responsable de Equipo/Admin.
+- Badge: se agrupa con los CERRADO (mismo color) en `tickets-card-utils.estadoStyle`.
+**Nota:** el match es por inclusión y en mayúsculas, así que tolera variantes del texto del catálogo.

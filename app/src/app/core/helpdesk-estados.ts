@@ -8,12 +8,14 @@
  *  - APROBADO
  *  - CERRADO POR EL CLIENTE
  *  - CERRADO POR FALTA DE RESPUESTA DEL CLIENTE
+ *  - NO APLICA (mismo trato que los cerrados: finalizado y solo lectura)
  */
 export function esEstadoFinalizado(estado: string | null | undefined): boolean {
   const e = (estado || '').toUpperCase();
   return e.includes('APROBADO')
     || e.includes('CERRADO POR EL CLIENTE')
-    || e.includes('CERRADO POR FALTA DE RESPUESTA');
+    || e.includes('CERRADO POR FALTA DE RESPUESTA')
+    || e.includes('NO APLICA');
 }
 
 /**
