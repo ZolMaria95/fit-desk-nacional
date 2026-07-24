@@ -438,3 +438,9 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Fix:** `subscriptSizing="dynamic"` → el espacio solo se reserva cuando el hint realmente aparece. Medido después: **28px de scroll** (−78%) sin quitar ni un campo.
 **Regla:** en formularios densos (modales, paneles de filtros del drawer) usar SIEMPRE `subscriptSizing="dynamic"`; el default solo tiene sentido cuando el campo valida y el mensaje aparece/desaparece, para que no salte el layout.
 **De paso:** un pie de diálogo con 4 acciones no cabe en 560px si las etiquetas son largas ("Enviar a otro equipo"). Acortar la etiqueta y dejar la explicación en el tooltip devolvió el pie a UNA fila (113px → 65px) y evitó que la acción primaria quedara suelta abajo.
+
+### [2026-07-24] Hueco: la regla "tareas con ticket no se borran" no cubría el modal
+**Hecho:** el commit `bf66be4` (2026-07-18) protegió del borrado a las tareas con ticket en **tres** sitios: la × de la tarjeta del board (`@if (puedeGestionarTodo() && !card.ticket)`), `deleteCard` y `clearBoard`. Pero el botón **"Eliminar" del modal de detalle quedó fuera**: su única condición era `@if (!isNew)` y `remove()` no comprobaba el ticket → desde el modal SÍ se podía borrar una tarea con ticket, saltándose la regla.
+**Por qué importa:** la tarea nace del HelpDesk; borrarla deja el ticket sin representación en el tablero (y el board la vuelve a necesitar).
+**Fix:** `puedeEliminar = !isNew && !story.ticket` oculta el botón (mismo criterio que la tarjeta), **más** una guarda en `remove()` que rechaza y avisa aunque se invoque de otra forma (defensa en profundidad).
+**Lección:** al establecer una regla de negocio, listar TODOS los puntos de entrada de esa acción. Aquí había cuatro (tarjeta, modal, deleteCard, clearBoard) y se cubrieron tres; el hueco salió a la luz meses después, al rediseñar el modal y dar más protagonismo al botón.

@@ -423,8 +423,21 @@ export class CardDetailDialog {
     });
   }
 
+  /**
+   * Las tareas CON ticket asociado NO se eliminan: nacen del HelpDesk y borrarlas aquí
+   * dejaría el ticket huérfano en el tablero. Solo son eliminables las tareas propias
+   * del board (reuniones/locales). Misma regla que la × de la tarjeta y que
+   * `deleteCard`/`clearBoard` del board; aquí faltaba y el botón quedaba operativo.
+   */
+  readonly puedeEliminar = computed(() => !this.isNew && !this.story?.ticket);
+
   async remove(): Promise<void> {
     if (!this.story) return;
+    // Defensa en profundidad: aunque el botón esté oculto, nunca borrar una tarea con ticket.
+    if (this.story.ticket) {
+      this.snack.open('Las tareas con ticket asociado no se pueden eliminar.', 'OK', { duration: 4000 });
+      return;
+    }
     const ok = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {

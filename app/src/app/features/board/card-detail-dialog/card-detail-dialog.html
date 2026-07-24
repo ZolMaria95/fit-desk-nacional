@@ -165,7 +165,9 @@
 
 <!-- ── 4. ACCIONES: fijas al pie (regla de oro: nunca fuera de pantalla) ── -->
 <mat-dialog-actions class="cd-actions">
-  @if (!isNew) {
+  <!-- Solo las tareas SIN ticket son eliminables: las que nacen de un ticket del
+       HelpDesk no se borran (misma regla que la × de la tarjeta del board). -->
+  @if (puedeEliminar()) {
     <button mat-button class="danger" (click)="remove()">
       <mat-icon>delete_outline</mat-icon> Eliminar
     </button>
