@@ -432,3 +432,9 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Síntoma:** en las tarjetas de reunión, el chip del equipo ("Equipo Oficina Cuenca") se salía por fuera de la tarjeta.
 **Causa:** `.card-top` era `display:flex` **sin `flex-wrap`**, y los chips son `white-space: nowrap`. Medido en vivo: 259px de contenido en 170px útiles de columna (89px fuera); 23 tarjetas con desborde real.
 **Fix:** `flex-wrap: wrap` + `row-gap: 4px` en `.card-top` (+ `max-width:100%` en `.team-badge`). Verificado A/B en producción: 23 tarjetas desbordadas → **0**; la fila crece de 44px a 76px al bajar de línea.
+
+### [2026-07-24] `subscriptSizing="dynamic"`: ~20px por campo que nadie estaba usando
+**Hecho:** por defecto, cada `mat-form-field` reserva alto fijo para el *subscript* (hint/error) **aunque no haya ninguno**. En el modal de tarea (7 campos) eso costaba ~130px de alto muerto: el contenido scrolleaba 128px (713px de contenido en 585px visibles).
+**Fix:** `subscriptSizing="dynamic"` → el espacio solo se reserva cuando el hint realmente aparece. Medido después: **28px de scroll** (−78%) sin quitar ni un campo.
+**Regla:** en formularios densos (modales, paneles de filtros del drawer) usar SIEMPRE `subscriptSizing="dynamic"`; el default solo tiene sentido cuando el campo valida y el mensaje aparece/desaparece, para que no salte el layout.
+**De paso:** un pie de diálogo con 4 acciones no cabe en 560px si las etiquetas son largas ("Enviar a otro equipo"). Acortar la etiqueta y dejar la explicación en el tooltip devolvió el pie a UNA fila (113px → 65px) y evitó que la acción primaria quedara suelta abajo.
