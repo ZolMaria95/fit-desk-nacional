@@ -223,7 +223,14 @@
   }
   .cd-actions {
     padding: 10px 16px;
+    gap: 4px;
     // Las acciones primarias quedan a la derecha y siempre visibles aunque envuelvan.
     justify-content: flex-end;
+
+    // "Eliminar" queda solo con icono: es destructiva y ocasional, y su texto era lo
+    // que empujaba el pie a una segunda fila en 390px (dejando "Guardar" suelto abajo).
+    // El tooltip y el aria-label conservan el significado.
+    .btn-txt { display: none; }
+    .danger { min-width: 40px; padding: 0 8px; }
   }
 }

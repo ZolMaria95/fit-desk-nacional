@@ -168,8 +168,8 @@
   <!-- Solo las tareas SIN ticket son eliminables: las que nacen de un ticket del
        HelpDesk no se borran (misma regla que la × de la tarjeta del board). -->
   @if (puedeEliminar()) {
-    <button mat-button class="danger" (click)="remove()">
-      <mat-icon>delete_outline</mat-icon> Eliminar
+    <button mat-button class="danger" (click)="remove()" matTooltip="Eliminar tarea" aria-label="Eliminar tarea">
+      <mat-icon>delete_outline</mat-icon><span class="btn-txt">Eliminar</span>
     </button>
   }
   <span class="spacer"></span>
