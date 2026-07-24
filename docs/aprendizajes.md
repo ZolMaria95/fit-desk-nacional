@@ -444,3 +444,11 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Por qué importa:** la tarea nace del HelpDesk; borrarla deja el ticket sin representación en el tablero (y el board la vuelve a necesitar).
 **Fix:** `puedeEliminar = !isNew && !story.ticket` oculta el botón (mismo criterio que la tarjeta), **más** una guarda en `remove()` que rechaza y avisa aunque se invoque de otra forma (defensa en profundidad).
 **Lección:** al establecer una regla de negocio, listar TODOS los puntos de entrada de esa acción. Aquí había cuatro (tarjeta, modal, deleteCard, clearBoard) y se cubrieron tres; el hueco salió a la luz meses después, al rediseñar el modal y dar más protagonismo al botón.
+
+### [2026-07-24] El rol del HelpDesk se coló en una decisión de plataforma (y anuló el enfoque por rol)
+**Síntoma:** con el enfoque por rol ya desplegado, JPHP001 (que debía abrir filtrado) veía el **tablero completo**: 99 tarjetas, incluidas las de otras personas.
+**Causa:** `veTableroCompleto()` incluía `puedeGestionarTodo()`, que es `esMSC001() || esSupervisor()`, y **`esSupervisor()` mira `session.apiRole` — el `role_description` del HelpDesk**, no los roles de FitDesk. JPHP001 tiene `apiRole = "SUPERVISOR"` → daba `true` → sin filtro.
+**Contradecía el modelo**, que dice literal en `12-roles-y-responsabilidades.md`: *"Los roles se definen EN la plataforma, no en el HelpDesk… El `role_description` del API NO determina permisos."*
+**Fix:** `veTableroCompleto()` = SOLO roles de plataforma (ADMIN ∪ RESPONSABLE_EQUIPO ∪ GERENCIA). MSC001 sigue cubierto porque `esAdminPlataforma()` ya lo incluye como bootstrap.
+**Regla:** al construir un permiso, verificar de qué FUENTE sale cada computed que se compone. En este código conviven dos familias que se parecen y NO son lo mismo: las derivadas del HelpDesk (`esSupervisor`, `puedeGestionarTodo`) y las de plataforma (`esAdminPlataforma`, `esResponsableEquipo`, `esEspecialista`, `esGerencia`). Mezclarlas rompe el modelo en silencio.
+**Hallazgo de datos (aparte):** JPHP001 tiene `rolesPlataforma = []` — no tiene ninguna Asignación vigente en FitDesk, así que NO está registrado como ESPECIALISTA. Con "default deny" entra pero sin rol; hay que asignárselo en Administración → Asignaciones.

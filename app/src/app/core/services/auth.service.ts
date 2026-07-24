@@ -54,9 +54,15 @@ export class AuthService {
    * tareas"— así que el board les abre filtrado por "Asignados a mí"; pueden quitar el
    * filtro y mirar el tablero, pero seguir sin poder operar tarjetas ajenas
    * (`puedeOperar`/`canDrag` ya lo impiden). Ver `docs/knowledge/12-roles-y-responsabilidades.md`.
+   *
+   * SOLO roles de PLATAFORMA. No usar aquí `puedeGestionarTodo()`/`esSupervisor()`: esos
+   * derivan del `role_description` del HelpDesk, y el modelo dice explícitamente que el rol
+   * del API **NO** determina permisos. Al incluirlo, un usuario cuyo rol en el HelpDesk es
+   * "SUPERVISOR" pero SIN asignación en FitDesk (roles = []) abría el tablero completo,
+   * saltándose el enfoque por rol. Verificado con JPHP001.
    */
   readonly veTableroCompleto = computed(
-    () => this.esAdminPlataforma() || this.esResponsableEquipo() || this.esGerencia() || this.puedeGestionarTodo(),
+    () => this.esAdminPlataforma() || this.esResponsableEquipo() || this.esGerencia(),
   );
 
   get token(): string | null { return this._session()?.token ?? null; }
