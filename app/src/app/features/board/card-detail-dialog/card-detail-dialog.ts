@@ -3,13 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -62,9 +60,7 @@ export interface CardDetailData {
     MatInputModule,
     MatSelectModule,
     MatAutocompleteModule,
-    MatChipsModule,
     MatIconModule,
-    MatProgressBarModule,
     MatProgressSpinnerModule,
     MatDatepickerModule,
     MatTooltipModule,
@@ -310,6 +306,35 @@ export class CardDetailDialog {
 
   onProgress(value: string): void {
     this.progress.set(Math.min(100, Math.max(0, parseInt(value, 10) || 0)));
+  }
+
+  /**
+   * Icono por prioridad. La prioridad pasa de `mat-select` de texto a chips: un icono
+   * con forma distinta se reconoce de un vistazo, y no depende solo del color (que
+   * excluiría a quien no lo distingue).
+   */
+  readonly PRIORITY_ICONS: Record<Priority, string> = {
+    alta: 'keyboard_double_arrow_up',
+    media: 'drag_handle',
+    baja: 'keyboard_double_arrow_down',
+  };
+
+  /** Elige prioridad desde los chips (solo si la tarea aún es editable). */
+  setPriority(p: Priority): void {
+    if (this.editable) this.priority = p;
+  }
+
+  /** Flechas ←/→ para moverse entre los chips de prioridad (accesibilidad de teclado). */
+  onPriorityKey(ev: KeyboardEvent, p: Priority): void {
+    const k = ev.key;
+    if (k !== 'ArrowRight' && k !== 'ArrowLeft') return;
+    ev.preventDefault();
+    const i = this.PRIORITIES.indexOf(p);
+    const next = k === 'ArrowRight' ? (i + 1) % this.PRIORITIES.length
+                                    : (i - 1 + this.PRIORITIES.length) % this.PRIORITIES.length;
+    this.setPriority(this.PRIORITIES[next]);
+    const host = ev.currentTarget as HTMLElement;
+    (host.parentElement?.children[next] as HTMLElement | undefined)?.focus();
   }
 
   /** Fecha del datepicker (Date) → 'YYYY-MM-DD' (local, sin corrimiento de zona). */

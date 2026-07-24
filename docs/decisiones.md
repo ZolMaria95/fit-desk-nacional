@@ -422,3 +422,14 @@ Desplegado: backend `zolmaria/fitdesk-backend:latest` (digest `sha256:ed036e17�
 
 ### Encargo PENDIENTE para el agente `ux-ui`: rediseño del modal de tarea
 `features/board/card-detail-dialog/`. Objetivos pedidos: jerarquía visual clara; agrupar en **Información general · Gestión · Trabajo realizado · Acciones**; separar lo informativo (N° de ticket, estado del HelpDesk) de lo editable; **unificar terminología** (hoy conviven "Estado del ticket" y "Estado (mover)", que confunden); reducir alto para minimizar scroll; prioridad como **chip con color e icono** (hoy es un `mat-select` de texto); **un único control de progreso** (hoy hay barra + campo numérico a la vez); microcopy y placeholders; y acciones fijas al pie con jerarquía consistente (Guardar/Crear · Cancelar · Eliminar destructiva y separada).
+
+## [2026-07-24] Rediseño del modal de tarea: secciones, terminología y un solo control por dato
+**Implementado** (encargo registrado el mismo día). Cambios y su porqué:
+- **Encabezado informativo:** código de la tarea + chip `#ticket` + chip del **estado del HelpDesk** con su color, y el botón "Ver conversación". Antes esos datos se pintaban ENTRE los campos del formulario, como si fueran editables.
+- **Terminología (la clave):** "Estado del ticket" y "Estado (mover)" NO eran duplicados, eran dos cosas distintas mal nombradas. El primero es el estado en el HelpDesk (informativo → ahora chip en el encabezado); el segundo es la **columna del board** (editable → ahora se llama **"Columna del board"**, que es lo que sus valores realmente son: To Do / En progreso / En certificación / Entregado).
+- **Secciones:** *Información general* (título, cliente, N° ticket, descripción) · *Gestión* (asignado, prioridad, columna, fecha) · *Trabajo realizado* (progreso). Rejilla de 2 columnas donde cabe (`minmax(0,1fr)`), 1 en móvil → menos scroll.
+- **Prioridad como chips** con icono + color, `role="radiogroup"` y flechas ←/→. El icono acompaña al color para no depender solo de éste. El naranja se usa en "media" y el rojo en "alta", coherente con reservar el naranja/rojo a lo urgente.
+- **Progreso con UN mecanismo:** antes convivían `mat-progress-bar` **y** un `input[type=number]` para el mismo dato. Ahora un `<input type="range">` (step 5) teñido con `progBarColor()` y el % como lectura.
+- **Pie fijo** (`position: sticky; bottom:0`) → cumple la regla de oro "la barra de acciones SIEMPRE visible". Jerarquía: Eliminar (texto, rojo, izquierda) · Enviar a otro equipo / Escalar (contorno) · Cancelar (texto) · **Guardar/Crear tarea** (relleno turquesa).
+- **Microcopy:** placeholders con ejemplos reales del dominio y ayudas donde había duda (por qué "To Do" aparece deshabilitado → `salioDeTodo`; por qué el selector está bloqueado → `puedeMover`).
+**No se tocó** la lógica de guardado, permisos (`puedeMover`, `editable`, `salioDeTodo`) ni los autocompletes. Se eliminaron `MatProgressBarModule` y `MatChipsModule`, ya sin uso.

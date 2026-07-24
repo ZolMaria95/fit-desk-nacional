@@ -1,154 +1,177 @@
-<h2 mat-dialog-title>
-  {{ isNew ? 'Nueva tarea' : story!.id }}
-</h2>
-
-<mat-dialog-content class="detail">
-  <mat-form-field appearance="outline" class="full">
-    <mat-label>Título</mat-label>
-    <input matInput [(ngModel)]="title" placeholder="Título de la tarea" />
-  </mat-form-field>
-
-  @if (showClientEditor()) {
-    <div class="row">
-      <mat-form-field appearance="outline" class="grow">
-        <mat-label>Cliente</mat-label>
-        <input
-          matInput
-          [matAutocomplete]="autoClient"
-          [ngModel]="clientModel"
-          (ngModelChange)="onClientInput($event)"
-          placeholder="Buscar cliente..."
-          autocomplete="off"
-        />
-        <mat-icon matSuffix>search</mat-icon>
-        <mat-autocomplete #autoClient="matAutocomplete" [displayWith]="displayClient" (optionSelected)="onClientPicked($event.option.value)">
-          <mat-option [value]="null">— Sin cliente —</mat-option>
-          @for (c of filteredClients(); track c.id) {
-            <mat-option [value]="c">{{ c.name }}</mat-option>
-          } @empty {
-            <mat-option [value]="null" disabled>Sin coincidencias</mat-option>
-          }
-        </mat-autocomplete>
-      </mat-form-field>
-      @if (isNew) {
-        <mat-form-field appearance="outline" class="ticket">
-          <mat-label>N° Ticket</mat-label>
-          <input
-            matInput
-            [(ngModel)]="ticket"
-            inputmode="numeric"
-            placeholder="Buscar ticket…"
-            (blur)="lookupTicket()"
-            (keydown.enter)="lookupTicket()"
-          />
-          @if (ticketLoading()) {
-            <mat-spinner matSuffix diameter="18"></mat-spinner>
-          } @else {
-            <mat-icon matSuffix>search</mat-icon>
-          }
-        </mat-form-field>
-      }
-    </div>
-  } @else if (story!.ticket || client) {
-    <div class="meta">
-      @if (story!.ticket) {
-        <span class="ticket-badge">#{{ story!.ticket }}</span>
-      }
-      @if (client) {
-        <mat-chip-set>
-          <mat-chip disableRipple>{{ client.name }}</mat-chip>
-        </mat-chip-set>
-      }
-    </div>
-  }
-
-  @if (ticketEstatus(); as est) {
-    <div class="ticket-estado">
-      <span class="te-label">Estado del ticket:</span>
-      <span class="te-badge" [style.background]="estadoStyle(est).badgeBg" [style.color]="estadoStyle(est).badgeText">{{ est }}</span>
-    </div>
-  }
-
+<!-- ENCABEZADO: identidad de la tarea. Todo lo de aquí es INFORMATIVO (no se edita):
+     por eso va como chips y no como campos, que invitaban a escribir en ellos. -->
+<div class="cd-head" mat-dialog-title>
+  <div class="cd-head-main">
+    <h2 class="cd-title">{{ isNew ? 'Nueva tarea' : story!.id }}</h2>
+    @if (!isNew && story!.ticket) {
+      <span class="cd-chip cd-chip-ticket" matTooltip="Ticket del HelpDesk">#{{ story!.ticket }}</span>
+    }
+    @if (ticketEstatus(); as est) {
+      <span class="cd-chip"
+            [style.background]="estadoStyle(est).badgeBg" [style.color]="estadoStyle(est).badgeText"
+            matTooltip="Estado en el HelpDesk (no se edita aquí)">{{ est }}</span>
+    }
+  </div>
   @if (ticket.trim()) {
-    <button mat-stroked-button type="button" class="conv-btn" (click)="openTicketConversation()">
-      <mat-icon>forum</mat-icon> Ver conversación del ticket
+    <button mat-stroked-button type="button" class="cd-conv" (click)="openTicketConversation()">
+      <mat-icon>forum</mat-icon> Ver conversación
     </button>
   }
+</div>
 
-  <mat-form-field appearance="outline" class="full">
-    <mat-label>Asignado a</mat-label>
-    <input
-      matInput
-      [matAutocomplete]="autoAssignee"
-      [ngModel]="assigneeModel"
-      (ngModelChange)="onAssigneeInput($event)"
-      placeholder="Buscar por nombre o código..."
-      autocomplete="off"
-    />
-    <mat-icon matSuffix>search</mat-icon>
-    <mat-autocomplete #autoAssignee="matAutocomplete" [displayWith]="displayAssignee" (optionSelected)="onAssigneePicked($event.option.value)">
-      <mat-option [value]="null">— Sin asignar —</mat-option>
-      @for (m of filteredAssignees(); track m.id) {
-        <mat-option [value]="m">
-          <span class="opt-name">{{ m.name }}</span>
-          @if (m.role) { <small class="opt-meta">{{ m.role }}</small> }
-        </mat-option>
-      } @empty {
-        <mat-option [value]="null" disabled>Sin coincidencias</mat-option>
-      }
-    </mat-autocomplete>
-  </mat-form-field>
+<mat-dialog-content class="detail">
 
-  <div class="row">
-    <mat-form-field appearance="outline" class="grow">
-      <mat-label>Prioridad</mat-label>
-      @if (editable) {
-        <mat-select [(ngModel)]="priority">
-          @for (p of PRIORITIES; track p) {
-            <mat-option [value]="p">{{ PRIORITY_LABELS[p] }}</mat-option>
-          }
-        </mat-select>
-      } @else {
-        <input matInput [value]="PRIORITY_LABELS[priority]" readonly />
-      }
+  <!-- ── 1. INFORMACIÓN GENERAL: qué es la tarea ── -->
+  <section class="cd-sec">
+    <h3 class="cd-sec-title">Información general</h3>
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Título</mat-label>
+      <input matInput [(ngModel)]="title" placeholder="Ej. Corregir cálculo de IVA en facturación" />
     </mat-form-field>
 
-    <mat-form-field appearance="outline" class="grow">
-      <mat-label>Estado (mover)</mat-label>
-      @if (puedeMover()) {
-        <mat-select [(ngModel)]="status">
-          @for (s of STATUSES; track s) {
-            <mat-option [value]="s" [disabled]="salioDeTodo && s === 'todo'">{{ STATUS_LABELS[s] }}</mat-option>
-          }
-        </mat-select>
-      } @else {
-        <input matInput [value]="STATUS_LABELS[status]" readonly />
-      }
+    @if (showClientEditor()) {
+      <div class="cd-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Cliente</mat-label>
+          <input matInput [matAutocomplete]="autoClient" [ngModel]="clientModel"
+                 (ngModelChange)="onClientInput($event)" placeholder="Buscar cliente…" autocomplete="off" />
+          <mat-icon matSuffix>search</mat-icon>
+          <mat-autocomplete #autoClient="matAutocomplete" [displayWith]="displayClient" (optionSelected)="onClientPicked($event.option.value)">
+            <mat-option [value]="null">— Sin cliente —</mat-option>
+            @for (c of filteredClients(); track c.id) {
+              <mat-option [value]="c">{{ c.name }}</mat-option>
+            } @empty {
+              <mat-option [value]="null" disabled>Sin coincidencias</mat-option>
+            }
+          </mat-autocomplete>
+        </mat-form-field>
+
+        @if (isNew) {
+          <mat-form-field appearance="outline">
+            <mat-label>N° Ticket</mat-label>
+            <input matInput [(ngModel)]="ticket" inputmode="numeric" placeholder="Ej. 33281"
+                   (blur)="lookupTicket()" (keydown.enter)="lookupTicket()" />
+            @if (ticketLoading()) {
+              <mat-spinner matSuffix diameter="18"></mat-spinner>
+            } @else {
+              <mat-icon matSuffix>search</mat-icon>
+            }
+            <mat-hint>Al escribirlo se traen cliente y estado</mat-hint>
+          </mat-form-field>
+        }
+      </div>
+    } @else if (client) {
+      <div class="cd-readonly">
+        <span class="cd-readonly-label">Cliente</span>
+        <span class="cd-chip cd-chip-cliente">{{ client.name }}</span>
+      </div>
+    }
+
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Descripción</mat-label>
+      <textarea matInput rows="3" [(ngModel)]="description"
+                placeholder="Contexto, pasos para reproducir, acuerdos con el cliente…"></textarea>
     </mat-form-field>
-  </div>
+  </section>
 
-  <mat-form-field appearance="outline" class="full">
-    <mat-label>Descripción</mat-label>
-    <textarea matInput rows="3" [(ngModel)]="description" placeholder="Detalle adicional, contexto, pasos..."></textarea>
-  </mat-form-field>
+  <!-- ── 2. GESTIÓN: quién la lleva, con qué urgencia, dónde y para cuándo ── -->
+  <section class="cd-sec">
+    <h3 class="cd-sec-title">Gestión</h3>
 
-  <label class="block-label">Progreso — {{ progress() }}%</label>
-  <div class="prog">
-    <mat-progress-bar mode="determinate" [value]="progress()" [style.--mdc-linear-progress-active-indicator-color]="progBarColor()"></mat-progress-bar>
-    <input type="number" min="0" max="100" step="5" [value]="progress()" (input)="onProgress($any($event.target).value)" />
-  </div>
+    <mat-form-field appearance="outline" class="full">
+      <mat-label>Asignado a</mat-label>
+      <input matInput [matAutocomplete]="autoAssignee" [ngModel]="assigneeModel"
+             (ngModelChange)="onAssigneeInput($event)" placeholder="Buscar por nombre…" autocomplete="off" />
+      <mat-icon matSuffix>search</mat-icon>
+      <mat-autocomplete #autoAssignee="matAutocomplete" [displayWith]="displayAssignee" (optionSelected)="onAssigneePicked($event.option.value)">
+        <mat-option [value]="null">— Sin asignar —</mat-option>
+        @for (m of filteredAssignees(); track m.id) {
+          <mat-option [value]="m">
+            <span class="opt-name">{{ m.name }}</span>
+            @if (m.role) { <small class="opt-meta">{{ m.role }}</small> }
+          </mat-option>
+        } @empty {
+          <mat-option [value]="null" disabled>Sin coincidencias</mat-option>
+        }
+      </mat-autocomplete>
+    </mat-form-field>
 
-  <mat-form-field appearance="outline" class="full">
-    <mat-label>Fecha de entrega</mat-label>
-    <input matInput [matDatepicker]="duePicker" [(ngModel)]="dueDateModel" />
-    <mat-datepicker-toggle matIconSuffix [for]="duePicker"></mat-datepicker-toggle>
-    <mat-datepicker #duePicker></mat-datepicker>
-  </mat-form-field>
+    <!-- Prioridad como CHIPS: se reconoce de un vistazo por icono + color, en vez de
+         tener que abrir un desplegable y leer. Icono además del color, para no depender
+         solo de éste. -->
+    <div class="cd-field">
+      <span class="cd-label" id="prio-label">Prioridad</span>
+      <div class="cd-chips" role="radiogroup" aria-labelledby="prio-label">
+        @for (p of PRIORITIES; track p) {
+          <button type="button" class="prio-chip" [class]="'prio-' + p" [class.on]="priority === p"
+                  role="radio" [attr.aria-checked]="priority === p" [disabled]="!editable"
+                  [tabindex]="priority === p ? 0 : -1"
+                  (click)="setPriority(p)" (keydown)="onPriorityKey($event, p)">
+            <mat-icon>{{ PRIORITY_ICONS[p] }}</mat-icon>{{ PRIORITY_LABELS[p] }}
+          </button>
+        }
+      </div>
+      @if (!editable) {
+        <span class="cd-help">La prioridad solo se cambia mientras la tarea está en To Do o En progreso.</span>
+      }
+    </div>
+
+    <div class="cd-grid">
+      <!-- Antes se llamaba "Estado (mover)" y chocaba con el "Estado del ticket" del
+           HelpDesk. Son cosas distintas: esto es la COLUMNA del board. -->
+      <mat-form-field appearance="outline">
+        <mat-label>Columna del board</mat-label>
+        @if (puedeMover()) {
+          <mat-select [(ngModel)]="status">
+            @for (s of STATUSES; track s) {
+              <mat-option [value]="s" [disabled]="salioDeTodo && s === 'todo'">{{ STATUS_LABELS[s] }}</mat-option>
+            }
+          </mat-select>
+          @if (salioDeTodo) { <mat-hint>Una tarea que ya salió de To Do no puede volver</mat-hint> }
+        } @else {
+          <input matInput [value]="STATUS_LABELS[status]" readonly />
+          <mat-hint>Solo el asignado, un supervisor o el Helpdesk pueden moverla</mat-hint>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Fecha de entrega</mat-label>
+        <input matInput [matDatepicker]="duePicker" [(ngModel)]="dueDateModel" placeholder="dd/mm/aaaa" />
+        <mat-datepicker-toggle matIconSuffix [for]="duePicker"></mat-datepicker-toggle>
+        <mat-datepicker #duePicker></mat-datepicker>
+      </mat-form-field>
+    </div>
+  </section>
+
+  <!-- ── 3. TRABAJO REALIZADO ── -->
+  <section class="cd-sec">
+    <h3 class="cd-sec-title">Trabajo realizado</h3>
+
+    <!-- UN solo control: antes había barra de progreso Y campo numérico para el mismo
+         dato. El slider edita; el % es solo lectura. -->
+    <div class="cd-field">
+      <div class="cd-prog-head">
+        <span class="cd-label" id="prog-label">Progreso</span>
+        <span class="cd-prog-val" [style.color]="progBarColor()">{{ progress() }}%</span>
+      </div>
+      <input class="cd-prog-range" type="range" min="0" max="100" step="5"
+             [value]="progress()" (input)="onProgress($any($event.target).value)"
+             [style.--prog-color]="progBarColor()"
+             aria-labelledby="prog-label" [attr.aria-valuetext]="progress() + '%'" />
+    </div>
+  </section>
 </mat-dialog-content>
 
-<mat-dialog-actions align="end">
+<!-- ── 4. ACCIONES: fijas al pie (regla de oro: nunca fuera de pantalla) ── -->
+<mat-dialog-actions class="cd-actions">
   @if (!isNew) {
-    <button mat-button class="danger" (click)="remove()">Eliminar</button>
+    <button mat-button class="danger" (click)="remove()">
+      <mat-icon>delete_outline</mat-icon> Eliminar
+    </button>
+  }
+  <span class="spacer"></span>
+  @if (!isNew) {
     @if (puedeEnviarEquipo()) {
       <button mat-stroked-button (click)="enviarAotroEquipo()" matTooltip="Transferir a otro equipo">
         <mat-icon>swap_horiz</mat-icon> Enviar a otro equipo
@@ -159,8 +182,7 @@
         <mat-icon>campaign</mat-icon> Escalar
       </button>
     }
-    <span class="spacer"></span>
   }
   <button mat-button mat-dialog-close>Cancelar</button>
-  <button mat-flat-button color="primary" (click)="save()">{{ isNew ? 'Crear' : 'Guardar' }}</button>
+  <button mat-flat-button color="primary" (click)="save()">{{ isNew ? 'Crear tarea' : 'Guardar' }}</button>
 </mat-dialog-actions>
