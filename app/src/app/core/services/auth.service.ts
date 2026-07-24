@@ -46,6 +46,18 @@ export class AuthService {
   readonly puedeTransferir = computed(() => this.esAdminPlataforma() || this.esResponsableEquipo());
   // Asignar/modificar el rol ADMIN: SOLO ADMIN.
   readonly puedeAsignarAdmin = computed(() => this.esAdminPlataforma());
+  /** Gerencia: visibilidad global de SOLO LECTURA (no opera). */
+  readonly esGerencia = computed(() => this._rolesPlataforma().includes('GERENCIA'));
+  /**
+   * ¿Su plano de visibilidad es el TABLERO COMPLETO? RE (su equipo/clientes), ADMIN y
+   * Gerencia (global). Consultor y Especialista viven en el plano **operativo** —"sus
+   * tareas"— así que el board les abre filtrado por "Asignados a mí"; pueden quitar el
+   * filtro y mirar el tablero, pero seguir sin poder operar tarjetas ajenas
+   * (`puedeOperar`/`canDrag` ya lo impiden). Ver `docs/knowledge/12-roles-y-responsabilidades.md`.
+   */
+  readonly veTableroCompleto = computed(
+    () => this.esAdminPlataforma() || this.esResponsableEquipo() || this.esGerencia() || this.puedeGestionarTodo(),
+  );
 
   get token(): string | null { return this._session()?.token ?? null; }
 

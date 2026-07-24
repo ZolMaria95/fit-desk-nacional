@@ -132,6 +132,17 @@ export class Board implements OnDestroy {
     // Si venimos con un deep-link (?board&sprint&card), el modal se abre DENTRO de initBoards
     // en cuanto están las stories (sin esperar el sync del HelpDesk, que es lento).
     this.data.ensureInit().then(() => this.initBoards());
+    // ENFOQUE POR ROL: Consultor y Especialista viven en el plano "sus tareas"
+    // (docs/knowledge/12-roles-y-responsabilidades.md), así que el board les abre ya
+    // filtrado por "Asignados a mí" para que no arranquen con el ruido del equipo.
+    // NO es una restricción: pueden quitar el filtro y mirar el tablero completo, pero
+    // sin poder operar tarjetas ajenas (`puedeOperar`/`canDrag` ya lo impiden).
+    // RE / ADMIN / Gerencia abren con el tablero completo, que es su plano.
+    // Se espera a que carguen los roles (llegan del backend) y se respeta al usuario si
+    // ya tocó el filtro mientras tanto.
+    this.auth.ensureRolesPlataforma().then(() => {
+      if (!this.mineTocado && !this.auth.veTableroCompleto()) this.mineOnly.set(true);
+    });
     // Roster de mi equipo (para el toggle "Mi equipo"), solo si puedo verlo.
     if (this.data.usesQuarkus() && this.auth.puedeTransferir()) {
       this.transfer.miEquipoMiembros()
@@ -333,6 +344,8 @@ export class Board implements OnDestroy {
   });
   /** Atajo "Asignados a mí": muestra solo las tareas del usuario en sesión. */
   readonly mineOnly = signal(false);
+  /** ¿El usuario tocó el filtro a mano? Entonces su decisión manda sobre el default por rol. */
+  private mineTocado = false;
 
   // ── Permisos ──
   readonly puedeGestionarTodo = this.auth.puedeGestionarTodo;
@@ -506,6 +519,7 @@ export class Board implements OnDestroy {
   /** Atajo: alterna el filtro "Asignados a mí" (solo mis tareas). Al activarlo limpia
    *  el multi-select de asignados para no mezclar criterios. */
   toggleMine(): void {
+    this.mineTocado = true; // a partir de aquí manda el usuario, no el default por rol
     const next = !this.mineOnly();
     this.mineOnly.set(next);
     if (next) this.activeAssignees.set(new Set());

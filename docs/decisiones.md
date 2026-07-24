@@ -433,3 +433,13 @@ Desplegado: backend `zolmaria/fitdesk-backend:latest` (digest `sha256:ed036e17�
 - **Pie fijo** (`position: sticky; bottom:0`) → cumple la regla de oro "la barra de acciones SIEMPRE visible". Jerarquía: Eliminar (texto, rojo, izquierda) · Enviar a otro equipo / Escalar (contorno) · Cancelar (texto) · **Guardar/Crear tarea** (relleno turquesa).
 - **Microcopy:** placeholders con ejemplos reales del dominio y ayudas donde había duda (por qué "To Do" aparece deshabilitado → `salioDeTodo`; por qué el selector está bloqueado → `puedeMover`).
 **No se tocó** la lógica de guardado, permisos (`puedeMover`, `editable`, `salioDeTodo`) ni los autocompletes. Se eliminaron `MatProgressBarModule` y `MatChipsModule`, ya sin uso.
+
+## [2026-07-24] Board: enfoque por rol (Consultor/Especialista abren filtrado, NO restringido)
+**Contexto:** la matriz de `12-roles-y-responsabilidades.md` ya dice que Consultor y Especialista ven **"sus tareas"** (plano operativo) y que el Especialista "no ve el equipo". El código no lo aplicaba: el toggle "Asignados a mí" existía pero arrancaba apagado, así que todos abrían el tablero completo.
+**La dueña eligió ENFOQUE, no confidencialidad.** Diferencia deliberada:
+- **Enfoque (lo implementado):** el board **abre filtrado** a "Asignados a mí" para Consultor/Especialista, para que no arranquen con el ruido del equipo. **Pueden quitar el filtro** y mirar el tablero completo. Se preserva el sentido Scrum del tablero (daily, bloqueos, WIP del sprint).
+- **Confidencialidad (descartada):** habría que no entregarles siquiera los datos de otros. Se descartó porque rompe el board como artefacto de equipo.
+**Implementación:** `auth.veTableroCompleto()` = ADMIN ∪ RESPONSABLE_EQUIPO ∪ GERENCIA ∪ (MSC001/Supervisor). El board, tras cargar los roles, hace `mineOnly.set(true)` si el usuario NO está en ese conjunto y **no ha tocado el filtro** (`mineTocado`) — la decisión manual del usuario siempre gana al default.
+**Gerencia** se añadió explícitamente (`esGerencia`): su plano es global de solo lectura; dejarla fuera le habría quitado su razón de ser.
+**Ver el completo ya es de hecho solo lectura:** `puedeOperar`/`canDrag` impiden mover/certificar tarjetas ajenas, así que quitar el filtro no otorga poder, solo visión.
+**Límite honesto:** esto es una regla de **producto** (la UI hace cumplir el modelo), NO una barrera de seguridad: el backend sigue confiando en el header `X-Actor-Hid` y entrega todas las tareas. Sube a regla de seguridad cuando llegue la identidad por token.
