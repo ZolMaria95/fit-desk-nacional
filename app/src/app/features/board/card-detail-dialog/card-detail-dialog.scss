@@ -76,6 +76,13 @@
     border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
     margin-top: 6px;
   }
+
+  // Aire entre campos, EXPLÍCITO. Antes lo daba de rebote el `subscript` del
+  // mat-form-field (el hueco del hint/error). Al pasar a `subscriptSizing="dynamic"`
+  // para recuperar ~100px de alto, ese hueco desapareció y los campos quedaron
+  // pegados: la etiqueta flotante del siguiente llegaba a chocar con el borde del
+  // anterior. Ahora la separación se controla aquí y no depende de un espacio fantasma.
+  mat-form-field { margin-bottom: 12px; }
 }
 
 .cd-sec-title {
