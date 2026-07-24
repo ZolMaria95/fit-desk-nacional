@@ -77,8 +77,8 @@
       <mat-icon>flag</mat-icon>
     </button>
     <button class="tc-flag pend" [class.on]="esPendiente()" (click)="$event.stopPropagation(); togglePendiente.emit()"
-            [matTooltip]="esPendiente() ? 'Quitar pendiente' : 'Marcar pendiente'" aria-label="Pendiente">
-      <mat-icon>pause_circle</mat-icon>
+            [matTooltip]="esPendiente() ? 'Quitar recordatorio' : 'Crear recordatorio'" aria-label="Recordatorio">
+      <mat-icon>alarm</mat-icon>
     </button>
     <span class="tc-foot-spacer"></span>
     <button class="tc-ver" (click)="$event.stopPropagation(); verConversacion.emit()" matTooltip="Ver conversación">

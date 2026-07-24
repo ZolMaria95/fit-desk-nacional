@@ -165,7 +165,7 @@ export class MiPanel {
     }
     const res = (await firstValueFrom(
       this.dialog
-        .open(PendienteDateDialog, { data: { title: 'Marcar pendiente', ticket: t.ticket }, width: '420px', maxWidth: '95vw' })
+        .open(PendienteDateDialog, { data: { title: 'Crear recordatorio', ticket: t.ticket }, width: '420px', maxWidth: '95vw' })
         .afterClosed(),
     )) as PendienteDateResult | undefined;
     if (!res) return;
