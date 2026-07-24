@@ -25,14 +25,14 @@
   <section class="cd-sec">
     <h3 class="cd-sec-title">Información general</h3>
 
-    <mat-form-field appearance="outline" class="full">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Título</mat-label>
       <input matInput [(ngModel)]="title" placeholder="Ej. Corregir cálculo de IVA en facturación" />
     </mat-form-field>
 
     @if (showClientEditor()) {
       <div class="cd-grid">
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Cliente</mat-label>
           <input matInput [matAutocomplete]="autoClient" [ngModel]="clientModel"
                  (ngModelChange)="onClientInput($event)" placeholder="Buscar cliente…" autocomplete="off" />
@@ -48,7 +48,7 @@
         </mat-form-field>
 
         @if (isNew) {
-          <mat-form-field appearance="outline">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>N° Ticket</mat-label>
             <input matInput [(ngModel)]="ticket" inputmode="numeric" placeholder="Ej. 33281"
                    (blur)="lookupTicket()" (keydown.enter)="lookupTicket()" />
@@ -68,7 +68,7 @@
       </div>
     }
 
-    <mat-form-field appearance="outline" class="full">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Descripción</mat-label>
       <textarea matInput rows="3" [(ngModel)]="description"
                 placeholder="Contexto, pasos para reproducir, acuerdos con el cliente…"></textarea>
@@ -79,7 +79,7 @@
   <section class="cd-sec">
     <h3 class="cd-sec-title">Gestión</h3>
 
-    <mat-form-field appearance="outline" class="full">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Asignado a</mat-label>
       <input matInput [matAutocomplete]="autoAssignee" [ngModel]="assigneeModel"
              (ngModelChange)="onAssigneeInput($event)" placeholder="Buscar por nombre…" autocomplete="off" />
@@ -120,7 +120,7 @@
     <div class="cd-grid">
       <!-- Antes se llamaba "Estado (mover)" y chocaba con el "Estado del ticket" del
            HelpDesk. Son cosas distintas: esto es la COLUMNA del board. -->
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Columna del board</mat-label>
         @if (puedeMover()) {
           <mat-select [(ngModel)]="status">
@@ -135,7 +135,7 @@
         }
       </mat-form-field>
 
-      <mat-form-field appearance="outline">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-label>Fecha de entrega</mat-label>
         <input matInput [matDatepicker]="duePicker" [(ngModel)]="dueDateModel" placeholder="dd/mm/aaaa" />
         <mat-datepicker-toggle matIconSuffix [for]="duePicker"></mat-datepicker-toggle>
@@ -174,7 +174,7 @@
   @if (!isNew) {
     @if (puedeEnviarEquipo()) {
       <button mat-stroked-button (click)="enviarAotroEquipo()" matTooltip="Transferir a otro equipo">
-        <mat-icon>swap_horiz</mat-icon> Enviar a otro equipo
+        <mat-icon>swap_horiz</mat-icon> Enviar
       </button>
     }
     @if (puedeEscalar()) {
