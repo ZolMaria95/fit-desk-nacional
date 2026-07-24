@@ -98,19 +98,23 @@
      demás controles del drawer (buscador / Filtros): caja plana con borde de 8px e
      icono, en vez del mat-form-field con etiqueta flotante, que rompía la coherencia. -->
 <ng-template #sortTpl>
-  <label class="tool-sort">
+  <!-- Botón (caja plana, coherente con el buscador/Filtros) que abre un mat-menu. Se usa
+       menú de Material y NO un <select> nativo porque la lista desplegable del select la
+       dibuja el SO y no se puede estilizar (se veía anticuada). El menú además iguala a
+       los otros menús de la app. -->
+  <button type="button" class="tool-sort" [matMenuTriggerFor]="sortMenu" aria-label="Ordenar por">
     <mat-icon class="tool-sort-icon">swap_vert</mat-icon>
-    <select class="tool-sort-select" [value]="sortValue()"
-            (change)="onSortChange($any($event.target).value)" aria-label="Ordenar por">
-      <option value="modified_date|desc">Modificación (recientes)</option>
-      <option value="modified_date|asc">Modificación (antiguos)</option>
-      <option value="entry_date|desc">Ingreso (recientes)</option>
-      <option value="entry_date|asc">Ingreso (antiguos)</option>
-      <option value="priority|asc">Prioridad (alta primero)</option>
-      <option value="priority|desc">Prioridad (baja primero)</option>
-    </select>
+    <span class="tool-sort-label">{{ sortLabel() }}</span>
     <mat-icon class="tool-sort-caret">expand_more</mat-icon>
-  </label>
+  </button>
+  <mat-menu #sortMenu="matMenu" class="tool-sort-menu">
+    @for (o of sortOptions; track o.value) {
+      <button mat-menu-item (click)="onSortChange(o.value)" [class.activo]="sortValue() === o.value">
+        <mat-icon>{{ sortValue() === o.value ? 'check' : '' }}</mat-icon>
+        <span>{{ o.label }}</span>
+      </button>
+    }
+  </mat-menu>
 </ng-template>
 
 <!-- Contenido -->

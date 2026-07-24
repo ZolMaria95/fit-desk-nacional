@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -41,6 +42,7 @@ type Tab = 'equipo' | 'sinasignar' | 'asignados' | 'generales';
     MatIconModule,
     MatFormFieldModule,
     MatInputModule,
+    MatMenuModule,
     MatSelectModule,
     MatPaginatorModule,
     MatProgressBarModule,
@@ -97,6 +99,17 @@ export class Tickets implements OnDestroy {
   readonly sortField = signal('modified_date');
   readonly sortDir = signal<'asc' | 'desc'>('desc');
   readonly sortValue = computed(() => `${this.sortField()}|${this.sortDir()}`);
+  /** Opciones de orden (el `value` es `campo|dir`, como lo espera `onSortChange`). */
+  readonly sortOptions: { value: string; label: string }[] = [
+    { value: 'modified_date|desc', label: 'Modificación (recientes)' },
+    { value: 'modified_date|asc', label: 'Modificación (antiguos)' },
+    { value: 'entry_date|desc', label: 'Ingreso (recientes)' },
+    { value: 'entry_date|asc', label: 'Ingreso (antiguos)' },
+    { value: 'priority|asc', label: 'Prioridad (alta primero)' },
+    { value: 'priority|desc', label: 'Prioridad (baja primero)' },
+  ];
+  /** Etiqueta del orden activo (para mostrarla en el botón del menú). */
+  readonly sortLabel = computed(() => this.sortOptions.find((o) => o.value === this.sortValue())?.label ?? '');
 
   // Paginación server-side: cada página = una consulta con su offset; `total` del API.
   readonly pageIndex = signal(0);
