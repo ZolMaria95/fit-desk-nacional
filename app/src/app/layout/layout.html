@@ -91,9 +91,9 @@
 
       <!-- Ordenar va FUERA del panel de filtros: no reduce resultados, los reordena. -->
       @if (shell.sort(); as tpl) {
-        <div class="tool-sort">
-          <ng-container *ngTemplateOutlet="tpl"></ng-container>
-        </div>
+        <!-- Slot sin estilo: el control de orden lo pinta la vista (su plantilla), porque
+             por encapsulación de Angular el CSS del Layout no alcanza el contenido proyectado. -->
+        <ng-container *ngTemplateOutlet="tpl"></ng-container>
       }
     </div>
 

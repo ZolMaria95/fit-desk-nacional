@@ -317,3 +317,47 @@ mat-paginator {
   mat-icon { font-size: 16px; width: 16px; height: 16px; flex: none; }
   span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+
+// Control de "Ordenar" (se publica al drawer del shell). Mismo lenguaje visual que el
+// buscador y "Filtros" del drawer: caja plana, borde 8px, 40px de alto, icono a la
+// izquierda y chevron a la derecha. Se estiliza AQUÍ (no en layout.scss) porque esta
+// plantilla se proyecta al drawer y la encapsulación del Layout no la alcanza.
+.tool-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:focus-within {
+    border-color: var(--brand, #048abf);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand, #048abf) 18%, transparent);
+  }
+
+  .tool-sort-icon,
+  .tool-sort-caret {
+    flex: none;
+    color: var(--mat-sys-on-surface-variant, #5a6470);
+  }
+  .tool-sort-icon { font-size: 18px; width: 18px; height: 18px; }
+  .tool-sort-caret { font-size: 20px; width: 20px; height: 20px; }
+
+  .tool-sort-select {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    color: inherit;
+    cursor: pointer;
+    appearance: none; // oculta la flecha nativa; se usa el chevron para igualar a Filtros
+    -webkit-appearance: none;
+    text-overflow: ellipsis;
+  }
+}
