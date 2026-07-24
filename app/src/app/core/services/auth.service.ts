@@ -223,7 +223,15 @@ export class AuthService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: rt }),
       });
-      if (!r.ok) return null;
+      if (!r.ok) {
+        // 401/403 = el refresh_token venció o es inválido: la sesión está MUERTA. Hay que
+        // limpiarla para que `isAuthenticated()` pase a false y el shell redirija al login.
+        // Antes solo devolvía null y dejaba una sesión zombi: el usuario quedaba "dentro"
+        // con un token vencido, viendo "sesión expiró" pero sin que nada lo sacara.
+        // Un 502/503/timeout NO entra aquí (cae al catch) → no se cierra por un blip de Render.
+        if (r.status === 401 || r.status === 403) this.clearSession();
+        return null;
+      }
       const data = await r.json();
       const access: string | undefined = data?.access_token;
       const cur = this._session();

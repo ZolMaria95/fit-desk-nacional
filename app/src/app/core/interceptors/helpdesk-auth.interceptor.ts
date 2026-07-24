@@ -49,14 +49,18 @@ export const helpdeskAuthInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(withAuth(auth.token)).pipe(
     catchError((err) => {
-      if (!isProxy || isAuthCall || !auth.token) return throwError(() => err);
+      if (!isProxy || isAuthCall) return throwError(() => err);
       // 401 = sesión inválida/vencida → SIN reintento ni refresh: cerrar popups y al login.
+      // SIEMPRE redirige, incluso si `auth.token` ya no está: si el token expiró y se limpió
+      // por otra vía, una petición en vuelo puede llegar sin él y devolver 401; el usuario
+      // igual debe salir al login (antes el guard `!auth.token` lo dejaba atrapado).
       if (err?.status === 401) {
         goToLogin();
         return throwError(() => err);
       }
-      // 403 (sin permiso): el refresh no ayuda → cerrar sesión salvo "safe".
-      if (err?.status === 403 && !safe) goToLogin();
+      // 403 (sin permiso): el refresh no ayuda → cerrar sesión salvo "safe". Requiere token
+      // (un 403 sin sesión no debe forzar navegación).
+      if (err?.status === 403 && auth.token && !safe) goToLogin();
       return throwError(() => err);
     }),
   );

@@ -452,3 +452,13 @@ Build de deploy: `npx ng build -c cloud --base-href /fit-desk-nacional/` → sal
 **Fix:** `veTableroCompleto()` = SOLO roles de plataforma (ADMIN ∪ RESPONSABLE_EQUIPO ∪ GERENCIA). MSC001 sigue cubierto porque `esAdminPlataforma()` ya lo incluye como bootstrap.
 **Regla:** al construir un permiso, verificar de qué FUENTE sale cada computed que se compone. En este código conviven dos familias que se parecen y NO son lo mismo: las derivadas del HelpDesk (`esSupervisor`, `puedeGestionarTodo`) y las de plataforma (`esAdminPlataforma`, `esResponsableEquipo`, `esEspecialista`, `esGerencia`). Mezclarlas rompe el modelo en silencio.
 **Hallazgo de datos (aparte):** JPHP001 tiene `rolesPlataforma = []` — no tiene ninguna Asignación vigente en FitDesk, así que NO está registrado como ESPECIALISTA. Con "default deny" entra pero sin rol; hay que asignárselo en Administración → Asignaciones.
+
+### [2026-07-24] Sesión ZOMBI: el refresh proactivo fallaba sin limpiar la sesión
+**Síntoma:** el usuario ve "Tu sesión expiró. Vuelve a iniciar sesión." en Tickets pero **no lo redirige** al login; queda atrapado (mismo síntoma que el 2026-07-22, pero por otra causa).
+**Causa (dos huecos que se combinan):**
+1. `AuthService.doRefresh()` devolvía `null` cuando el refresh_token estaba vencido, **sin limpiar la sesión**. La sesión quedaba zombi: `isAuthenticated()` seguía `true`, el token vivo pero vencido. Como la sesión nunca pasaba a `null`, el `effect` del Layout (que redirige al perder sesión) NO disparaba.
+2. El interceptor solo redirigía el 401 si `auth.token` existía (`!auth.token` en la guarda). Si el token ya se había limpiado/perdido, una petición en vuelo llegaba sin él, daba 401, y el interceptor la dejaba pasar sin sacar al usuario.
+**Fix:**
+1. `doRefresh`: si el refresh responde **401/403** (rechazo definitivo, no un 502/timeout de Render que cae al catch) → `clearSession()` → `isAuthenticated=false` → el effect del Layout redirige.
+2. Interceptor: el 401 del proxy **siempre** redirige, aunque `auth.token` sea null. El 403 sigue requiriendo token (un 403 sin sesión no fuerza navegación).
+**Regla:** "sesión inválida" tiene varias puertas de entrada (refresh proactivo, `verifySession`, 401 de una petición normal). TODAS deben converger en `clearSession()` para que el único redirect (el effect del Layout que observa la señal) dispare. No basta con arreglar una puerta.
