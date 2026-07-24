@@ -173,17 +173,25 @@
     </button>
   }
   <span class="spacer"></span>
-  @if (!isNew) {
-    @if (puedeEnviarEquipo()) {
-      <button mat-stroked-button (click)="enviarAotroEquipo()" matTooltip="Transferir a otro equipo">
-        <mat-icon>swap_horiz</mat-icon> Enviar
-      </button>
-    }
-    @if (puedeEscalar()) {
-      <button mat-stroked-button (click)="escalar()" matTooltip="Solicitar reasignación/transferencia al Responsable de Equipo">
-        <mat-icon>campaign</mat-icon> Escalar
-      </button>
-    }
+  <!-- Acciones SECUNDARIAS y ocasionales (transferir/escalar) en un menú de desbordamiento:
+       en 390px el pie se partía en dos filas y dejaba "Guardar" suelto abajo. Además así
+       recuperan su etiqueta completa, que había que acortar por falta de espacio. -->
+  @if (!isNew && (puedeEnviarEquipo() || puedeEscalar())) {
+    <button mat-icon-button [matMenuTriggerFor]="masMenu" matTooltip="Más acciones" aria-label="Más acciones">
+      <mat-icon>more_vert</mat-icon>
+    </button>
+    <mat-menu #masMenu="matMenu">
+      @if (puedeEnviarEquipo()) {
+        <button mat-menu-item (click)="enviarAotroEquipo()">
+          <mat-icon>swap_horiz</mat-icon> Enviar a otro equipo
+        </button>
+      }
+      @if (puedeEscalar()) {
+        <button mat-menu-item (click)="escalar()">
+          <mat-icon>campaign</mat-icon> Escalar al Responsable
+        </button>
+      }
+    </mat-menu>
   }
   <button mat-button mat-dialog-close>Cancelar</button>
   <button mat-flat-button color="primary" (click)="save()">{{ isNew ? 'Crear tarea' : 'Guardar' }}</button>
