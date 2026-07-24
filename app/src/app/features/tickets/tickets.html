@@ -94,19 +94,23 @@
 </ng-template>
 
 <!-- Orden: se publica al drawer en un canal APARTE de los filtros (ordenar no
-     reduce resultados, los reordena), así que no se pliega con ellos. -->
+     reduce resultados, los reordena). Se usa un <select> nativo estilizado como los
+     demás controles del drawer (buscador / Filtros): caja plana con borde de 8px e
+     icono, en vez del mat-form-field con etiqueta flotante, que rompía la coherencia. -->
 <ng-template #sortTpl>
-  <mat-form-field appearance="outline" subscriptSizing="dynamic">
-    <mat-label>Ordenar por</mat-label>
-    <mat-select [value]="sortValue()" (selectionChange)="onSortChange($event.value)">
-      <mat-option value="modified_date|desc">Modificación (recientes)</mat-option>
-      <mat-option value="modified_date|asc">Modificación (antiguos)</mat-option>
-      <mat-option value="entry_date|desc">Ingreso (recientes)</mat-option>
-      <mat-option value="entry_date|asc">Ingreso (antiguos)</mat-option>
-      <mat-option value="priority|asc">Prioridad (alta primero)</mat-option>
-      <mat-option value="priority|desc">Prioridad (baja primero)</mat-option>
-    </mat-select>
-  </mat-form-field>
+  <label class="tool-sort">
+    <mat-icon class="tool-sort-icon">swap_vert</mat-icon>
+    <select class="tool-sort-select" [value]="sortValue()"
+            (change)="onSortChange($any($event.target).value)" aria-label="Ordenar por">
+      <option value="modified_date|desc">Modificación (recientes)</option>
+      <option value="modified_date|asc">Modificación (antiguos)</option>
+      <option value="entry_date|desc">Ingreso (recientes)</option>
+      <option value="entry_date|asc">Ingreso (antiguos)</option>
+      <option value="priority|asc">Prioridad (alta primero)</option>
+      <option value="priority|desc">Prioridad (baja primero)</option>
+    </select>
+    <mat-icon class="tool-sort-caret">expand_more</mat-icon>
+  </label>
 </ng-template>
 
 <!-- Contenido -->
