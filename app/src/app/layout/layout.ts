@@ -8,7 +8,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatListModule } from '@angular/material/list';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatDialog } from '@angular/material/dialog';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -40,7 +39,6 @@ import { ReminderAlertDialog, ReminderItem } from '../features/pendientes/remind
     MatButtonModule,
     MatFormFieldModule,
     MatInputModule,
-    MatListModule,
     MatSidenavModule,
     MatIconModule,
   ],
@@ -82,13 +80,9 @@ export class Layout {
    *  `inert` pegado al navegar en círculo. En `side` Material no aplica focus-trap/inert.) */
   readonly fixed = computed(() => this.isDesktop());
   readonly mode = computed<'side' | 'over'>(() => (this.fixed() ? 'side' : 'over'));
-  /** URL actual: para ocultar la búsqueda global del shell cuando ya estás en Tickets
-   *  (esa vista trae su propia búsqueda global con "limpiar"). */
   private readonly currentUrl = signal(this.router.url);
-  readonly enTickets = computed(() => this.currentUrl().startsWith('/tickets'));
-  /** Campos de la búsqueda global del shell (disponible en TODAS las pantallas). */
-  readonly gTicket = signal('');
-  readonly gPalabra = signal('');
+  /** Texto del buscador ÚNICO del shell (N° de ticket o texto; el tipo se deduce). */
+  readonly gBuscar = signal('');
 
   /** Estado manual del drawer (botón ☰) cuando es overlay; en modo fijo se ignora. */
   readonly drawerOpen = signal(false);
@@ -175,7 +169,7 @@ export class Layout {
       this.destroyRef.onDestroy(() => obs.disconnect());
     });
 
-    // Al navegar: refresca la URL (para `enTickets`) y, en overlay, cierra el drawer.
+    // Al navegar: refresca la URL y, en overlay, cierra el drawer.
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),
@@ -187,22 +181,18 @@ export class Layout {
       });
   }
 
-  /** Búsqueda global por N° de ticket desde el shell → va a Tickets y la ejecuta. */
-  buscarTicketGlobal(): void {
-    const v = this.gTicket().trim();
+  /**
+   * Búsqueda ÚNICA del shell: un solo campo que acepta N° de ticket **o** texto.
+   * Antes eran dos campos separados ("Ticket" y "Palabra") y obligaban al usuario a
+   * decidir de antemano en cuál escribir. El tipo se DEDUCE: solo dígitos = N° de
+   * ticket (búsqueda exacta); cualquier otra cosa = texto (búsqueda por contenido).
+   * Siempre lleva a Tickets, que es quien ejecuta y muestra el resultado.
+   */
+  buscarGlobal(): void {
+    const v = this.gBuscar().trim();
     if (!v) return;
-    this.search.buscar('ticket', v);
-    this.gTicket.set('');
-    this.router.navigate(['/tickets']);
-    if (!this.fixed()) this.drawerOpen.set(false);
-  }
-
-  /** Búsqueda global por palabra desde el shell → va a Tickets y la ejecuta. */
-  buscarPalabraGlobal(): void {
-    const v = this.gPalabra().trim();
-    if (!v) return;
-    this.search.buscar('palabra', v);
-    this.gPalabra.set('');
+    this.search.buscar(/^\d+$/.test(v) ? 'ticket' : 'palabra', v);
+    this.gBuscar.set('');
     this.router.navigate(['/tickets']);
     if (!this.fixed()) this.drawerOpen.set(false);
   }

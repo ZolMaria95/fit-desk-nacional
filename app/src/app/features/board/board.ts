@@ -541,6 +541,29 @@ export class Board implements OnDestroy {
     this.codeSearch.set(value);
   }
 
+  /**
+   * Buscador ÚNICO del tablero: antes eran dos campos ("Ticket o código" y "Palabra")
+   * con comportamientos distintos, y había que saber de antemano en cuál escribir.
+   * Ahora uno solo DEDUCE qué hacer:
+   *  · Parece código (solo dígitos, o `TA-…`) → filtra el tablero al instante, local.
+   *  · Parece palabra → NO filtra por código (dejaría el tablero vacío mientras
+   *    escribes); solo se guarda y se consulta el HelpDesk al pulsar Enter.
+   */
+  onBoardSearch(value: string): void {
+    const v = value.trim();
+    const esCodigo = !v || /^\d+$/.test(v) || /^ta-?\d*$/i.test(v);
+    this.onCodeInput(esCodigo ? value : '');
+    this.onPalabraInput(esCodigo ? '' : value);
+  }
+
+  /** Enter en el buscador del tablero: solo tiene sentido para palabra (el código ya filtró). */
+  submitBoardSearch(): void {
+    if (this.palabraSearch().trim()) void this.submitPalabra();
+  }
+
+  /** Texto visible del buscador único (venga del filtro por código o del de palabra). */
+  readonly boardSearchText = computed(() => this.codeSearch() || this.palabraSearch());
+
   /** Campo 2 (palabra): cada tecla solo guarda; vaciar quita el filtro de palabra. */
   onPalabraInput(value: string): void {
     this.palabraSearch.set(value);

@@ -63,6 +63,8 @@ export class Tickets implements OnDestroy {
 
   /** Panel de filtros que se publica al drawer del shell. */
   readonly filtersTpl = viewChild<TemplateRef<unknown>>('filtersTpl');
+  /** Control de ORDEN: canal aparte del de filtros (no se pliega con ellos). */
+  readonly sortTpl = viewChild<TemplateRef<unknown>>('sortTpl');
 
   // La consulta filtra server-side; `tickets` es la página actual del API.
   readonly tickets = this.hd.tickets;
@@ -114,7 +116,10 @@ export class Tickets implements OnDestroy {
     // `effect` escribía una señal que el Layout lee durante su CD: en zoneless eso
     // bloqueaba la pantalla en la primera carga hasta recargar. El template es
     // estático, así que no necesita reactividad.)
-    afterNextRender(() => this.shell.setFilters(this.filtersTpl() ?? null));
+    afterNextRender(() => {
+      this.shell.setFilters(this.filtersTpl() ?? null);
+      this.shell.setSort(this.sortTpl() ?? null);
+    });
     // Espera los catálogos de clientes Y estados (para mapear válidos→client_id y
     // no-finalizados→ticket_status_id) y luego consulta fresca. Así Pendientes filtra
     // TODO server-side desde la primera carga. El botón ↻ vuelve a llamar a refresh().

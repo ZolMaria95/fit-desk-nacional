@@ -16,57 +16,86 @@
       <span class="drawer-brand-text">Fit-Desk</span>
     </div>
 
-    <!-- Búsqueda GLOBAL de ticket, disponible en TODAS las pantallas. En Tickets se
-         oculta porque esa vista ya trae su propia búsqueda global (con "limpiar"). -->
-    @if (!enTickets()) {
-      <div class="drawer-search">
-        <div class="drawer-search-title">Buscar ticket</div>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="ds-field">
-          <mat-label>N° de ticket</mat-label>
-          <input matInput inputmode="numeric" [ngModel]="gTicket()" (ngModelChange)="gTicket.set($event)"
-                 (keydown.enter)="buscarTicketGlobal()" placeholder="Ej. 33281" />
-          <button matSuffix mat-icon-button aria-label="Buscar ticket" (click)="buscarTicketGlobal()">
-            <mat-icon>search</mat-icon>
-          </button>
-        </mat-form-field>
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="ds-field">
-          <mat-label>Palabra</mat-label>
-          <input matInput [ngModel]="gPalabra()" (ngModelChange)="gPalabra.set($event)"
-                 (keydown.enter)="buscarPalabraGlobal()" placeholder="Ej. crédito" />
-          <button matSuffix mat-icon-button aria-label="Buscar palabra" (click)="buscarPalabraGlobal()">
-            <mat-icon>search</mat-icon>
-          </button>
-        </mat-form-field>
-      </div>
-    }
-
-    @if (shell.filters(); as tpl) {
-      <div class="drawer-filters">
-        <ng-container *ngTemplateOutlet="tpl"></ng-container>
-      </div>
-    }
-
-    <mat-nav-list class="drawer-nav" (click)="drawerOpen.set(false)">
-      <h3 matSubheader>Scrum</h3>
-      <a mat-list-item routerLink="/board" routerLinkActive="active">Board</a>
-
-      <h3 matSubheader>Helpdesk</h3>
-      <a mat-list-item routerLink="/tickets" routerLinkActive="active">Tickets</a>
-      <a mat-list-item routerLink="/semanal" routerLinkActive="active">HelpDesk Semanal</a>
+    <!-- NAVEGACIÓN PRIMERO. Antes iba debajo de la búsqueda y los filtros, así que en
+         móvil los filtros la empujaban fuera de pantalla y había que hacer scroll para
+         cambiar de sección. Ahora las secciones son lo primero y siempre alcanzables. -->
+    <nav class="drawer-nav" (click)="drawerOpen.set(false)">
+      <p class="nav-group-title">Principal</p>
+      <a class="nav-item" routerLink="/board" routerLinkActive="active">
+        <mat-icon>view_kanban</mat-icon><span>Board</span>
+      </a>
+      <a class="nav-item" routerLink="/tickets" routerLinkActive="active">
+        <mat-icon>confirmation_number</mat-icon><span>Tickets</span>
+      </a>
       @if (puedeVerMiPanel()) {
-        <a mat-list-item routerLink="/mi-panel" routerLinkActive="active">Mi Panel</a>
+        <a class="nav-item" routerLink="/mi-panel" routerLinkActive="active">
+          <mat-icon>space_dashboard</mat-icon><span>Mi Panel</span>
+        </a>
       }
-      <a mat-list-item routerLink="/pendientes" routerLinkActive="active">Pendientes</a>
 
+      <p class="nav-group-title">Seguimiento</p>
+      <a class="nav-item" routerLink="/pendientes" routerLinkActive="active">
+        <mat-icon>pending_actions</mat-icon><span>Pendientes</span>
+      </a>
+      <a class="nav-item" routerLink="/semanal" routerLinkActive="active">
+        <mat-icon>calendar_month</mat-icon><span>HelpDesk Semanal</span>
+      </a>
       @if (mostrarBandeja()) {
-        <a mat-list-item routerLink="/bandeja" routerLinkActive="active">Bandeja</a>
+        <a class="nav-item" routerLink="/bandeja" routerLinkActive="active">
+          <mat-icon>inbox</mat-icon><span>Bandeja</span>
+        </a>
       }
 
       @if (mostrarAdmin()) {
-        <h3 matSubheader>Administración</h3>
-        <a mat-list-item routerLink="/admin" routerLinkActive="active">Administración</a>
+        <p class="nav-group-title">Sistema</p>
+        <a class="nav-item" routerLink="/admin" routerLinkActive="active">
+          <mat-icon>settings</mat-icon><span>Administración</span>
+        </a>
       }
-    </mat-nav-list>
+    </nav>
+
+    <!-- HERRAMIENTAS, separadas de la navegación por una divisoria. -->
+    <div class="drawer-tools">
+      <!-- Buscador ÚNICO: acepta N° de ticket o texto; el tipo se deduce solo. -->
+      <div class="tool-search">
+        <mat-icon class="tool-search-icon">search</mat-icon>
+        <input
+          class="tool-search-input"
+          type="text"
+          [ngModel]="gBuscar()"
+          (ngModelChange)="gBuscar.set($event)"
+          (keydown.enter)="buscarGlobal()"
+          placeholder="Buscar N° o texto…"
+          aria-label="Buscar por número de ticket o por texto" />
+        @if (gBuscar()) {
+          <button type="button" class="tool-search-clear" (click)="gBuscar.set('')" aria-label="Limpiar búsqueda">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
+      </div>
+
+      <!-- Filtros de la vista activa, PLEGADOS por defecto (menos ruido visual).
+           `details/summary` nativo: accesible por teclado sin JS adicional. -->
+      @if (shell.filters(); as tpl) {
+        <details class="tool-panel">
+          <summary class="tool-panel-head">
+            <mat-icon class="tool-panel-lead">tune</mat-icon>
+            <span class="tool-panel-label">Filtros</span>
+            <mat-icon class="tool-panel-caret">expand_more</mat-icon>
+          </summary>
+          <div class="tool-panel-body">
+            <ng-container *ngTemplateOutlet="tpl"></ng-container>
+          </div>
+        </details>
+      }
+
+      <!-- Ordenar va FUERA del panel de filtros: no reduce resultados, los reordena. -->
+      @if (shell.sort(); as tpl) {
+        <div class="tool-sort">
+          <ng-container *ngTemplateOutlet="tpl"></ng-container>
+        </div>
+      }
+    </div>
 
     <span class="drawer-spacer"></span>
 

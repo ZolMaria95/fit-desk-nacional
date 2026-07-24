@@ -1,35 +1,16 @@
 <!-- Panel de filtros: se publica al drawer del shell (ShellService). -->
 <ng-template #filtersTpl>
   <div class="hd-filters-panel">
-    <!-- Búsqueda GLOBAL: por N° de ticket y por palabra (dos campos independientes). -->
+    <!-- La búsqueda (N° o texto) ya no vive aquí: la cubre el buscador ÚNICO del
+         drawer, que alimenta estos mismos filtros vía SearchService. -->
+    @if (filterTicket() || filterTexto()) {
+      <div class="filter-busqueda-activa">
+        <mat-icon>search</mat-icon>
+        <span>Buscando: <strong>{{ filterTicket() || filterTexto() }}</strong></span>
+      </div>
+    }
+
     <div class="filter-group">
-      <div class="filter-group-title">Búsqueda global</div>
-
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="f-search">
-        <mat-label>Ticket (N°)</mat-label>
-        <input matInput inputmode="numeric" [ngModel]="ticketInput()" (ngModelChange)="onTicketInput($event)"
-               (keydown.enter)="submitTicket()" placeholder="Ej. 304705" />
-        <button matSuffix mat-icon-button aria-label="Buscar ticket" (click)="submitTicket()">
-          <mat-icon>search</mat-icon>
-        </button>
-        @if (ticketPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
-      </mat-form-field>
-
-      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="f-search">
-        <mat-label>Palabra</mat-label>
-        <input matInput [ngModel]="palabraInput()" (ngModelChange)="onPalabraInput($event)"
-               (keydown.enter)="submitPalabra()" placeholder="Ej. crédito" />
-        <button matSuffix mat-icon-button aria-label="Buscar palabra" (click)="submitPalabra()">
-          <mat-icon>search</mat-icon>
-        </button>
-        @if (palabraPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
-        @else if (filterTexto()) { <mat-hint>Resultados por contenido en todos los tickets</mat-hint> }
-      </mat-form-field>
-    </div>
-
-    <!-- Filtros que aplican SOLO a esta sección (Tickets). -->
-    <div class="filter-group">
-      <div class="filter-group-title">Filtros de la sección</div>
 
     @if (filterClientes().length) {
       <div class="hd-cli-chips">
@@ -104,23 +85,28 @@
       </mat-select>
     </mat-form-field>
 
-    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-      <mat-label>Ordenar por</mat-label>
-      <mat-select [value]="sortValue()" (selectionChange)="onSortChange($event.value)">
-        <mat-option value="modified_date|desc">Modificación (recientes)</mat-option>
-        <mat-option value="modified_date|asc">Modificación (antiguos)</mat-option>
-        <mat-option value="entry_date|desc">Ingreso (recientes)</mat-option>
-        <mat-option value="entry_date|asc">Ingreso (antiguos)</mat-option>
-        <mat-option value="priority|asc">Prioridad (alta primero)</mat-option>
-        <mat-option value="priority|desc">Prioridad (baja primero)</mat-option>
-      </mat-select>
-    </mat-form-field>
     </div>
 
     @if (hasFilters()) {
       <button mat-stroked-button (click)="clearFilters()"><mat-icon>close</mat-icon> Limpiar filtros</button>
     }
   </div>
+</ng-template>
+
+<!-- Orden: se publica al drawer en un canal APARTE de los filtros (ordenar no
+     reduce resultados, los reordena), así que no se pliega con ellos. -->
+<ng-template #sortTpl>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>Ordenar por</mat-label>
+    <mat-select [value]="sortValue()" (selectionChange)="onSortChange($event.value)">
+      <mat-option value="modified_date|desc">Modificación (recientes)</mat-option>
+      <mat-option value="modified_date|asc">Modificación (antiguos)</mat-option>
+      <mat-option value="entry_date|desc">Ingreso (recientes)</mat-option>
+      <mat-option value="entry_date|asc">Ingreso (antiguos)</mat-option>
+      <mat-option value="priority|asc">Prioridad (alta primero)</mat-option>
+      <mat-option value="priority|desc">Prioridad (baja primero)</mat-option>
+    </mat-select>
+  </mat-form-field>
 </ng-template>
 
 <!-- Contenido -->

@@ -57,30 +57,20 @@
 <!-- Filtros del board: se publican al drawer del shell (ShellService), como en Tickets. -->
 <ng-template #filtersTpl>
   <div class="board-filters-panel">
-  <!-- Búsqueda acotada a ESTE tablero (la búsqueda global vive en el shell / Tickets).
-       Dos campos: por N°/código (TA-NNN, local e instantáneo) y por palabra. -->
+  <!-- Buscador ÚNICO del tablero (la búsqueda global vive en el drawer del shell).
+       Un solo campo: si es N°/código filtra al instante; si es palabra, Enter consulta. -->
   <div class="filter-group">
-    <div class="filter-group-title">Búsqueda en el tablero</div>
     <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
-      <mat-label>Ticket o código (TA-…)</mat-label>
-      <input matInput [value]="codeSearch()" (input)="onCodeInput($any($event.target).value)"
-             placeholder="Ej. 33281 o TA-046" />
+      <mat-label>Buscar en el tablero</mat-label>
+      <input matInput [value]="boardSearchText()" (input)="onBoardSearch($any($event.target).value)"
+             (keydown.enter)="submitBoardSearch()" placeholder="N°, TA-046 o una palabra…" />
       <mat-icon matSuffix>search</mat-icon>
-    </mat-form-field>
-    <mat-form-field appearance="outline" class="ticket-search" subscriptSizing="dynamic">
-      <mat-label>Palabra</mat-label>
-      <input matInput [value]="palabraSearch()" (input)="onPalabraInput($any($event.target).value)"
-             (keydown.enter)="submitPalabra()" placeholder="Ej. factura…" />
-      <button matSuffix mat-icon-button aria-label="Buscar palabra" (click)="submitPalabra()">
-        <mat-icon>search</mat-icon>
-      </button>
       @if (searchingTickets()) { <mat-hint>Buscando en el HelpDesk…</mat-hint> }
-      @else if (searchPending()) { <mat-hint>Presiona Enter o 🔍 para buscar</mat-hint> }
+      @else if (searchPending()) { <mat-hint>Presiona Enter para buscar por palabra</mat-hint> }
     </mat-form-field>
   </div>
 
   <div class="filter-group">
-    <div class="filter-group-title">Filtros de la sección</div>
 
     <mat-button-toggle-group
       class="prio-filter"

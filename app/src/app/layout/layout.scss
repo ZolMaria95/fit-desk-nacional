@@ -29,45 +29,152 @@
   .drawer-brand-text { margin-left: 2px; }
 }
 
-.drawer-filters {
-  padding: 8px 12px 12px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+// ── NAVEGACIÓN (primero) ──────────────────────────────────────────────
+// Lista propia en vez de mat-nav-list: control total del alto de fila (44px de
+// área táctil, accesible) y del icono, que con la lista de Material salía más alta
+// y sin margen para iconos consistentes.
+.drawer-nav {
+  padding: 4px 8px 10px;
+
+  .nav-group-title {
+    margin: 10px 0 4px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--mat-sys-on-surface-variant, #5a6470);
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px; // área táctil accesible
+    padding: 0 10px;
+    border-radius: 8px;
+    color: var(--mat-sys-on-surface, #181c20);
+    text-decoration: none;
+    font-size: 14px;
+    line-height: 1.2;
+    transition: background 0.12s;
+
+    mat-icon {
+      flex: none;
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: var(--mat-sys-on-surface-variant, #5a6470);
+    }
+    span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    &:hover { background: rgba(0, 0, 0, 0.05); }
+    &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: -2px; }
+
+    // Activo: turquesa de marca, con barra a la izquierda para leerlo de un vistazo.
+    &.active {
+      background: color-mix(in srgb, var(--brand, #048abf) 12%, transparent);
+      color: var(--brand-dark, #0390bc);
+      font-weight: 600;
+      box-shadow: inset 3px 0 0 var(--brand, #048abf);
+      mat-icon { color: var(--brand, #048abf); }
+    }
+  }
 }
 
-// Búsqueda global de ticket en el drawer (todas las pantallas salvo Tickets).
-.drawer-search {
+// ── HERRAMIENTAS (búsqueda / filtros / orden), separadas de la navegación ──
+.drawer-tools {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 12px 12px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+}
 
+// Buscador único: campo compacto (36px) en vez de dos mat-form-field apilados.
+.tool-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline, #bdbdbd);
+  border-radius: 8px;
+
+  &:focus-within { border-color: var(--brand, #048abf); box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand, #048abf) 18%, transparent); }
+
+  .tool-search-icon { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-on-surface-variant, #5a6470); }
+
+  .tool-search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    color: inherit;
+    &::placeholder { color: #8a8a9a; }
+  }
+
+  .tool-search-clear {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--mat-sys-on-surface-variant, #5a6470);
+    mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    &:hover { background: rgba(0, 0, 0, 0.08); }
+  }
+}
+
+// Panel plegable de filtros (details/summary nativo).
+.tool-panel {
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 8px;
+  background: #fff;
+
+  .tool-panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 10px;
+    cursor: pointer;
+    list-style: none; // oculta el triángulo por defecto
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface, #181c20);
+    &::-webkit-details-marker { display: none; }
+    &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: -2px; border-radius: 8px; }
+  }
+  .tool-panel-lead { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-on-surface-variant, #5a6470); }
+  .tool-panel-label { flex: 1; }
+  .tool-panel-caret { flex: none; font-size: 20px; width: 20px; height: 20px; color: var(--mat-sys-on-surface-variant, #5a6470); transition: transform 0.15s; }
+  &[open] .tool-panel-caret { transform: rotate(180deg); }
+
+  .tool-panel-body {
+    padding: 2px 10px 10px;
+    border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  }
+}
+
+// Orden: fuera del panel de filtros, siempre a la vista.
+.tool-sort {
   mat-form-field { width: 100%; }
 }
-.drawer-search-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--mat-sys-on-surface-variant);
-}
 
-.drawer-nav {
-  padding-top: 4px;
-
-  h3[matSubheader] {
-    color: var(--brand-dark, #0390bc);
-    font-weight: 700;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .active {
-    background: color-mix(in srgb, var(--brand, #048abf) 14%, transparent);
-    font-weight: 600;
-  }
-}
+// Controles de las vistas dentro del drawer: más compactos para que quepa más
+// sin scroll (los mat-form-field por defecto son altos).
+.drawer-tools .mat-mdc-form-field { width: 100%; font-size: 13px; }
+.drawer-tools .mat-mdc-text-field-wrapper { --mat-form-field-container-height: 40px; }
 
 .drawer-spacer {
   flex: 1 1 auto;

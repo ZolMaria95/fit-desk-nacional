@@ -299,3 +299,21 @@ mat-paginator {
   tfoot td { background: #1f3864; color: #fff; font-weight: 700; text-align: center; }
   tfoot td:first-child { text-align: left; }
 }
+
+// Indicador de búsqueda activa en el panel de filtros. La búsqueda ya no vive aquí
+// (la hace el buscador único del drawer), pero el usuario necesita ver QUÉ está
+// buscando para entender por qué la lista está recortada.
+.filter-busqueda-activa {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand, #048abf) 10%, transparent);
+  color: var(--brand-dark, #0390bc);
+  font-size: 12px;
+
+  mat-icon { font-size: 16px; width: 16px; height: 16px; flex: none; }
+  span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
