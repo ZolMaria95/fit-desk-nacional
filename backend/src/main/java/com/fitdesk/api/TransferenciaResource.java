@@ -116,8 +116,14 @@ public class TransferenciaResource {
         if (mis.isEmpty()) {
             return out;
         }
+        // EXCLUYE lo que despaché YO: si gobierno también el equipo destino (p. ej. ADMIN),
+        // un traslado que YO envié aparecía como "pendiente a aceptar" — pero no debo aceptar
+        // mi propio envío. Esas van a /salientes ("Enviadas"). despachadorOrigen null = legacy.
+        Usuario actor = Actor.usuario(actorHid);
+        long actorId = actor != null ? actor.id : -1L;
         for (Transferencia t : Transferencia.<Transferencia>list(
-                "estado = ?1 and equipoDestino.id in ?2 order by creadoEn desc", "PENDIENTE", mis)) {
+                "estado = ?1 and equipoDestino.id in ?2 and (despachadorOrigen is null or despachadorOrigen.id <> ?3) order by creadoEn desc",
+                "PENDIENTE", mis, actorId)) {
             out.add(describir(t));
         }
         return out;

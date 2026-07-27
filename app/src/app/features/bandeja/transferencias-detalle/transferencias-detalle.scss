@@ -370,6 +370,22 @@
   mat-icon { font-size: 18px; width: 18px; height: 18px; }
 }
 
+// Aviso en la pestaña "Enviadas": la envié yo, así que en vez de acciones muestro el estado.
+.td-sent-note {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 14px;
+  padding: 10px 12px; border-radius: 10px; font-size: 0.85rem; line-height: 1.35;
+  background: color-mix(in srgb, var(--brand, #048abf) 8%, #fff);
+  color: var(--brand-dark, #0390bc);
+  border: 1px solid color-mix(in srgb, var(--brand, #048abf) 22%, transparent);
+  mat-icon { flex: none; font-size: 19px; width: 19px; height: 19px; margin-top: 1px; }
+  &.est-aceptada, &.est-completada {
+    background: #e8f6ef; color: #1b7a4b; border-color: #bfe6d3;
+  }
+  &.est-rechazada {
+    background: #fdecea; color: #c0392b; border-color: #f5c6c0;
+  }
+}
+
 .td-detail-empty {
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
   color: var(--muted);

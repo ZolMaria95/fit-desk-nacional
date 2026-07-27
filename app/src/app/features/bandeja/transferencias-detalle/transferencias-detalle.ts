@@ -15,7 +15,7 @@ import {
   TransferenciasService,
 } from '../../../core/services/transferencias.service';
 
-type TabKey = 'pendientes' | 'aceptadas' | 'rechazadas' | 'completadas';
+type TabKey = 'pendientes' | 'enviadas' | 'aceptadas' | 'rechazadas' | 'completadas';
 
 /**
  * Página interior de "Transferencias entrantes" (drill-down desde la Bandeja).
@@ -45,6 +45,8 @@ export class TransferenciasDetalle {
 
   readonly pendientes = signal<Transferencia[]>([]);
   readonly completadas = signal<Transferencia[]>([]);
+  /** Transferencias que YO envié (salientes), para verlas "como enviadas". */
+  readonly enviadas = signal<Transferencia[]>([]);
   private readonly miembros = signal<Record<number, MiembroEquipo[]>>({});
   /** transferencia.id → helpdesk_user_id elegido para asignar al aceptar. */
   readonly asignadoSel: Record<number, string> = {};
@@ -62,11 +64,14 @@ export class TransferenciasDetalle {
 
   /** Estas dos pestañas aún no tienen fuente en el backend. */
   readonly tabSinDatos = computed(() => this.tab() === 'aceptadas' || this.tab() === 'rechazadas');
+  /** ¿Pestaña "Enviadas" (transferencias que YO envié)? Cambia columnas y oculta acciones. */
+  readonly esEnviadas = computed(() => this.tab() === 'enviadas');
 
   /** Lista base según la pestaña activa. */
   private readonly listaBase = computed<Transferencia[]>(() => {
     switch (this.tab()) {
       case 'pendientes': return this.pendientes();
+      case 'enviadas': return this.enviadas();
       case 'completadas': return this.completadas();
       default: return []; // aceptadas / rechazadas: sin endpoint todavía
     }
@@ -108,6 +113,7 @@ export class TransferenciasDetalle {
 
   readonly conteos = computed(() => ({
     pendientes: this.pendientes().length,
+    enviadas: this.enviadas().length,
     completadas: this.completadas().length,
     aceptadas: 0,
     rechazadas: 0,
@@ -120,12 +126,14 @@ export class TransferenciasDetalle {
   async cargar(): Promise<void> {
     this.loading.set(true);
     try {
-      const [pend, comp] = await Promise.all([
+      const [pend, comp, env] = await Promise.all([
         this.svc.transferenciasEntrantes(),
         this.svc.trabajoAceptado(),
+        this.svc.transferenciasSalientes(),
       ]);
       this.pendientes.set(pend);
       this.completadas.set(comp);
+      this.enviadas.set(env);
       // Miembros de cada equipo destino (para el picker "Asignar a" al aceptar).
       const ids = [...new Set(pend.map((t) => t.equipoDestinoId).filter((x): x is number => x != null))];
       const map: Record<number, MiembroEquipo[]> = {};

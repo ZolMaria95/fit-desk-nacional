@@ -31,6 +31,9 @@
     <button type="button" class="td-tab" [class.active]="tab() === 'pendientes'" (click)="setTab('pendientes')">
       <mat-icon>pending_actions</mat-icon> Pendientes <span class="td-tab-count">{{ conteos().pendientes }}</span>
     </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'enviadas'" (click)="setTab('enviadas')">
+      <mat-icon>send</mat-icon> Enviadas <span class="td-tab-count">{{ conteos().enviadas }}</span>
+    </button>
     <button type="button" class="td-tab" [class.active]="tab() === 'aceptadas'" (click)="setTab('aceptadas')">
       <mat-icon>check_circle</mat-icon> Aceptadas <span class="td-tab-count">{{ conteos().aceptadas }}</span>
     </button>
@@ -97,7 +100,7 @@
           <div class="td-table-wrap">
             <table class="td-table">
               <thead>
-                <tr><th>Tarea transferida</th><th>Origen</th><th>Fecha</th><th>Estado</th><th aria-hidden="true"></th></tr>
+                <tr><th>Tarea transferida</th><th>{{ esEnviadas() ? 'Enviada a' : 'Origen' }}</th><th>Fecha</th><th>Estado</th><th aria-hidden="true"></th></tr>
               </thead>
               <tbody>
                 @for (t of filas(); track t.id) {
@@ -116,10 +119,17 @@
                     <td class="c-origen">
                       <div class="c-origen-in">
                         <mat-icon>groups</mat-icon>
-                        <span class="c-origen-text">
-                          <span class="c-eq">{{ t.equipoOrigen || '—' }}</span>
-                          @if (t.despachadorOrigen) { <span class="c-pers">{{ t.despachadorOrigen }}</span> }
-                        </span>
+                        @if (esEnviadas()) {
+                          <span class="c-origen-text">
+                            <span class="c-eq">{{ t.equipoDestino || '—' }}</span>
+                            @if (t.asignadoDestino) { <span class="c-pers">{{ t.asignadoDestino }}</span> }
+                          </span>
+                        } @else {
+                          <span class="c-origen-text">
+                            <span class="c-eq">{{ t.equipoOrigen || '—' }}</span>
+                            @if (t.despachadorOrigen) { <span class="c-pers">{{ t.despachadorOrigen }}</span> }
+                          </span>
+                        }
                       </div>
                     </td>
                     <td class="c-fecha">{{ fecha(t.creadoEn) }}</td>
@@ -175,7 +185,17 @@
               </div>
             }
 
-            @if (s.estado === 'PENDIENTE') {
+            @if (esEnviadas()) {
+              <!-- La envié yo: no puedo aceptar/rechazar mi propia transferencia; solo espero. -->
+              <div class="td-sent-note" [class]="'est-' + s.estado.toLowerCase()">
+                <mat-icon>{{ s.estado === 'PENDIENTE' ? 'schedule_send' : (s.estado === 'RECHAZADA' ? 'undo' : 'check_circle') }}</mat-icon>
+                <span>{{ s.estado === 'PENDIENTE'
+                  ? 'Esperando que ' + (s.equipoDestino || 'el equipo destino') + ' acepte la transferencia.'
+                  : (s.estado === 'RECHAZADA'
+                    ? (s.equipoDestino || 'El equipo destino') + ' rechazó la transferencia.'
+                    : (s.equipoDestino || 'El equipo destino') + ' aceptó la transferencia.') }}</span>
+              </div>
+            } @else if (s.estado === 'PENDIENTE') {
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="td-asignar">
                 <mat-label>Asignar a</mat-label>
                 <mat-select [(ngModel)]="asignadoSel[s.id]">
