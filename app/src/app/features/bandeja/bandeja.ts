@@ -6,6 +6,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { errorMsg } from '../board/transferir/enviar-equipo-dialog';
 import {
+  Mensaje,
   Solicitud,
   Transferencia,
   TransferenciasService,
@@ -50,7 +51,10 @@ export class Bandeja {
   readonly solicitudes = signal<Solicitud[]>([]);
   /** Trabajo YA aceptado: tareas de otros equipos que ahora lleva mi gente. */
   readonly aceptadas = signal<Transferencia[]>([]);
+  /** Mensajes entrantes (otro RE escribe sobre una tarea de mi equipo). */
+  readonly mensajes = signal<Mensaje[]>([]);
   readonly loading = signal(true);
+  readonly busy = signal<number | null>(null);
 
   /** Panel "¿Cómo funciona?" desplegado. */
   readonly guiaAbierta = signal(false);
@@ -62,18 +66,33 @@ export class Bandeja {
   async cargar(): Promise<void> {
     this.loading.set(true);
     try {
-      const [ts, ss, ac] = await Promise.all([
+      const [ts, ss, ac, ms] = await Promise.all([
         this.svc.transferenciasEntrantes(),
         this.svc.solicitudesEntrantes(),
         this.svc.trabajoAceptado(),
+        this.svc.mensajesEntrantes(),
       ]);
       this.transferencias.set(ts);
       this.solicitudes.set(ss);
       this.aceptadas.set(ac);
+      this.mensajes.set(ms);
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo cargar la bandeja.'), 'OK', { duration: 5000 });
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /** Marca un mensaje como visto (lo quita de la bandeja). */
+  async marcarVisto(m: Mensaje): Promise<void> {
+    this.busy.set(m.id);
+    try {
+      await this.svc.marcarMensajeVisto(m.id);
+      this.mensajes.update((list) => list.filter((x) => x.id !== m.id));
+    } catch (e: unknown) {
+      this.snack.open(errorMsg(e, 'No se pudo marcar como visto.'), 'OK', { duration: 5000 });
+    } finally {
+      this.busy.set(null);
     }
   }
 }

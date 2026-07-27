@@ -263,6 +263,51 @@
   color: var(--cat);
 }
 
+// ── Recordatorios entrantes (nudge entre RE; acento de alerta) ──
+.bj-recos {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent, #f29e38) 8%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent, #f29e38) 24%, transparent);
+}
+.bj-recos-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #9a5b06;
+  mat-icon { color: var(--accent, #f29e38); }
+}
+.bj-badge-reco { background: var(--accent, #f29e38); }
+.bj-reco-list { display: flex; flex-direction: column; gap: 10px; }
+.bj-reco {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e6e9ee);
+
+  .bj-reco-ic { flex: none; color: var(--accent, #f29e38); }
+  .bj-reco-body { flex: 1; min-width: 0; }
+  .bj-reco-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+  .bj-reco-code { font-weight: 700; font-size: 0.82rem; color: var(--brand-dark, #0390bc); }
+  .bj-reco-task { font-size: 0.9rem; font-weight: 600; color: var(--mat-sys-on-surface, #16202a); min-width: 0; }
+  .bj-reco-meta { font-size: 0.8rem; color: var(--mat-sys-on-surface-variant, #5a6470); margin-top: 2px; }
+  .bj-reco-msg { font-size: 0.84rem; font-style: italic; color: var(--mat-sys-on-surface, #384552); margin-top: 4px;
+    background: var(--mat-sys-surface-container-low, #f6f8fa); border-radius: 8px; padding: 6px 10px; }
+  .bj-reco-visto { flex: none; align-self: center; }
+
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+    .bj-reco-visto { width: 100%; }
+  }
+}
+
 // Cuerpo desplegable con las tarjetas de acción.
 .bj-cat-body {
   padding: 4px 20px 20px;

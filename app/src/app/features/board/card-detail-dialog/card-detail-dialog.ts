@@ -21,6 +21,7 @@ import { estadoStyle } from '../../tickets/tickets-card-utils';
 import { ConfirmDialog } from '../confirm-dialog/confirm-dialog';
 import { EnviarEquipoDialog } from '../transferir/enviar-equipo-dialog';
 import { EscalarDialog } from '../transferir/escalar-dialog';
+import { MensajeDialog } from '../transferir/mensaje-dialog';
 import {
   HD_ESTADO_POR_STATUS,
   PRIORITY_LABELS,
@@ -94,6 +95,8 @@ export class CardDetailDialog {
   readonly puedeEnviarEquipo = computed(() => !this.isNew && this.data.usesQuarkus() && this.auth.puedeTransferir());
   /** Escalar por solicitud: Especialista. */
   readonly puedeEscalar = computed(() => !this.isNew && this.data.usesQuarkus() && this.auth.esEspecialista());
+  /** Mensaje al responsable del equipo de la tarea: entre Responsables de Equipo (o ADMIN). */
+  readonly puedeMensaje = computed(() => !this.isNew && this.data.usesQuarkus() && this.auth.puedeTransferir());
 
   /** ¿Puede MOVER la tarea de columna? Mismo criterio que el board (canDrag/puedeOperar):
    *  el asignado (dueño) o MSC001/Supervisor(=Responsable de Equipo). Habilita el selector
@@ -121,6 +124,16 @@ export class CardDetailDialog {
     this.dialog.open(EscalarDialog, {
       data: { tareaCodigo: this.story.id, boardCodigo: this.story.board ?? null, titulo: this.story.title },
       width: '460px',
+      maxWidth: '95vw',
+    });
+  }
+
+  /** Abre el diálogo para escribir al responsable del equipo de la tarea (mensajes entre equipos). */
+  enviarMensaje(): void {
+    if (!this.story) return;
+    this.dialog.open(MensajeDialog, {
+      data: { tareaCodigo: this.story.id, titulo: this.story.title },
+      width: '440px',
       maxWidth: '95vw',
     });
   }

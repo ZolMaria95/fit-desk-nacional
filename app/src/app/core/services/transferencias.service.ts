@@ -49,6 +49,21 @@ export interface Solicitud {
 
 export interface MiembroEquipo { helpdeskUserId: string | null; codigoLocal: string | null; nombre: string; }
 
+/** Mensaje entre equipos sobre una tarea/ticket (un RE escribe al RE del equipo que la desarrolla). */
+export interface Mensaje {
+  id: number;
+  tareaCodigo: string;
+  tareaTitulo: string | null;
+  ticket: string | null;
+  equipoTarea: string | null;
+  asignado: string | null;
+  deHid: string | null;
+  de: string | null;
+  texto: string | null;
+  visto: boolean;
+  creadoEn: string | null;
+}
+
 /**
  * Cliente del API de envío de tareas entre equipos (Transferencia + Solicitud), en Quarkus.
  * Solo aplica en modo Quarkus. El actor va en el header `X-Actor-Hid` (interino, hasta la
@@ -131,5 +146,16 @@ export class TransferenciasService {
   }
   rechazarSolicitud(id: number, motivo?: string) {
     return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/rechazar`, { motivo }, this.actorOpts()));
+  }
+
+  // ── Mensajes entre equipos (sobre una tarea/ticket) ──
+  crearMensaje(b: { tareaCodigo: string; texto?: string }) {
+    return firstValueFrom(this.http.post<Mensaje>(`${this.base}/api/mensajes`, b, this.actorOpts()));
+  }
+  mensajesEntrantes() {
+    return firstValueFrom(this.http.get<Mensaje[]>(`${this.base}/api/mensajes/entrantes`, this.actorOpts()));
+  }
+  marcarMensajeVisto(id: number) {
+    return firstValueFrom(this.http.post<Mensaje>(`${this.base}/api/mensajes/${id}/visto`, {}, this.actorOpts()));
   }
 }

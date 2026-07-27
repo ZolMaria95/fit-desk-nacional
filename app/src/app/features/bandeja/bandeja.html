@@ -120,6 +120,37 @@
       </button>
     </section>
 
+    <!-- Mensajes entrantes: otro RE (el origen) te escribe sobre una tarea de tu equipo. -->
+    @if (mensajes().length) {
+      <section class="bj-recos">
+        <h2 class="bj-recos-title">
+          <mat-icon>forum</mat-icon> Mensajes del origen
+          <span class="bj-badge bj-badge-reco">{{ mensajes().length }}</span>
+        </h2>
+        <div class="bj-reco-list">
+          @for (m of mensajes(); track m.id) {
+            <div class="bj-reco">
+              <mat-icon class="bj-reco-ic">forum</mat-icon>
+              <div class="bj-reco-body">
+                <div class="bj-reco-head">
+                  <span class="bj-reco-code">{{ m.tareaCodigo }}@if (m.ticket) { · #{{ m.ticket }} }</span>
+                  <span class="bj-reco-task">{{ m.tareaTitulo || '(sin título)' }}</span>
+                </div>
+                <div class="bj-reco-meta">
+                  De <strong>{{ m.de || '—' }}</strong>@if (m.asignado) { · lo lleva {{ m.asignado }} }@if (m.equipoTarea) { · {{ m.equipoTarea }} }
+                </div>
+                @if (m.texto) { <div class="bj-reco-msg">"{{ m.texto }}"</div> }
+              </div>
+              <button mat-stroked-button type="button" class="bj-reco-visto"
+                      [disabled]="busy() === m.id" (click)="marcarVisto(m)">
+                <mat-icon>done</mat-icon> Visto
+              </button>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
     <!-- Ayuda: qué es cada cosa y quién la origina. -->
     <div class="bj-help">
       <div class="bj-help-main">

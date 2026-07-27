@@ -509,3 +509,15 @@ Completa el pedido "también para especialistas". El especialista escala un tick
 - Backend: `SolicitudResource.crear/aprobar/rechazar` extendidos; reutiliza `TransferenciaResource.crearTareaOcultaDesdeTicket` (ahora `static`). Verificado E2E en local: escalar→oculta (no en /stories)→aprobar REASIGNACION→aparece asignada a la sugerida; rechazar→descartada.
 - Frontend: `crearSolicitud` acepta `{ticket,titulo,clienteCodigo}`; `EscalarDialog` soporta el camino ticket; `ticket-card` añade "Escalar al Responsable" (menú ⋮, gateado por `esEspecialista`); `tickets.escalarTicket` elige tarea-existente vs ticket.
 **Ambos caminos (responsable + especialista) quedan implementados y verificados E2E en local. Pendiente: deploy backend a Render; botón "recordatorio" en el board.**
+
+## [2026-07-27] Mensajes entre equipos sobre tickets (Bandeja "Mensajes del origen") — IMPLEMENTADO
+**Pedido de la dueña:** poder enviar mensajes ENTRE equipos sobre los tickets (empezó como "recordatorio" pero se renombró a **mensaje**: es comunicación, no un aviso unidireccional). Un Responsable de Equipo escribe al RE del equipo que desarrolla la tarea (p. ej. "el cliente pregunta por el avance, sigue pendiente"); el destinatario lo ve en su Bandeja bajo **"Mensajes del origen"**.
+**Backend (V14 + verificado E2E en local):**
+- Entidad `Mensaje` (tabla `mensaje`): tarea, de (Usuario RE), texto, visto, fechas. Destinatario NO se guarda: se deriva por gobierno del equipo de la tarea (como transferencias/solicitudes entrantes).
+- `MensajeResource` (`/api/mensajes`): POST crear (gateado a RE/ADMIN), GET `/entrantes` (no vistos, de tareas de mis equipos), POST `/{id}/visto`.
+- Verificado: RE Quito escribe sobre tarea de Cuenca → RE Cuenca lo ve → marca visto (desaparece); un consultor recibe 403.
+**Frontend:**
+- Servicio `crearMensaje/mensajesEntrantes/marcarMensajeVisto`.
+- `MensajeDialog` (mensaje obligatorio) abierto desde el modal de tarea (menú ⋮ "Mensaje al equipo", `puedeMensaje` = Quarkus + RE/admin).
+- Bandeja: sección **"Mensajes del origen"** (solo si hay) con tarjetas {tarea/#ticket, de, mensaje} + botón "Visto".
+**Nota:** MVP unidireccional (origen → equipo que desarrolla). Un hilo bidireccional (respuestas) quedaría para después.
