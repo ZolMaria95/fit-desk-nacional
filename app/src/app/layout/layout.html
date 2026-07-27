@@ -42,10 +42,13 @@
       </a>
       @if (mostrarBandeja()) {
         <a class="nav-item" routerLink="/bandeja" routerLinkActive="active">
-          <mat-icon>inbox</mat-icon><span>Bandeja</span>
-          @if (bandejaPendientes()) {
-            <span class="nav-badge" [attr.aria-label]="bandejaPendientes() + ' pendientes en la bandeja'">{{ bandejaPendientes() }}</span>
-          }
+          <span class="nav-ic-wrap">
+            <mat-icon>inbox</mat-icon>
+            @if (bandejaPendientes()) {
+              <span class="nav-badge" [attr.aria-label]="bandejaPendientes() + ' pendientes en la bandeja'">{{ bandejaPendientes() > 9 ? '9+' : bandejaPendientes() }}</span>
+            }
+          </span>
+          <span>Bandeja</span>
         </a>
       }
 
