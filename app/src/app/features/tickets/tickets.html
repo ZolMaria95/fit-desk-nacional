@@ -191,6 +191,7 @@
           [esPendiente]="isPending(t)"
           [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
           [puedeCambiarEstadoCerrado]="puedeTransferir()"
+          [puedeTransferirTicket]="puedeTransferirTicket()"
           (verConversacion)="openConversation(t)"
           (crearTarea)="openTicketTask(t)"
           (asignar)="openAssign(t)"
@@ -198,7 +199,8 @@
           (guardarNota)="onGuardarNota(t, $event)"
           (toggleAccion)="toggleAction(t)"
           (togglePendiente)="togglePending(t)"
-          (irAlBoard)="irAlBoard(t)" />
+          (irAlBoard)="irAlBoard(t)"
+          (transferir)="transferirTicket(t)" />
       }
     </div>
 

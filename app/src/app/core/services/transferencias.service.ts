@@ -66,7 +66,18 @@ export class TransferenciasService {
   }
 
   // ── Transferencias ──
-  crearTransferencia(b: { tareaCodigo: string; equipoDestinoId: number; motivo?: string }) {
+  /** Crea una transferencia. Camino clásico: `tareaCodigo` (tarea ya en un board). Camino
+   *  desde un ticket sin tarea: `ticket` (+ `titulo`, `clienteCodigo`); el backend crea la
+   *  tarea OCULTA en el board del remitente y aparece al aceptarse. */
+  crearTransferencia(b: {
+    tareaCodigo?: string;
+    ticket?: string;
+    titulo?: string;
+    clienteCodigo?: string;
+    equipoOrigenId?: number;
+    equipoDestinoId: number;
+    motivo?: string;
+  }) {
     return firstValueFrom(this.http.post<Transferencia>(`${this.base}/api/transferencias`, b, this.actorOpts()));
   }
   transferenciasEntrantes() {

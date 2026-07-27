@@ -93,6 +93,13 @@ public class Tarea extends PanacheEntityBase {
     public String inicio;
     public String fin;
 
+    // ── Transferencia de un ticket sin tarea previa (V13) ──
+    /** true = tarea creada al PEDIR una transferencia desde un ticket, aún NO aceptada:
+     *  invisible en los boards (se excluye de /stories) hasta que el equipo destino la acepta;
+     *  si la rechaza, se descarta. Al aceptar pasa a false y aparece en el board destino. */
+    @Column(name = "pendiente_transferencia", nullable = false)
+    public boolean pendienteTransferencia = false;
+
     @Column(name = "creado_en")
     public OffsetDateTime creadoEn = OffsetDateTime.now();
 

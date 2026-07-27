@@ -100,6 +100,12 @@
           [matTooltip]="soloLectura() && !puedeCambiarEstadoCerrado() ? 'Ticket cerrado — solo el responsable de equipo puede cambiar el estado' : ''">
     <mat-icon>swap_horiz</mat-icon> Cambiar estado
   </button>
+  @if (puedeTransferirTicket()) {
+    <button mat-menu-item (click)="transferir.emit()"
+            matTooltip="La tarea aparece en el board destino cuando la acepten">
+      <mat-icon>forward_to_inbox</mat-icon> Enviar a otro equipo
+    </button>
+  }
 </mat-menu>
 
 <mat-menu #estadoMenu="matMenu">

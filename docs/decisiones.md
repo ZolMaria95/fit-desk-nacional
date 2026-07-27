@@ -484,3 +484,22 @@ Desplegado: backend `zolmaria/fitdesk-backend:latest` (digest `sha256:ed036e17�
 
 ### [2026-07-26] Página interior de Solicitudes de Especialistas (`/bandeja/solicitudes`)
 Gemela de Transferencias, acento **naranja**, según mockup de la dueña. Maestro-detalle: pestañas **Pendientes** (con datos, `solicitudesEntrantes`) + **Aprobadas/Rechazadas** ("historial no disponible", sin endpoint); tabla SOLICITUD·SOLICITANTE·TIPO·FECHA·ESTADO (**sin Prioridad** — la solicitud no la guarda); panel de detalle con Rechazar/Aprobar; caja de ayuda al pie con los **dos tipos reales**. Corrección vs mockup: los tipos reales son **Reasignación** y **Transferencia** (no existe "Apoyo técnico"); no hay estado "Completada" para solicitudes (solo PENDIENTE/APROBADA/RECHAZADA). El overview ya NO expande ninguna categoría inline: las tres (Transferencias, Solicitudes, Trabajo de mi equipo) **navegan** a su página interior.
+
+## [2026-07-26] Transferir un TICKET desde Tickets (tarea pendiente fuera del board) — IMPLEMENTADO (camino responsable)
+**Decisión de la dueña:** un responsable de equipo puede enviar un ticket a otro equipo desde la vista Tickets **aunque el ticket no esté en el board**; la tarea se crea al PEDIR pero **nace oculta en el board del REMITENTE** (ej.: Quito envía a Cuenca → la tarea se crea en el board de Quito) y **aparece al aceptarse**; si se rechaza, se descarta.
+**Backend (verificado E2E en local con Postgres):**
+- **V13** (`tarea.pendiente_transferencia boolean default false` + índice parcial). Flyway la aplicó OK.
+- `TransferenciaResource.crear`: si viene `ticket` (sin `tareaCodigo`), crea la `Tarea` OCULTA (`pendienteTransferencia=true`) en el board del equipo del actor (`equipoOrigenId` o el primero que gobierna), con código `TA-<max+1>`, enlazando/creando el `TicketEspejo`, título y cliente del ticket; luego la `Transferencia` PENDIENTE. Helpers `crearTareaOcultaDesdeTicket` + `nuevoCodigoTarea`.
+- `LegacyReadResource.stories()`: excluye `pendienteTransferencia = false` → las ocultas no salen en ningún board.
+- `aceptar`: además de asignar, pone `pendienteTransferencia=false` → la tarea aparece en el board.
+- `rechazar`: si la tarea era pendiente (nació solo para esta transferencia), borra tarea + transferencia (`{ok:true,descartada:true}`); si no, comportamiento clásico (marca RECHAZADA).
+- Smoke test local: Quito→Cuenca crea TA oculta en board de Quito (board_id 2), NO sale en /stories; aceptar la hace visible asignada; rechazar la descarta (0 tareas ocultas, 0 transferencia).
+**Frontend (compila; falta verificación visual en deploy):**
+- `crearTransferencia` del servicio acepta `{ticket, titulo, clienteCodigo, equipoOrigenId}` además de `tareaCodigo`.
+- `EnviarEquipoDialog` soporta ambos caminos (hint distinto para ticket).
+- `ticket-card`: ítem "Enviar a otro equipo" en el menú ⋮, gateado por `puedeTransferirTicket` (Quarkus + `puedeTransferir`).
+- `tickets.transferirTicket(t)`: si el ticket ya tiene tarea en el board transfiere esa (camino clásico); si no, abre el diálogo con el ticket (camino nuevo).
+**PENDIENTE:**
+- **Camino ESPECIALISTA** (escalar/solicitud desde un ticket sin tarea): requiere el mismo tratamiento en `crearSolicitud` + aprobar. No implementado aún.
+- **Deploy del backend a Render** para que funcione en prod (Docker no corría en la sesión).
+- **NUEVO pedido de la dueña (no empezado):** botón en las tarjetas del BOARD para **enviar un recordatorio al responsable del equipo que desarrolla la tarea** (recordar que está pendiente de resolución).

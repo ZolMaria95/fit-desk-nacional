@@ -32,6 +32,9 @@ export class TicketCard {
   /** ¿El usuario puede cambiar el estado de un ticket cerrado? (Responsable/Admin).
    *  El card es presentacional: el contenedor pasa el permiso (auth.puedeTransferir). */
   readonly puedeCambiarEstadoCerrado = input(false);
+  /** ¿El usuario puede enviar el ticket a otro equipo? (Responsable/Admin, modo Quarkus).
+   *  Funciona esté o no en el board: si no tiene tarea, se crea al aceptar la transferencia. */
+  readonly puedeTransferirTicket = input(false);
 
   readonly verConversacion = output<void>();
   readonly crearTarea = output<void>();
@@ -42,6 +45,8 @@ export class TicketCard {
   readonly togglePendiente = output<void>();
   /** "en board" → ir a la tarea del board (lo resuelve el contenedor). */
   readonly irAlBoard = output<void>();
+  /** Enviar el ticket a otro equipo (transferencia); lo resuelve el contenedor. */
+  readonly transferir = output<void>();
 
   /** Ticket en estado terminal (cerrado/aprobado/cotización rechazada) → solo lectura. */
   readonly soloLectura = computed(() => esSoloLectura(this.ticket().estatus));

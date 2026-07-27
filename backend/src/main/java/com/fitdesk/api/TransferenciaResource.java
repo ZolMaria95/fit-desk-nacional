@@ -9,10 +9,14 @@ import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fitdesk.core.Asignacion;
+import com.fitdesk.core.Board;
+import com.fitdesk.core.Cliente;
 import com.fitdesk.core.Equipo;
 import com.fitdesk.core.Tarea;
+import com.fitdesk.core.TicketEspejo;
 import com.fitdesk.core.Transferencia;
 import com.fitdesk.core.Usuario;
+import com.fitdesk.core.WorkflowEstado;
 
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
@@ -41,18 +45,46 @@ public class TransferenciaResource {
     @Transactional
     public Response crear(JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid) {
         String tareaCodigo = text(in, "tareaCodigo");
+        String ticket = text(in, "ticket");
         Long equipoDestinoId = asLong(in, "equipoDestinoId");
-        if (tareaCodigo == null || equipoDestinoId == null) {
-            return bad("tareaCodigo y equipoDestinoId son obligatorios");
+        if (equipoDestinoId == null || (tareaCodigo == null && (ticket == null || ticket.isBlank()))) {
+            return bad("equipoDestinoId y (tareaCodigo o ticket) son obligatorios");
         }
-        Tarea tarea = Tarea.findByCodigo(tareaCodigo);
-        if (tarea == null) {
-            return bad("tarea inexistente: " + tareaCodigo);
+
+        Tarea tarea;
+        Equipo origen;
+        if (tareaCodigo != null) {
+            // Camino clásico: la tarea YA existe en un board.
+            tarea = Tarea.findByCodigo(tareaCodigo);
+            if (tarea == null) {
+                return bad("tarea inexistente: " + tareaCodigo);
+            }
+            origen = tarea.board != null ? tarea.board.equipo : null;
+            if (origen == null) {
+                return bad("la tarea no tiene equipo de origen (board sin equipo)");
+            }
+        } else {
+            // Camino NUEVO: transferir un TICKET sin tarea previa. Se crea la tarea OCULTA en
+            // el board del equipo del actor (el remitente); aparece al aceptarse (ver /aceptar).
+            Long origenId = asLong(in, "equipoOrigenId");
+            java.util.Set<Long> mis = Actor.equiposGestionables(actorHid);
+            if (origenId == null) {
+                origenId = mis.stream().findFirst().orElse(null);
+            }
+            if (origenId == null || !mis.contains(origenId)) {
+                return forbidden("el actor no gobierna un equipo origen válido");
+            }
+            origen = Equipo.findById(origenId);
+            Board board = Board.<Board>find("equipo.id = ?1 and activo = true order by id", origenId).firstResult();
+            if (board == null) {
+                board = Board.<Board>find("equipo.id = ?1 order by id", origenId).firstResult();
+            }
+            if (board == null) {
+                return bad("el equipo origen no tiene board para alojar la tarea");
+            }
+            tarea = crearTareaOcultaDesdeTicket(ticket, board, text(in, "titulo"), text(in, "clienteCodigo"));
         }
-        Equipo origen = tarea.board != null ? tarea.board.equipo : null;
-        if (origen == null) {
-            return bad("la tarea no tiene equipo de origen (board sin equipo)");
-        }
+
         Equipo destino = Equipo.findById(equipoDestinoId);
         if (destino == null) {
             return bad("equipo destino inexistente");
@@ -132,6 +164,8 @@ public class TransferenciaResource {
             return bad("usuario asignado inexistente: " + asignadoHid);
         }
         t.tarea.asignadoA = asignado;
+        // Si la tarea nació de un ticket transferido (oculta), al aceptar APARECE en el board.
+        t.tarea.pendienteTransferencia = false;
         t.tarea.actualizadoEn = OffsetDateTime.now();
         t.asignadoDestino = asignado;
         t.despachadorDestino = Actor.usuario(actorHid);
@@ -154,6 +188,14 @@ public class TransferenciaResource {
         }
         if (t.equipoDestino == null || !Actor.gobierna(actorHid, t.equipoDestino.id)) {
             return forbidden("solo el Responsable del equipo destino (o un ADMIN) puede rechazar");
+        }
+        // Si la tarea nació SOLO para esta transferencia (ticket sin tarea previa), se descarta
+        // entera: nunca se materializó en ningún board, no deja rastro que gestionar.
+        if (t.tarea != null && t.tarea.pendienteTransferencia) {
+            Tarea oculta = t.tarea;
+            t.delete();
+            oculta.delete();
+            return Response.ok(Map.of("ok", true, "descartada", true)).build();
         }
         t.despachadorDestino = Actor.usuario(actorHid);
         t.estado = "RECHAZADA";
@@ -252,6 +294,52 @@ public class TransferenciaResource {
         m.put("creadoEn", t.creadoEn != null ? t.creadoEn.toString() : null);
         m.put("resueltoEn", t.resueltoEn != null ? t.resueltoEn.toString() : null);
         return m;
+    }
+
+    /** Crea la Tarea OCULTA (pendiente de transferencia) desde un ticket sin tarea previa.
+     *  Nace en el board del remitente, sin asignar; aparece en el board al aceptarse. */
+    private Tarea crearTareaOcultaDesdeTicket(String ticket, Board board, String titulo, String clienteCodigo) {
+        Tarea t = new Tarea();
+        t.codigo = nuevoCodigoTarea();
+        t.board = board;
+        t.workflowEstado = WorkflowEstado.<WorkflowEstado>find("activo = true order by orden").firstResult();
+        t.pendienteTransferencia = true;
+        t.tipo = "DESARROLLO_SOPORTE";
+        // Enlace al ticket del HelpDesk (crea el espejo si no existía).
+        TicketEspejo esp = TicketEspejo.findByHelpdeskTicketId(ticket);
+        if (esp == null) {
+            esp = new TicketEspejo();
+            esp.helpdeskTicketId = ticket;
+            if (titulo != null && !titulo.isBlank()) {
+                esp.asunto = titulo;
+            }
+            esp.persist();
+        }
+        t.ticketEspejo = esp;
+        if (titulo != null && !titulo.isBlank()) {
+            t.titulo = titulo;
+        }
+        if (clienteCodigo != null && !clienteCodigo.isBlank()) {
+            t.cliente = Cliente.findByCodigo(clienteCodigo);
+        }
+        t.persist();
+        return t;
+    }
+
+    /** Código único "TA-<n>" (n = máximo numérico existente + 1). El board muestra t.codigo. */
+    private String nuevoCodigoTarea() {
+        int max = 0;
+        for (Tarea t : Tarea.<Tarea>listAll()) {
+            String c = t.codigo;
+            if (c != null && c.startsWith("TA-")) {
+                try {
+                    max = Math.max(max, Integer.parseInt(c.substring(3).trim()));
+                } catch (NumberFormatException ignore) {
+                    // códigos con otro formato: se ignoran para el cálculo del máximo
+                }
+            }
+        }
+        return "TA-" + (max + 1);
     }
 
     /** Resuelve un usuario por helpdesk_user_id y, como respaldo, por codigo local. */

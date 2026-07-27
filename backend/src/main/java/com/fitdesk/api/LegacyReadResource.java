@@ -63,7 +63,9 @@ public class LegacyReadResource {
     @Path("/stories")
     public Map<String, Object> stories() {
         Map<String, Object> mapa = new LinkedHashMap<>();
-        for (Tarea t : Tarea.<Tarea>list("order by codigo")) {
+        // Se excluyen las tareas "pendiente_transferencia" (V13): son tickets transferidos
+        // que aún no se aceptan → invisibles en los boards hasta la aceptación.
+        for (Tarea t : Tarea.<Tarea>list("pendienteTransferencia = false order by codigo")) {
             Map<String, Object> s = new LinkedHashMap<>();
             s.put("id", t.codigo);
             s.put("board", t.board != null ? t.board.codigo : BOARD_DEFAULT);

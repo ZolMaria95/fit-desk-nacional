@@ -10,7 +10,11 @@ import { AdminApiService, Equipo } from '../../admin/admin-api.service';
 import { TransferenciasService } from '../../../core/services/transferencias.service';
 
 export interface EnviarEquipoData {
-  tareaCodigo: string;
+  /** Camino clásico: la tarea ya existe en un board. */
+  tareaCodigo?: string;
+  /** Camino desde Tickets: N° de ticket sin tarea previa (se crea oculta al enviar). */
+  ticket?: string;
+  clienteCodigo?: string | null;
   /** Codigo del board de la tarea (= codigo del equipo origen) para excluirlo del destino. */
   boardCodigo: string | null;
   titulo?: string | null;
@@ -26,10 +30,17 @@ export interface EnviarEquipoData {
   template: `
     <h2 mat-dialog-title>Enviar a otro equipo</h2>
     <mat-dialog-content>
-      <p class="hint">
-        La tarea <strong>{{ data.tareaCodigo }}</strong> sigue en su tablero; el equipo destino la
-        recibe en su bandeja y decide a quién asignarla.
-      </p>
+      @if (data.tareaCodigo) {
+        <p class="hint">
+          La tarea <strong>{{ data.tareaCodigo }}</strong> sigue en su tablero; el equipo destino la
+          recibe en su bandeja y decide a quién asignarla.
+        </p>
+      } @else {
+        <p class="hint">
+          El ticket <strong>#{{ data.ticket }}</strong> se enviará como tarea a otro equipo. La tarea
+          se crea en tu tablero y <strong>aparece en el board destino cuando la acepten</strong>.
+        </p>
+      }
       <mat-form-field appearance="outline" class="full">
         <mat-label>Equipo destino</mat-label>
         <mat-select [(ngModel)]="destinoId">
@@ -75,7 +86,10 @@ export class EnviarEquipoDialog {
     this.busy.set(true);
     try {
       await this.svc.crearTransferencia({
-        tareaCodigo: this.data.tareaCodigo,
+        tareaCodigo: this.data.tareaCodigo || undefined,
+        ticket: this.data.tareaCodigo ? undefined : this.data.ticket || undefined,
+        titulo: this.data.titulo || undefined,
+        clienteCodigo: this.data.clienteCodigo || undefined,
         equipoDestinoId: this.destinoId,
         motivo: this.motivo.trim() || undefined,
       });

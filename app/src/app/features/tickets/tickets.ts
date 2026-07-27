@@ -22,6 +22,7 @@ import { SearchService, GlobalSearch } from '../../core/services/search.service'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { resolveMember } from '../board/board-utils';
 import { CardDetailDialog } from '../board/card-detail-dialog/card-detail-dialog';
+import { EnviarEquipoDialog } from '../board/transferir/enviar-equipo-dialog';
 import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-dialog';
 import { AssignTicketDialog } from './assign-ticket-dialog/assign-ticket-dialog';
 import { PendienteDateDialog, PendienteDateResult } from '../pendientes/pendiente-date-dialog/pendiente-date-dialog';
@@ -78,6 +79,8 @@ export class Tickets implements OnDestroy {
   readonly statusOptions = computed(() => this.statusNames().filter((s) => s.trim().toUpperCase() !== 'ABIERTO'));
   /** ¿Puede cambiar el estado de tickets cerrados? (Responsable de Equipo/Admin). */
   readonly puedeTransferir = this.auth.puedeTransferir;
+  /** ¿Puede enviar un ticket a otro equipo? (Responsable/Admin, solo en modo Quarkus). */
+  readonly puedeTransferirTicket = computed(() => this.data.usesQuarkus() && this.auth.puedeTransferir());
 
   // ── Estado de la vista ──
   readonly tab = signal<Tab>('equipo');
@@ -612,6 +615,19 @@ export class Tickets implements OnDestroy {
     const st = this.data.stories().find((s) => String(s.ticket) === String(t.ticket));
     if (!st) return;
     this.router.navigate(['/board'], { queryParams: { board: st.board || '', sprint: st.sprint || '', card: st.id } });
+  }
+
+  /** Envía el ticket a otro equipo. Si ya tiene tarea en el board, transfiere esa tarea;
+   *  si no, se crea una tarea OCULTA que aparece en el board destino al aceptarse. */
+  transferirTicket(t: Ticket): void {
+    const st = this.data.stories().find((s) => String(s.ticket) === String(t.ticket));
+    this.dialog.open(EnviarEquipoDialog, {
+      data: st
+        ? { tareaCodigo: st.id, boardCodigo: st.board ?? null, titulo: st.title }
+        : { ticket: t.ticket, clienteCodigo: t.clientId ?? null, boardCodigo: null, titulo: t.asunto },
+      width: '460px',
+      maxWidth: '95vw',
+    });
   }
 
   openAssign(t: Ticket): void {
