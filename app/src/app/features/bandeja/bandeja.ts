@@ -41,34 +41,22 @@ export class Bandeja {
     void this.router.navigate(['/bandeja/trabajo-equipo']);
   }
 
+  /** Abre la página interior (drill-down) de Solicitudes de Especialistas. */
+  abrirSolicitudes(): void {
+    void this.router.navigate(['/bandeja/solicitudes']);
+  }
+
   readonly transferencias = signal<Transferencia[]>([]);
   readonly solicitudes = signal<Solicitud[]>([]);
   /** Trabajo YA aceptado: tareas de otros equipos que ahora lleva mi gente. */
   readonly aceptadas = signal<Transferencia[]>([]);
   readonly loading = signal(true);
-  readonly busy = signal<string | null>(null); // "t-<id>" | "s-<id>"
 
-  /** Categorías expandidas (para ver las tarjetas de acción). Sin entrada = por defecto
-   *  abierta si tiene ítems. La clave del usuario siempre gana al default. */
-  readonly expandidas = signal<Record<string, boolean>>({});
   /** Panel "¿Cómo funciona?" desplegado. */
   readonly guiaAbierta = signal(false);
 
   constructor() {
     void this.cargar();
-  }
-
-  /** ¿La categoría está expandida? Default: abierta si tiene ítems. */
-  estaExpandida(key: string, count: number): boolean {
-    const e = this.expandidas();
-    return key in e ? e[key] : count > 0;
-  }
-
-  /** Alterna una categoría (solo si tiene ítems que mostrar). */
-  toggleCat(key: string, count: number): void {
-    if (!count) return;
-    const abierta = this.estaExpandida(key, count);
-    this.expandidas.update((e) => ({ ...e, [key]: !abierta }));
   }
 
   async cargar(): Promise<void> {
@@ -86,35 +74,6 @@ export class Bandeja {
       this.snack.open(errorMsg(e, 'No se pudo cargar la bandeja.'), 'OK', { duration: 5000 });
     } finally {
       this.loading.set(false);
-    }
-  }
-
-  async aprobar(s: Solicitud): Promise<void> {
-    this.busy.set('s-' + s.id);
-    try {
-      await this.svc.aprobarSolicitud(s.id);
-      const msg = s.tipo === 'TRANSFERENCIA'
-        ? 'Solicitud aprobada; se creó la transferencia al equipo destino.'
-        : 'Solicitud aprobada; la tarea fue reasignada.';
-      this.snack.open(msg, 'OK', { duration: 4000 });
-      await this.cargar();
-    } catch (e: unknown) {
-      this.snack.open(errorMsg(e, 'No se pudo aprobar (¿falta destino o asignado sugerido?).'), 'OK', { duration: 6000 });
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  async rechazarSolicitud(s: Solicitud): Promise<void> {
-    this.busy.set('s-' + s.id);
-    try {
-      await this.svc.rechazarSolicitud(s.id);
-      this.snack.open('Solicitud rechazada.', 'OK', { duration: 3000 });
-      await this.cargar();
-    } catch (e: unknown) {
-      this.snack.open(errorMsg(e, 'No se pudo rechazar.'), 'OK', { duration: 5000 });
-    } finally {
-      this.busy.set(null);
     }
   }
 }

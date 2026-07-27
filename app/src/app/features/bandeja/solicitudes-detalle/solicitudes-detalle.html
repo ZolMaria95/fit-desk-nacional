@@ -1,0 +1,198 @@
+<div class="td sd">
+  <!-- Migas + Actualizar -->
+  <div class="td-bread">
+    <a class="td-back" routerLink="/bandeja"><mat-icon>arrow_back</mat-icon> Bandeja de equipo</a>
+    <mat-icon class="td-bread-sep">chevron_right</mat-icon>
+    <span class="td-bread-current">Solicitudes de Especialistas</span>
+    <span class="td-bread-spacer"></span>
+    <button type="button" class="td-refresh" (click)="cargar()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon> Actualizar
+    </button>
+  </div>
+
+  <!-- Encabezado -->
+  <div class="td-header">
+    <span class="td-header-icon"><mat-icon>support_agent</mat-icon></span>
+    <div class="td-header-text">
+      <h1 class="td-title">Solicitudes de Especialistas <span class="td-badge">{{ conteos().pendientes }}</span></h1>
+      <p class="td-sub">Solicitudes de apoyo o reasignación realizadas por especialistas de otros equipos.</p>
+    </div>
+    <div class="td-note">
+      <mat-icon>info</mat-icon>
+      <div class="td-note-text">
+        <strong>Las solicitudes esperan tu decisión.</strong>
+        <span>Apruébalas (se ejecutan) o recházalas con una razón.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pestañas por estado -->
+  <div class="td-tabs">
+    <button type="button" class="td-tab" [class.active]="tab() === 'pendientes'" (click)="setTab('pendientes')">
+      <mat-icon>pending_actions</mat-icon> Pendientes <span class="td-tab-count">{{ conteos().pendientes }}</span>
+    </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'aprobadas'" (click)="setTab('aprobadas')">
+      <mat-icon>check_circle</mat-icon> Aprobadas <span class="td-tab-count">{{ conteos().aprobadas }}</span>
+    </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'rechazadas'" (click)="setTab('rechazadas')">
+      <mat-icon>cancel</mat-icon> Rechazadas <span class="td-tab-count">{{ conteos().rechazadas }}</span>
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="center"><mat-spinner diameter="32"></mat-spinner></div>
+  } @else {
+    <!-- Barra de herramientas -->
+    <div class="td-toolbar">
+      <div class="td-search">
+        <mat-icon class="td-search-icon">search</mat-icon>
+        <input type="text" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
+               placeholder="Buscar por ID, título o solicitante…" aria-label="Buscar solicitudes" />
+        @if (busqueda()) {
+          <button type="button" class="td-search-clear" (click)="busqueda.set('')" aria-label="Limpiar"><mat-icon>close</mat-icon></button>
+        }
+      </div>
+
+      <button type="button" class="td-filter" [matMenuTriggerFor]="tipoMenu" [disabled]="tabSinDatos()">
+        <mat-icon>sell</mat-icon> <span class="td-filter-lbl">Tipo: {{ tipoFiltroLabel() }}</span> <mat-icon class="td-caret">expand_more</mat-icon>
+      </button>
+      <mat-menu #tipoMenu="matMenu" class="td-menu">
+        <button mat-menu-item (click)="tipoFiltro.set('')" [class.on]="!tipoFiltro()">Todas</button>
+        <button mat-menu-item (click)="tipoFiltro.set('REASIGNACION')" [class.on]="tipoFiltro() === 'REASIGNACION'">Reasignación</button>
+        <button mat-menu-item (click)="tipoFiltro.set('TRANSFERENCIA')" [class.on]="tipoFiltro() === 'TRANSFERENCIA'">Transferencia</button>
+      </mat-menu>
+
+      <span class="td-toolbar-spacer"></span>
+
+      <button type="button" class="td-filter td-sort" [matMenuTriggerFor]="ordenMenu" [disabled]="tabSinDatos()">
+        <span class="td-sort-lbl">Ordenar por:</span> {{ ordenLabel() }} <mat-icon class="td-caret">expand_more</mat-icon>
+      </button>
+      <mat-menu #ordenMenu="matMenu" class="td-menu">
+        <button mat-menu-item (click)="orden.set('reciente')" [class.on]="orden() === 'reciente'">Reciente</button>
+        <button mat-menu-item (click)="orden.set('antiguo')" [class.on]="orden() === 'antiguo'">Más antiguo</button>
+      </mat-menu>
+    </div>
+
+    <!-- Maestro-detalle -->
+    <div class="td-main">
+      <!-- IZQUIERDA: tabla -->
+      <div class="td-list-card">
+        @if (tabSinDatos()) {
+          <div class="td-empty-tab">
+            <mat-icon>hourglass_empty</mat-icon>
+            <strong>Historial aún no disponible</strong>
+            <span>Esta pestaña se activará cuando el sistema exponga el historial de solicitudes {{ tab() === 'aprobadas' ? 'aprobadas' : 'rechazadas' }}.</span>
+          </div>
+        } @else if (!filas().length) {
+          <div class="td-empty-tab">
+            <mat-icon>{{ busqueda() || tipoFiltro() ? 'search_off' : 'inbox' }}</mat-icon>
+            <strong>{{ busqueda() || tipoFiltro() ? 'Sin coincidencias' : 'No hay solicitudes' }}</strong>
+            <span>{{ busqueda() || tipoFiltro() ? 'Prueba con otro término o quita los filtros.' : 'Cuando lleguen, aparecerán aquí.' }}</span>
+          </div>
+        } @else {
+          <div class="td-table-wrap">
+            <table class="td-table">
+              <thead>
+                <tr><th>Solicitud</th><th>Solicitante</th><th>Tipo</th><th>Fecha</th><th>Estado</th><th aria-hidden="true"></th></tr>
+              </thead>
+              <tbody>
+                @for (s of filas(); track s.id) {
+                  <tr [class.sel]="seleccionada()?.id === s.id" (click)="seleccionar(s)" tabindex="0"
+                      (keydown.enter)="seleccionar(s)" (keydown.space)="seleccionar(s); $event.preventDefault()">
+                    <td class="c-tarea">
+                      <div class="c-tarea-in">
+                        <span class="c-tarea-icon"><mat-icon>assignment_ind</mat-icon></span>
+                        <span class="c-tarea-text">
+                          <span class="c-code">{{ s.tareaCodigo }}</span>
+                          <span class="c-title" [title]="s.tareaTitulo">{{ s.tareaTitulo || '(sin título)' }}</span>
+                          @if (s.equipoTarea) { <span class="c-cli"><mat-icon>groups</mat-icon> {{ s.equipoTarea }}</span> }
+                        </span>
+                      </div>
+                    </td>
+                    <td class="c-origen">
+                      <div class="c-origen-in">
+                        <mat-icon>person</mat-icon>
+                        <span class="c-eq">{{ s.solicitante || '—' }}</span>
+                      </div>
+                    </td>
+                    <td><span class="c-tipo" [class.tipo-reasig]="s.tipo === 'REASIGNACION'" [class.tipo-transf]="s.tipo === 'TRANSFERENCIA'">{{ tipoLabel(s.tipo) }}</span></td>
+                    <td class="c-fecha">{{ fecha(s.creadoEn) }}</td>
+                    <td><span class="c-estado" [class]="'est-' + s.estado.toLowerCase()">{{ estadoLabel(s.estado) }}</span></td>
+                    <td class="c-chevron"><mat-icon>chevron_right</mat-icon></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="td-list-foot">Mostrando {{ filas().length }} de {{ totalTab() }} solicitudes</div>
+        }
+      </div>
+
+      <!-- DERECHA: detalle -->
+      <aside class="td-side">
+        @if (seleccionada(); as s) {
+          <div class="td-detail">
+            <h3 class="td-panel-h">Detalle de la solicitud</h3>
+            <div class="td-detail-id">
+              <span class="c-tarea-icon"><mat-icon>assignment_ind</mat-icon></span>
+              <div class="td-detail-id-text">
+                <span class="c-code">{{ s.tareaCodigo }}</span>
+                <span class="td-detail-title">{{ s.tareaTitulo || '(sin título)' }}</span>
+              </div>
+            </div>
+
+            <dl class="td-dl">
+              <dt>Solicitante</dt>
+              <dd><mat-icon>person</mat-icon> {{ s.solicitante || '—' }}@if (s.equipoTarea) {&nbsp;({{ s.equipoTarea }})}</dd>
+              <dt>Tipo</dt>
+              <dd><mat-icon>sell</mat-icon> {{ tipoLabel(s.tipo) }}</dd>
+              @if (s.tipo === 'TRANSFERENCIA' && s.equipoDestino) {
+                <dt>Sugiere equipo</dt>
+                <dd><mat-icon>groups</mat-icon> {{ s.equipoDestino }}</dd>
+              }
+              @if (s.tipo === 'REASIGNACION' && s.asignadoSugerido) {
+                <dt>Sugiere asignar</dt>
+                <dd><mat-icon>person_add</mat-icon> {{ s.asignadoSugerido }}</dd>
+              }
+              <dt>Fecha</dt>
+              <dd><mat-icon>event</mat-icon> {{ fecha(s.creadoEn) }}</dd>
+            </dl>
+
+            @if (s.motivo) {
+              <div class="td-detail-desc">
+                <span class="td-detail-desc-lbl">Motivo</span>
+                <p>{{ s.motivo }}</p>
+              </div>
+            }
+
+            <div class="td-detail-actions">
+              <button mat-stroked-button type="button" [disabled]="busy() === s.id" (click)="rechazar(s)">
+                <mat-icon>close</mat-icon> Rechazar
+              </button>
+              <button mat-flat-button color="primary" type="button" class="sd-aprobar" [disabled]="busy() === s.id" (click)="aprobar(s)">
+                <mat-icon>check</mat-icon> Aprobar
+              </button>
+            </div>
+          </div>
+        } @else {
+          <div class="td-detail td-detail-empty">
+            <mat-icon>touch_app</mat-icon>
+            <p>Selecciona una solicitud de la lista para ver su detalle.</p>
+          </div>
+        }
+      </aside>
+    </div>
+
+    <!-- Ayuda al pie: los dos tipos de solicitud (reales). -->
+    <div class="sd-help">
+      <mat-icon class="sd-help-icon">info</mat-icon>
+      <div class="sd-help-body">
+        <strong>Las solicitudes pueden ser de dos tipos:</strong>
+        <ul>
+          <li><mat-icon>person_add</mat-icon><span><strong>Reasignación:</strong> pedir que la tarea la lleve otra persona (del mismo equipo).</span></li>
+          <li><mat-icon>swap_horiz</mat-icon><span><strong>Transferencia:</strong> pedir mover la tarea a otro equipo por carga de trabajo u otra razón.</span></li>
+        </ul>
+      </div>
+    </div>
+  }
+</div>

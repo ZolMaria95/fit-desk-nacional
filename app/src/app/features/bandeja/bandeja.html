@@ -58,11 +58,10 @@
       </button>
     </section>
 
-    <!-- ── Solicitudes de Especialistas ── -->
+    <!-- ── Solicitudes de Especialistas → abre su página interior ── -->
     <section class="bj-cat cat-orange">
-      <button type="button" class="bj-cat-head" [class.is-clickable]="solicitudes().length"
-              (click)="toggleCat('sol', solicitudes().length)"
-              [attr.aria-expanded]="solicitudes().length ? estaExpandida('sol', solicitudes().length) : null">
+      <button type="button" class="bj-cat-head is-clickable" (click)="abrirSolicitudes()"
+              aria-label="Abrir solicitudes de especialistas">
         <span class="bj-cat-left">
           <span class="bj-cat-icon"><mat-icon>support_agent</mat-icon></span>
           <span class="bj-cat-info">
@@ -82,46 +81,12 @@
           } @else {
             <span class="bj-summary">
               <strong>{{ solicitudes().length }} {{ solicitudes().length === 1 ? 'pendiente' : 'pendientes' }}</strong>
-              <span>Toca para aprobar o rechazar.</span>
+              <span>Abrir para aprobar o rechazar.</span>
             </span>
-            <mat-icon class="bj-chevron" [class.open]="estaExpandida('sol', solicitudes().length)">expand_more</mat-icon>
           }
+          <mat-icon class="bj-chevron-go">chevron_right</mat-icon>
         </span>
       </button>
-
-      @if (solicitudes().length && estaExpandida('sol', solicitudes().length)) {
-        <div class="bj-cat-body">
-          <div class="grid">
-            @for (s of solicitudes(); track s.id) {
-              <div class="b-card accent-sol">
-                <div class="b-head">
-                  <div class="b-head-top">
-                    <span class="b-id">{{ s.tareaCodigo }}</span>
-                    <span class="b-spacer"></span>
-                    <span class="b-badge badge-tipo">{{ s.tipo === 'TRANSFERENCIA' ? 'Transferir' : 'Reasignar' }}</span>
-                  </div>
-                  <div class="b-route"><mat-icon inline>campaign</mat-icon> Pide: {{ s.solicitante }}</div>
-                </div>
-                <div class="b-body">
-                  <div class="b-subject" [title]="s.tareaTitulo">{{ s.tareaTitulo || '(sin título)' }}</div>
-                  @if (s.tipo === 'TRANSFERENCIA' && s.equipoDestino) {
-                    <div class="b-meta"><mat-icon>arrow_forward</mat-icon> Sugiere: {{ s.equipoDestino }}</div>
-                  }
-                  @if (s.tipo === 'REASIGNACION' && s.asignadoSugerido) {
-                    <div class="b-meta"><mat-icon>arrow_forward</mat-icon> Sugiere: {{ s.asignadoSugerido }}</div>
-                  }
-                  @if (s.motivo) { <div class="b-motivo">"{{ s.motivo }}"</div> }
-                </div>
-                <div class="b-foot">
-                  <span class="b-foot-spacer"></span>
-                  <button mat-flat-button color="primary" [disabled]="busy() === 's-' + s.id" (click)="aprobar(s)">Aprobar</button>
-                  <button mat-button class="danger" [disabled]="busy() === 's-' + s.id" (click)="rechazarSolicitud(s)">Rechazar</button>
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-      }
     </section>
 
     <!-- ── Trabajo de mi equipo (de otros tableros) → abre su página interior ── -->
