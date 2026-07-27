@@ -528,3 +528,10 @@ Desplegado y verificado en prod:
 - **Backend** → imagen `zolmaria/fitdesk-backend:latest` (digest `53ee45f`) construida `linux/amd64` y subida a Docker Hub; Render **Manual Deploy** por la dueña → live. Flyway aplicó **V13 + V14** a Neon al arrancar (aditivas, sin downtime de datos).
 - Verificación en prod: `/api/mensajes/entrantes` → 200; `/api/transferencias` con validación nueva; y ciclo E2E del mensaje (enviar→entrantes→visto) OK contra la base real.
 Código en `main` hasta `5eccf80` (+ esta nota). Pendiente futuro: hilo bidireccional de mensajes (respuestas); verificación visual con Playwright de los menús de Tickets.
+
+## [2026-07-27] Rediseño UX/UI de Administración (según mockups de la dueña)
+Las 4 pestañas con el sistema de diseño de la app: header con icono de marca + subtítulo + "Recargar" pastilla; pestañas con icono; layout de 2 columnas (tabla-en-tarjeta + panel lateral).
+- **Regionales/Equipos/Clientes:** buscador con anillo de foco + filtro Activos/Inactivos/Todos, tabla en tarjeta (cabeceras en mayúsculas, badge Sí/No, iconos editar/eliminar), contador "Mostrando N de M", y **panel de ayuda** a la derecha (Sobre X + ítems + "Importante").
+- **Asignaciones:** fila de **stats** derivadas del dato real (vigentes/temporales/globales/por equipos/próximas a vencer), buscador + filtros Rol/Alcance/Estado + Limpiar, tabla con avatar + badge de rol a color + alcance + vigencia + estado, y **maestro-detalle**: panel lateral con el detalle de la fila seleccionada (Rol/Alcance/Objetivo/Desde/Hasta) + Editar/Quitar.
+- **Solo datos reales** (decisión de la dueña): se OMITIERON los campos del mockup que no existen en el modelo (`Asignada por`, `Descripción`, `Historial de cambios`, `Equipos involucrados`) y el email (se usa avatar de iniciales). "Finalizar asignación" se mapeó a Editar/Quitar (las acciones reales). Sin paginación por ahora (listas chicas); solo contador.
+- Verificado en Chrome (Playwright): Regionales ≈ mockup 1, Asignaciones ≈ mockup 2, tabla de asignaciones sin scroll horizontal (se quitó la columna chevron redundante y se compactó).

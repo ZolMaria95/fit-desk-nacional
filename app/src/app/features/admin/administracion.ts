@@ -2,6 +2,7 @@ import { Component, Signal, WritableSignal, computed, inject, signal } from '@an
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { firstValueFrom } from 'rxjs';
@@ -21,7 +22,7 @@ import { EliminarRegionDialog } from './eliminar-region-dialog';
  */
 @Component({
   selector: 'app-administracion',
-  imports: [MatTabsModule, MatButtonModule, MatIconModule],
+  imports: [MatTabsModule, MatButtonModule, MatIconModule, MatMenuModule],
   templateUrl: './administracion.html',
   styleUrl: './administracion.scss',
 })
@@ -66,19 +67,105 @@ export class Administracion {
     });
   });
 
-  /** Buscador de la tabla Asignaciones (por nombre, código del API, rol o alcance). */
+  // ── Búsqueda + filtro "activo" por tabla (Regionales/Equipos/Clientes) ──
+  readonly regBuscar = signal(''); readonly regActivo = signal<'todos' | 'si' | 'no'>('todos');
+  readonly eqBuscar = signal(''); readonly eqActivo = signal<'todos' | 'si' | 'no'>('todos');
+  readonly cliBuscar = signal(''); readonly cliActivo = signal<'todos' | 'si' | 'no'>('todos');
+
+  readonly regionalesFiltradas = computed(() =>
+    this.filtrar(this.regionales(), this.regBuscar(), this.regActivo(), (r) => [r.codigo, r.nombre]));
+  readonly equiposFiltrados = computed(() =>
+    this.filtrar(this.equiposVista(), this.eqBuscar(), this.eqActivo(), (e) => [e.codigo, e.nombre, e.regionalNombre, e.responsableNombre]));
+  readonly clientesFiltrados = computed(() =>
+    this.filtrar(this.clientes(), this.cliBuscar(), this.cliActivo(), (c) => [c.codigo, c.nombre, c.helpdeskClientId, c.equipoResponsableNombre]));
+
+  /** Filtro común: texto (varios campos) + estado activo. */
+  private filtrar<T extends { activo: boolean }>(rows: T[], q: string, activo: 'todos' | 'si' | 'no', campos: (r: T) => (string | null | undefined)[]): T[] {
+    const t = q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (activo === 'si' && !r.activo) return false;
+      if (activo === 'no' && r.activo) return false;
+      if (!t) return true;
+      return campos(r).some((v) => (v ?? '').toString().toLowerCase().includes(t));
+    });
+  }
+
+  readonly activoLabel = (v: 'todos' | 'si' | 'no') => (v === 'si' ? 'Activos' : v === 'no' ? 'Inactivos' : 'Todos');
+
+  // ── Asignaciones: búsqueda + filtros (rol / alcance / estado) + selección + stats ──
   readonly asigBuscar = signal('');
+  readonly asigRol = signal(''); // rolCodigo o ''
+  readonly asigAlcance = signal(''); // alcanceTipo o ''
+  readonly asigEstado = signal<'todos' | 'vigentes' | 'vencidas'>('todos');
+  readonly asigSelId = signal<number | null>(null);
+
+  /** ¿La asignación está vigente hoy? (activa y sin fecha fin o fin en el futuro). */
+  esVigente(a: Asignacion): boolean {
+    const hoy = new Date().toISOString().slice(0, 10);
+    return a.activo && (!a.vigenteHasta || a.vigenteHasta >= hoy);
+  }
+
   readonly asignacionesFiltradas = computed<Asignacion[]>(() => {
     const t = this.asigBuscar().trim().toLowerCase();
-    const rows = this.asignacionesVista();
-    if (!t) return rows;
-    return rows.filter((a) =>
-      (a.usuarioNombre ?? '').toLowerCase().includes(t) ||
-      (a.helpdeskUserId ?? '').toLowerCase().includes(t) ||
-      (a.rolNombre ?? '').toLowerCase().includes(t) ||
-      (a.alcanceNombre ?? '').toLowerCase().includes(t),
-    );
+    const rol = this.asigRol(), alc = this.asigAlcance(), est = this.asigEstado();
+    return this.asignacionesVista().filter((a) => {
+      if (rol && a.rolCodigo !== rol) return false;
+      if (alc && a.alcanceTipo !== alc) return false;
+      if (est === 'vigentes' && !this.esVigente(a)) return false;
+      if (est === 'vencidas' && this.esVigente(a)) return false;
+      if (!t) return true;
+      return (
+        (a.usuarioNombre ?? '').toLowerCase().includes(t) ||
+        (a.helpdeskUserId ?? '').toLowerCase().includes(t) ||
+        (a.rolNombre ?? '').toLowerCase().includes(t) ||
+        (a.alcanceNombre ?? '').toLowerCase().includes(t)
+      );
+    });
   });
+
+  readonly hayFiltroAsig = computed(() => !!(this.asigBuscar().trim() || this.asigRol() || this.asigAlcance() || this.asigEstado() !== 'todos'));
+
+  /** Tarjetas de resumen (todas derivadas del dato real). */
+  readonly asigStats = computed(() => {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const en7 = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+    const rows = this.asignacionesVista();
+    return {
+      activas: rows.filter((a) => this.esVigente(a)).length,
+      temporales: rows.filter((a) => !!a.vigenteHasta).length,
+      globales: rows.filter((a) => a.alcanceTipo === 'GLOBAL').length,
+      porEquipos: rows.filter((a) => a.alcanceTipo === 'EQUIPO').length,
+      porVencer: rows.filter((a) => a.vigenteHasta && a.vigenteHasta >= hoy && a.vigenteHasta <= en7).length,
+    };
+  });
+
+  /** Roles y alcances presentes (para los menús de filtro). */
+  readonly rolesPresentes = computed(() => [...new Map(this.asignacionesVista().map((a) => [a.rolCodigo, a.rolNombre])).entries()]);
+  readonly alcancesPresentes = computed(() => [...new Set(this.asignacionesVista().map((a) => a.alcanceTipo))]);
+
+  /** Asignación seleccionada para el panel de detalle (o la primera de la lista). */
+  readonly asigSel = computed<Asignacion | null>(() => {
+    const list = this.asignacionesOrd();
+    return list.find((a) => a.id === this.asigSelId()) ?? list[0] ?? null;
+  });
+  seleccionarAsig(a: Asignacion): void { this.asigSelId.set(a.id); }
+  limpiarFiltrosAsig(): void {
+    this.asigBuscar.set(''); this.asigRol.set(''); this.asigAlcance.set(''); this.asigEstado.set('todos');
+  }
+
+  /** Iniciales para el avatar (2 letras). */
+  iniciales(nombre: string | null | undefined): string {
+    const p = (nombre ?? '').trim().split(/\s+/).filter(Boolean);
+    return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || '—';
+  }
+
+  /** "2026-07-03" → "03 jul 2026" (o "—"). */
+  fmtFecha(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const [y, m, d] = iso.slice(0, 10).split('-');
+    const mes = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][Number(m) - 1] ?? m;
+    return d && mes && y ? `${d} ${mes} ${y}` : iso;
+  }
 
   // ── Ordenamiento de las tablas (click en el encabezado) ──
   private readonly sortReg = signal<{ col: string; dir: 1 | -1 }>({ col: 'nombre', dir: 1 });
@@ -89,9 +176,9 @@ export class Administracion {
     reg: this.sortReg, eq: this.sortEq, cli: this.sortCli, asig: this.sortAsig,
   };
 
-  readonly regionalesOrd = this.ordenar(this.regionales, this.sortReg);
-  readonly equiposOrd = this.ordenar(this.equiposVista, this.sortEq);
-  readonly clientesOrd = this.ordenar(this.clientes, this.sortCli);
+  readonly regionalesOrd = this.ordenar(this.regionalesFiltradas, this.sortReg);
+  readonly equiposOrd = this.ordenar(this.equiposFiltrados, this.sortEq);
+  readonly clientesOrd = this.ordenar(this.clientesFiltrados, this.sortCli);
   readonly asignacionesOrd = this.ordenar(this.asignacionesFiltradas, this.sortAsig);
 
   constructor() {
