@@ -537,3 +537,5 @@ Las 4 pestañas con el sistema de diseño de la app: header con icono de marca +
 - Verificado en Chrome (Playwright): Regionales ≈ mockup 1, Asignaciones ≈ mockup 2, tabla de asignaciones sin scroll horizontal (se quitó la columna chevron redundante y se compactó).
 
 - **[2026-07-27]** El badge de la Bandeja pasó a **círculo rojo en la esquina del icono** (estilo campana de notificaciones), con "9+" si supera 9. Antes era una pastilla naranja al final de la fila.
+
+- **[2026-07-27]** Fix: el badge de la Bandeja se recortaba porque su contenedor (`.nav-ic-wrap`, un `<span>`) heredaba `overflow: hidden` de la regla `.nav-item span` (el ellipsis del texto). Se le puso `overflow: visible`.

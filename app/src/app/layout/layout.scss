@@ -68,8 +68,10 @@
     }
     span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    // Contenedor del icono (ancla del badge de notificación).
-    .nav-ic-wrap { flex: none; position: relative; display: inline-flex; align-items: center; }
+    // Contenedor del icono (ancla del badge de notificación). `overflow: visible` es CLAVE:
+    // es un <span>, así que hereda `.nav-item span { overflow: hidden }` (del ellipsis del
+    // texto) y ESO recortaba el badge que sobresale del icono. Aquí lo dejamos verse completo.
+    .nav-ic-wrap { flex: none; position: relative; display: inline-flex; align-items: center; overflow: visible; }
 
     // Badge de notificación (pendientes de la Bandeja): círculo ROJO en la esquina del
     // icono, estilo campana de notificaciones. El borde del color del drawer lo hace "flotar".
