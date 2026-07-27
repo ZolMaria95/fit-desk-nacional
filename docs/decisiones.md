@@ -503,3 +503,9 @@ Gemela de Transferencias, acento **naranja**, según mockup de la dueña. Maestr
 - **Camino ESPECIALISTA** (escalar/solicitud desde un ticket sin tarea): requiere el mismo tratamiento en `crearSolicitud` + aprobar. No implementado aún.
 - **Deploy del backend a Render** para que funcione en prod (Docker no corría en la sesión).
 - **NUEVO pedido de la dueña (no empezado):** botón en las tarjetas del BOARD para **enviar un recordatorio al responsable del equipo que desarrolla la tarea** (recordar que está pendiente de resolución).
+
+### [2026-07-26] Camino ESPECIALISTA de la transferencia-desde-ticket — IMPLEMENTADO
+Completa el pedido "también para especialistas". El especialista escala un ticket sin tarea desde Tickets (menú ⋮ "Escalar al Responsable"): se crea la tarea OCULTA en el board de SU equipo (resuelto por su Asignación de alcance EQUIPO), asignada a él, y una `Solicitud` PENDIENTE (REASIGNACION o TRANSFERENCIA). Al **aprobar**: REASIGNACION → asigna + `pendienteTransferencia=false` (aparece en el board); TRANSFERENCIA → crea la `Transferencia` PENDIENTE (la tarea sigue oculta hasta que el destino acepte). Al **rechazar** una solicitud nacida de ticket → descarta tarea + solicitud (`{ok:true,descartada:true}`).
+- Backend: `SolicitudResource.crear/aprobar/rechazar` extendidos; reutiliza `TransferenciaResource.crearTareaOcultaDesdeTicket` (ahora `static`). Verificado E2E en local: escalar→oculta (no en /stories)→aprobar REASIGNACION→aparece asignada a la sugerida; rechazar→descartada.
+- Frontend: `crearSolicitud` acepta `{ticket,titulo,clienteCodigo}`; `EscalarDialog` soporta el camino ticket; `ticket-card` añade "Escalar al Responsable" (menú ⋮, gateado por `esEspecialista`); `tickets.escalarTicket` elige tarea-existente vs ticket.
+**Ambos caminos (responsable + especialista) quedan implementados y verificados E2E en local. Pendiente: deploy backend a Render; botón "recordatorio" en el board.**

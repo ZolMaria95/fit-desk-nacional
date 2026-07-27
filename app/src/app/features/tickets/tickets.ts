@@ -23,6 +23,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { resolveMember } from '../board/board-utils';
 import { CardDetailDialog } from '../board/card-detail-dialog/card-detail-dialog';
 import { EnviarEquipoDialog } from '../board/transferir/enviar-equipo-dialog';
+import { EscalarDialog } from '../board/transferir/escalar-dialog';
 import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-dialog';
 import { AssignTicketDialog } from './assign-ticket-dialog/assign-ticket-dialog';
 import { PendienteDateDialog, PendienteDateResult } from '../pendientes/pendiente-date-dialog/pendiente-date-dialog';
@@ -81,6 +82,8 @@ export class Tickets implements OnDestroy {
   readonly puedeTransferir = this.auth.puedeTransferir;
   /** ¿Puede enviar un ticket a otro equipo? (Responsable/Admin, solo en modo Quarkus). */
   readonly puedeTransferirTicket = computed(() => this.data.usesQuarkus() && this.auth.puedeTransferir());
+  /** ¿Puede escalar un ticket al Responsable? (Especialista, solo en modo Quarkus). */
+  readonly puedeEscalarTicket = computed(() => this.data.usesQuarkus() && this.auth.esEspecialista());
 
   // ── Estado de la vista ──
   readonly tab = signal<Tab>('equipo');
@@ -622,6 +625,19 @@ export class Tickets implements OnDestroy {
   transferirTicket(t: Ticket): void {
     const st = this.data.stories().find((s) => String(s.ticket) === String(t.ticket));
     this.dialog.open(EnviarEquipoDialog, {
+      data: st
+        ? { tareaCodigo: st.id, boardCodigo: st.board ?? null, titulo: st.title }
+        : { ticket: t.ticket, clienteCodigo: t.clientId ?? null, boardCodigo: null, titulo: t.asunto },
+      width: '460px',
+      maxWidth: '95vw',
+    });
+  }
+
+  /** Escala el ticket al Responsable (solicitud). Si ya tiene tarea en el board escala esa;
+   *  si no, se crea una tarea OCULTA (asignada a ti) que aparece al aprobarse. */
+  escalarTicket(t: Ticket): void {
+    const st = this.data.stories().find((s) => String(s.ticket) === String(t.ticket));
+    this.dialog.open(EscalarDialog, {
       data: st
         ? { tareaCodigo: st.id, boardCodigo: st.board ?? null, titulo: st.title }
         : { ticket: t.ticket, clienteCodigo: t.clientId ?? null, boardCodigo: null, titulo: t.asunto },

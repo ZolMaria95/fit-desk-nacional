@@ -12,7 +12,11 @@ import { TransferenciasService } from '../../../core/services/transferencias.ser
 import { errorMsg } from './enviar-equipo-dialog';
 
 export interface EscalarData {
-  tareaCodigo: string;
+  /** Camino clásico: tarea suya ya en el board. */
+  tareaCodigo?: string;
+  /** Camino desde Tickets: N° de ticket sin tarea previa (se crea oculta al escalar). */
+  ticket?: string;
+  clienteCodigo?: string | null;
   boardCodigo: string | null;
   titulo?: string | null;
 }
@@ -27,9 +31,16 @@ export interface EscalarData {
   template: `
     <h2 mat-dialog-title>Escalar solicitud</h2>
     <mat-dialog-content>
-      <p class="hint">
-        Pides al Responsable de Equipo que actúe sobre <strong>{{ data.tareaCodigo }}</strong>. Él decide y ejecuta.
-      </p>
+      @if (data.tareaCodigo) {
+        <p class="hint">
+          Pides al Responsable de Equipo que actúe sobre <strong>{{ data.tareaCodigo }}</strong>. Él decide y ejecuta.
+        </p>
+      } @else {
+        <p class="hint">
+          Pides al Responsable de Equipo que actúe sobre el ticket <strong>#{{ data.ticket }}</strong>. Se crea como
+          tarea tuya y <strong>aparece en el board cuando el responsable lo apruebe</strong>.
+        </p>
+      }
       <mat-form-field appearance="outline" class="full">
         <mat-label>Tipo de solicitud</mat-label>
         <mat-select [(ngModel)]="tipo">
@@ -100,7 +111,10 @@ export class EscalarDialog {
     this.busy.set(true);
     try {
       await this.svc.crearSolicitud({
-        tareaCodigo: this.data.tareaCodigo,
+        tareaCodigo: this.data.tareaCodigo || undefined,
+        ticket: this.data.tareaCodigo ? undefined : this.data.ticket || undefined,
+        titulo: this.data.titulo || undefined,
+        clienteCodigo: this.data.clienteCodigo || undefined,
         tipo: this.tipo,
         motivo: this.motivo.trim(),
         equipoDestinoId: this.tipo === 'TRANSFERENCIA' ? this.equipoDestinoId ?? undefined : undefined,

@@ -106,6 +106,12 @@
       <mat-icon>forward_to_inbox</mat-icon> Enviar a otro equipo
     </button>
   }
+  @if (puedeEscalarTicket()) {
+    <button mat-menu-item (click)="escalar.emit()"
+            matTooltip="Pide al Responsable reasignar o transferir este ticket">
+      <mat-icon>campaign</mat-icon> Escalar al Responsable
+    </button>
+  }
 </mat-menu>
 
 <mat-menu #estadoMenu="matMenu">

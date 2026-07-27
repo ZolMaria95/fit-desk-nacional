@@ -297,8 +297,9 @@ public class TransferenciaResource {
     }
 
     /** Crea la Tarea OCULTA (pendiente de transferencia) desde un ticket sin tarea previa.
-     *  Nace en el board del remitente, sin asignar; aparece en el board al aceptarse. */
-    private Tarea crearTareaOcultaDesdeTicket(String ticket, Board board, String titulo, String clienteCodigo) {
+     *  Nace en el board indicado, sin asignar; aparece en el board al aceptarse/aprobarse.
+     *  static + package-private para reutilizar desde {@link SolicitudResource}. */
+    static Tarea crearTareaOcultaDesdeTicket(String ticket, Board board, String titulo, String clienteCodigo) {
         Tarea t = new Tarea();
         t.codigo = nuevoCodigoTarea();
         t.board = board;
@@ -327,7 +328,7 @@ public class TransferenciaResource {
     }
 
     /** Código único "TA-<n>" (n = máximo numérico existente + 1). El board muestra t.codigo. */
-    private String nuevoCodigoTarea() {
+    static String nuevoCodigoTarea() {
         int max = 0;
         for (Tarea t : Tarea.<Tarea>listAll()) {
             String c = t.codigo;

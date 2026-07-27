@@ -105,7 +105,19 @@ export class TransferenciasService {
   }
 
   // ── Solicitudes (Especialista → Responsable de Equipo) ──
-  crearSolicitud(b: { tareaCodigo: string; tipo: 'REASIGNACION' | 'TRANSFERENCIA'; motivo?: string; equipoDestinoId?: number; asignadoSugeridoHid?: string }) {
+  /** Crea una solicitud (Especialista → RE). Camino clásico: `tareaCodigo` (tarea suya).
+   *  Camino desde un ticket sin tarea: `ticket` (+ `titulo`, `clienteCodigo`); el backend crea
+   *  la tarea OCULTA en el board del especialista y aparece al aprobar/aceptar. */
+  crearSolicitud(b: {
+    tareaCodigo?: string;
+    ticket?: string;
+    titulo?: string;
+    clienteCodigo?: string;
+    tipo: 'REASIGNACION' | 'TRANSFERENCIA';
+    motivo?: string;
+    equipoDestinoId?: number;
+    asignadoSugeridoHid?: string;
+  }) {
     return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes`, b, this.actorOpts()));
   }
   solicitudesEntrantes() {

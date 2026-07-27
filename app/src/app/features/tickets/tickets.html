@@ -192,6 +192,7 @@
           [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
           [puedeCambiarEstadoCerrado]="puedeTransferir()"
           [puedeTransferirTicket]="puedeTransferirTicket()"
+          [puedeEscalarTicket]="puedeEscalarTicket()"
           (verConversacion)="openConversation(t)"
           (crearTarea)="openTicketTask(t)"
           (asignar)="openAssign(t)"
@@ -200,7 +201,8 @@
           (toggleAccion)="toggleAction(t)"
           (togglePendiente)="togglePending(t)"
           (irAlBoard)="irAlBoard(t)"
-          (transferir)="transferirTicket(t)" />
+          (transferir)="transferirTicket(t)"
+          (escalar)="escalarTicket(t)" />
       }
     </div>
 

@@ -35,6 +35,8 @@ export class TicketCard {
   /** ¿El usuario puede enviar el ticket a otro equipo? (Responsable/Admin, modo Quarkus).
    *  Funciona esté o no en el board: si no tiene tarea, se crea al aceptar la transferencia. */
   readonly puedeTransferirTicket = input(false);
+  /** ¿El usuario puede ESCALAR el ticket al Responsable? (Especialista, modo Quarkus). */
+  readonly puedeEscalarTicket = input(false);
 
   readonly verConversacion = output<void>();
   readonly crearTarea = output<void>();
@@ -47,6 +49,8 @@ export class TicketCard {
   readonly irAlBoard = output<void>();
   /** Enviar el ticket a otro equipo (transferencia); lo resuelve el contenedor. */
   readonly transferir = output<void>();
+  /** Escalar el ticket al Responsable de Equipo (solicitud); lo resuelve el contenedor. */
+  readonly escalar = output<void>();
 
   /** Ticket en estado terminal (cerrado/aprobado/cotización rechazada) → solo lectura. */
   readonly soloLectura = computed(() => esSoloLectura(this.ticket().estatus));

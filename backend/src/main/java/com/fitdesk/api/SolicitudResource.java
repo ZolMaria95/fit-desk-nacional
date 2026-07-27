@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Set;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fitdesk.core.Asignacion;
+import com.fitdesk.core.Board;
 import com.fitdesk.core.Equipo;
 import com.fitdesk.core.Solicitud;
 import com.fitdesk.core.Tarea;
@@ -45,21 +47,46 @@ public class SolicitudResource {
             return forbidden("solo un Especialista escala por solicitud");
         }
         String tareaCodigo = text(in, "tareaCodigo");
+        String ticket = text(in, "ticket");
         String tipo = text(in, "tipo");
-        if (tareaCodigo == null || tipo == null) {
-            return bad("tareaCodigo y tipo son obligatorios");
+        if (tipo == null || (tareaCodigo == null && (ticket == null || ticket.isBlank()))) {
+            return bad("(tareaCodigo o ticket) y tipo son obligatorios");
         }
         if (!"REASIGNACION".equals(tipo) && !"TRANSFERENCIA".equals(tipo)) {
             return bad("tipo inválido: " + tipo + " (REASIGNACION | TRANSFERENCIA)");
         }
-        Tarea tarea = Tarea.findByCodigo(tareaCodigo);
-        if (tarea == null) {
-            return bad("tarea inexistente: " + tareaCodigo);
-        }
         Usuario actor = Actor.usuario(actorHid);
-        // El Especialista solo escala tareas asignadas a él mismo.
-        if (actor == null || tarea.asignadoA == null || !tarea.asignadoA.id.equals(actor.id)) {
-            return forbidden("solo puedes escalar una tarea asignada a ti");
+        if (actor == null) {
+            return forbidden("actor desconocido");
+        }
+        Tarea tarea;
+        if (tareaCodigo != null) {
+            // Camino clásico: la tarea ya existe y debe estar asignada al especialista.
+            tarea = Tarea.findByCodigo(tareaCodigo);
+            if (tarea == null) {
+                return bad("tarea inexistente: " + tareaCodigo);
+            }
+            if (tarea.asignadoA == null || !tarea.asignadoA.id.equals(actor.id)) {
+                return forbidden("solo puedes escalar una tarea asignada a ti");
+            }
+        } else {
+            // Camino NUEVO: escalar un TICKET sin tarea previa → crear la tarea OCULTA en el
+            // board del equipo del especialista, asignada a él; aparece al aprobar (ver /aprobar).
+            Asignacion asig = Asignacion.<Asignacion>find(
+                    "usuario = ?1 and alcanceTipo = 'EQUIPO' and activo = true", actor).firstResult();
+            Equipo equipoActor = asig != null ? asig.alcanceEquipo : null;
+            if (equipoActor == null) {
+                return bad("no se pudo determinar tu equipo para crear la tarea");
+            }
+            Board board = Board.<Board>find("equipo.id = ?1 and activo = true order by id", equipoActor.id).firstResult();
+            if (board == null) {
+                board = Board.<Board>find("equipo.id = ?1 order by id", equipoActor.id).firstResult();
+            }
+            if (board == null) {
+                return bad("tu equipo no tiene board para alojar la tarea");
+            }
+            tarea = TransferenciaResource.crearTareaOcultaDesdeTicket(ticket, board, text(in, "titulo"), text(in, "clienteCodigo"));
+            tarea.asignadoA = actor; // es "su" trabajo (pasa el chequeo de propiedad)
         }
         // Resolver sugerencias (opcionales) ANTES de persistir.
         Equipo destino = null;
@@ -145,8 +172,10 @@ public class SolicitudResource {
                 return bad("falta el asignado (asignadoHid en el body o asignadoSugerido en la solicitud)");
             }
             s.tarea.asignadoA = destinatario;
+            // Si la tarea nació de un ticket escalado (oculta), al aprobar la reasignación APARECE en el board.
+            s.tarea.pendienteTransferencia = false;
             s.tarea.actualizadoEn = OffsetDateTime.now();
-        } else { // TRANSFERENCIA
+        } else { // TRANSFERENCIA (la tarea sigue oculta hasta que el equipo destino ACEPTE la transferencia)
             Equipo destino = asLong(in, "equipoDestinoId") != null
                     ? Equipo.findById(asLong(in, "equipoDestinoId"))
                     : s.equipoDestino;
@@ -187,6 +216,13 @@ public class SolicitudResource {
         Equipo equipoTarea = (s.tarea != null && s.tarea.board != null) ? s.tarea.board.equipo : null;
         if (equipoTarea == null || !Actor.gobierna(actorHid, equipoTarea.id)) {
             return forbidden("solo el Responsable del equipo de la tarea (o un ADMIN) puede rechazar");
+        }
+        // Si la tarea nació SOLO para esta solicitud (ticket sin tarea previa), se descarta entera.
+        if (s.tarea != null && s.tarea.pendienteTransferencia) {
+            Tarea oculta = s.tarea;
+            s.delete();
+            oculta.delete();
+            return Response.ok(Map.of("ok", true, "descartada", true)).build();
         }
         s.resueltaPor = Actor.usuario(actorHid);
         s.estado = "RECHAZADA";
