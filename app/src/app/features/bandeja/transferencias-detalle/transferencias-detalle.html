@@ -1,0 +1,248 @@
+<div class="td">
+  <!-- Migas + Actualizar -->
+  <div class="td-bread">
+    <a class="td-back" routerLink="/bandeja"><mat-icon>arrow_back</mat-icon> Bandeja de equipo</a>
+    <mat-icon class="td-bread-sep">chevron_right</mat-icon>
+    <span class="td-bread-current">Transferencias entrantes</span>
+    <span class="td-bread-spacer"></span>
+    <button type="button" class="td-refresh" (click)="cargar()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon> Actualizar
+    </button>
+  </div>
+
+  <!-- Encabezado -->
+  <div class="td-header">
+    <span class="td-header-icon"><mat-icon>move_to_inbox</mat-icon></span>
+    <div class="td-header-text">
+      <h1 class="td-title">Transferencias entrantes <span class="td-badge">{{ conteos().pendientes }}</span></h1>
+      <p class="td-sub">Tareas transferidas desde otros equipos hacia el tuyo.</p>
+    </div>
+    <div class="td-note">
+      <mat-icon>info</mat-icon>
+      <div class="td-note-text">
+        <strong>Las transferencias requieren tu acción.</strong>
+        <span>Revisa, acepta y atiende las tareas asignadas a tu equipo.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pestañas por estado -->
+  <div class="td-tabs">
+    <button type="button" class="td-tab" [class.active]="tab() === 'pendientes'" (click)="setTab('pendientes')">
+      <mat-icon>pending_actions</mat-icon> Pendientes <span class="td-tab-count">{{ conteos().pendientes }}</span>
+    </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'aceptadas'" (click)="setTab('aceptadas')">
+      <mat-icon>check_circle</mat-icon> Aceptadas <span class="td-tab-count">{{ conteos().aceptadas }}</span>
+    </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'rechazadas'" (click)="setTab('rechazadas')">
+      <mat-icon>cancel</mat-icon> Rechazadas <span class="td-tab-count">{{ conteos().rechazadas }}</span>
+    </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'completadas'" (click)="setTab('completadas')">
+      <mat-icon>task_alt</mat-icon> Completadas <span class="td-tab-count">{{ conteos().completadas }}</span>
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="center"><mat-spinner diameter="32"></mat-spinner></div>
+  } @else {
+    <!-- Barra de herramientas -->
+    <div class="td-toolbar">
+      <div class="td-search">
+        <mat-icon class="td-search-icon">search</mat-icon>
+        <input type="text" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
+               placeholder="Buscar por ID, título o cliente…" aria-label="Buscar transferencias" />
+        @if (busqueda()) {
+          <button type="button" class="td-search-clear" (click)="busqueda.set('')" aria-label="Limpiar"><mat-icon>close</mat-icon></button>
+        }
+      </div>
+
+      <button type="button" class="td-filter" [matMenuTriggerFor]="eqMenu" [disabled]="tabSinDatos()">
+        <mat-icon>groups</mat-icon> <span class="td-filter-lbl">{{ equipoFiltro() || 'Todos los equipos' }}</span> <mat-icon class="td-caret">expand_more</mat-icon>
+      </button>
+      <mat-menu #eqMenu="matMenu" class="td-menu">
+        <button mat-menu-item (click)="equipoFiltro.set('')" [class.on]="!equipoFiltro()">Todos los equipos</button>
+        @for (e of equiposOrigen(); track e) {
+          <button mat-menu-item (click)="equipoFiltro.set(e)" [class.on]="equipoFiltro() === e">{{ e }}</button>
+        }
+      </mat-menu>
+
+      <span class="td-toolbar-spacer"></span>
+
+      <button type="button" class="td-filter td-sort" [matMenuTriggerFor]="ordenMenu" [disabled]="tabSinDatos()">
+        <span class="td-sort-lbl">Ordenar por:</span> {{ ordenLabel() }} <mat-icon class="td-caret">expand_more</mat-icon>
+      </button>
+      <mat-menu #ordenMenu="matMenu" class="td-menu">
+        <button mat-menu-item (click)="orden.set('reciente')" [class.on]="orden() === 'reciente'">Reciente</button>
+        <button mat-menu-item (click)="orden.set('antiguo')" [class.on]="orden() === 'antiguo'">Más antiguo</button>
+      </mat-menu>
+    </div>
+
+    <!-- Maestro-detalle -->
+    <div class="td-main">
+      <!-- IZQUIERDA: tabla -->
+      <div class="td-list-card">
+        @if (tabSinDatos()) {
+          <div class="td-empty-tab">
+            <mat-icon>hourglass_empty</mat-icon>
+            <strong>Historial aún no disponible</strong>
+            <span>Esta pestaña se activará cuando el sistema exponga el historial de {{ tab() === 'aceptadas' ? 'transferencias aceptadas' : 'transferencias rechazadas' }}.</span>
+          </div>
+        } @else if (!filas().length) {
+          <div class="td-empty-tab">
+            <mat-icon>{{ busqueda() || equipoFiltro() ? 'search_off' : 'inbox' }}</mat-icon>
+            <strong>{{ busqueda() || equipoFiltro() ? 'Sin coincidencias' : 'No hay transferencias' }}</strong>
+            <span>{{ busqueda() || equipoFiltro() ? 'Prueba con otro término o quita los filtros.' : 'Cuando lleguen, aparecerán aquí.' }}</span>
+          </div>
+        } @else {
+          <div class="td-table-wrap">
+            <table class="td-table">
+              <thead>
+                <tr><th>Tarea transferida</th><th>Origen</th><th>Fecha</th><th>Estado</th><th aria-hidden="true"></th></tr>
+              </thead>
+              <tbody>
+                @for (t of filas(); track t.id) {
+                  <tr [class.sel]="seleccionada()?.id === t.id" (click)="seleccionar(t)" tabindex="0"
+                      (keydown.enter)="seleccionar(t)" (keydown.space)="seleccionar(t); $event.preventDefault()">
+                    <td class="c-tarea">
+                      <div class="c-tarea-in">
+                        <span class="c-tarea-icon"><mat-icon>local_offer</mat-icon></span>
+                        <span class="c-tarea-text">
+                          <span class="c-code">{{ t.tareaCodigo }}</span>
+                          <span class="c-title" [title]="t.tareaTitulo">{{ t.tareaTitulo || '(sin título)' }}</span>
+                          @if (t.clienteTarea) { <span class="c-cli"><mat-icon>business</mat-icon> {{ t.clienteTarea }}</span> }
+                        </span>
+                      </div>
+                    </td>
+                    <td class="c-origen">
+                      <div class="c-origen-in">
+                        <mat-icon>groups</mat-icon>
+                        <span class="c-origen-text">
+                          <span class="c-eq">{{ t.equipoOrigen || '—' }}</span>
+                          @if (t.despachadorOrigen) { <span class="c-pers">{{ t.despachadorOrigen }}</span> }
+                        </span>
+                      </div>
+                    </td>
+                    <td class="c-fecha">{{ fecha(t.creadoEn) }}</td>
+                    <td><span class="c-estado" [class]="'est-' + t.estado.toLowerCase()">{{ estadoLabel(t.estado) }}</span></td>
+                    <td class="c-chevron"><mat-icon>chevron_right</mat-icon></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="td-list-foot">Mostrando {{ filas().length }} de {{ totalTab() }} transferencias</div>
+        }
+      </div>
+
+      <!-- DERECHA: detalle + actividad + ayuda -->
+      <aside class="td-side">
+        @if (seleccionada(); as s) {
+          <div class="td-detail">
+            <h3 class="td-panel-h">Detalle de la transferencia</h3>
+            <div class="td-detail-id">
+              <span class="c-tarea-icon"><mat-icon>local_offer</mat-icon></span>
+              <div class="td-detail-id-text">
+                <span class="c-code">{{ s.tareaCodigo }}</span>
+                <span class="td-detail-title">{{ s.tareaTitulo || '(sin título)' }}</span>
+              </div>
+            </div>
+
+            <dl class="td-dl">
+              <dt>Desde</dt>
+              <dd><mat-icon>groups</mat-icon> {{ s.equipoOrigen || '—' }}@if (s.despachadorOrigen) {&nbsp;({{ s.despachadorOrigen }})}</dd>
+              <dt>Para</dt>
+              <dd><mat-icon>groups</mat-icon> {{ s.equipoDestino || 'Tu equipo' }}</dd>
+              <dt>Fecha de envío</dt>
+              <dd><mat-icon>event</mat-icon> {{ fecha(s.creadoEn) }}</dd>
+              @if (s.estado !== 'PENDIENTE' && s.resueltoEn) {
+                <dt>Resuelto</dt>
+                <dd><mat-icon>event_available</mat-icon> {{ fecha(s.resueltoEn) }}</dd>
+              }
+              @if (s.clienteTarea) {
+                <dt>Cliente</dt>
+                <dd><mat-icon>business</mat-icon> {{ s.clienteTarea }}</dd>
+              }
+              @if (s.asignadoDestino) {
+                <dt>Lleva</dt>
+                <dd><mat-icon>person</mat-icon> {{ s.asignadoDestino }}</dd>
+              }
+            </dl>
+
+            @if (s.motivo) {
+              <div class="td-detail-desc">
+                <span class="td-detail-desc-lbl">Descripción / motivo</span>
+                <p>{{ s.motivo }}</p>
+              </div>
+            }
+
+            @if (s.estado === 'PENDIENTE') {
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="td-asignar">
+                <mat-label>Asignar a</mat-label>
+                <mat-select [(ngModel)]="asignadoSel[s.id]">
+                  @for (m of miembrosDe(s.equipoDestinoId); track m.helpdeskUserId) {
+                    <mat-option [value]="m.helpdeskUserId">{{ m.nombre }}</mat-option>
+                  } @empty {
+                    <mat-option [value]="null" disabled>Sin miembros</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <div class="td-detail-actions">
+                <button mat-stroked-button type="button" [disabled]="busy() === 't-' + s.id" (click)="rechazar(s)">
+                  <mat-icon>close</mat-icon> Rechazar
+                </button>
+                <button mat-flat-button color="primary" type="button" [disabled]="busy() === 't-' + s.id" (click)="aceptar(s)">
+                  <mat-icon>check</mat-icon> Aceptar transferencia
+                </button>
+              </div>
+            }
+          </div>
+
+          <!-- Actividad reciente (de las fechas reales) -->
+          <div class="td-activity">
+            <h3 class="td-panel-h"><mat-icon>history</mat-icon> Actividad reciente</h3>
+            <ol class="td-timeline">
+              <li class="done">
+                <span class="tl-dot"><mat-icon>send</mat-icon></span>
+                <div class="tl-body">
+                  <strong>Transferencia enviada</strong>
+                  <span>{{ s.equipoOrigen || 'Otro equipo' }} envió {{ s.tareaCodigo }}</span>
+                  <span class="tl-when">{{ fecha(s.creadoEn) }}</span>
+                </div>
+              </li>
+              <li [class.done]="s.estado !== 'PENDIENTE'" [class.current]="s.estado === 'PENDIENTE'">
+                <span class="tl-dot"><mat-icon>hourglass_top</mat-icon></span>
+                <div class="tl-body">
+                  <strong>Pendiente de aceptación</strong>
+                  <span>En espera de acción de tu equipo</span>
+                </div>
+              </li>
+              <li [class.done]="s.estado === 'COMPLETADA' || s.estado === 'RECHAZADA'" [class.current]="s.estado === 'ACEPTADA'">
+                <span class="tl-dot"><mat-icon>{{ s.estado === 'RECHAZADA' ? 'undo' : 'play_circle' }}</mat-icon></span>
+                <div class="tl-body">
+                  <strong>{{ s.estado === 'RECHAZADA' ? 'Rechazada' : 'En proceso' }}</strong>
+                  <span>{{ s.estado === 'PENDIENTE' ? 'Acepta la transferencia para comenzar a trabajar la tarea' : (s.estado === 'RECHAZADA' ? 'Devuelta al equipo emisor' : 'La lleva ' + (s.asignadoDestino || 'tu equipo')) }}</span>
+                  @if (s.resueltoEn) { <span class="tl-when">{{ fecha(s.resueltoEn) }}</span> }
+                </div>
+              </li>
+            </ol>
+          </div>
+        } @else {
+          <div class="td-detail td-detail-empty">
+            <mat-icon>touch_app</mat-icon>
+            <p>Selecciona una transferencia de la lista para ver su detalle.</p>
+          </div>
+        }
+
+        <!-- ¿Qué puedes hacer? -->
+        <div class="td-help">
+          <h3 class="td-help-h"><mat-icon>help</mat-icon> ¿Qué puedes hacer?</h3>
+          <ul>
+            <li><mat-icon class="ok">check_circle</mat-icon><span><strong>Aceptar:</strong> la tarea se asigna a tu equipo para su atención.</span></li>
+            <li><mat-icon class="no">cancel</mat-icon><span><strong>Rechazar:</strong> devuelve la tarea al equipo emisor con observaciones.</span></li>
+            <li><mat-icon>visibility</mat-icon><span><strong>Ver detalle:</strong> revisa toda la información antes de decidir.</span></li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  }
+</div>

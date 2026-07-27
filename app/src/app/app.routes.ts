@@ -24,6 +24,8 @@ export const routes: Routes = [
       { path: 'mi-panel', canActivate: [solGuard], loadComponent: () => import('./features/mi-panel/mi-panel').then((m) => m.MiPanel) },
       { path: 'pendientes', loadComponent: () => import('./features/pendientes/pendientes').then((m) => m.Pendientes) },
       { path: 'bandeja', canActivate: [bandejaGuard], loadComponent: () => import('./features/bandeja/bandeja').then((m) => m.Bandeja) },
+      { path: 'bandeja/transferencias', canActivate: [bandejaGuard], loadComponent: () => import('./features/bandeja/transferencias-detalle/transferencias-detalle').then((m) => m.TransferenciasDetalle) },
+      { path: 'bandeja/trabajo-equipo', canActivate: [bandejaGuard], loadComponent: () => import('./features/bandeja/trabajo-equipo/trabajo-equipo').then((m) => m.TrabajoEquipo) },
       { path: 'admin', canActivate: [adminGuard], loadComponent: () => import('./features/admin/administracion').then((m) => m.Administracion) },
     ],
   },

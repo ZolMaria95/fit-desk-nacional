@@ -123,6 +123,16 @@ Base blanca + grises suaves. **El naranja nunca es decorativo.** La app es
 - **Angular zoneless:** no escribas señales que el Layout lee durante su detección de
   cambios (bloquea la pantalla en la primera carga). Publica templates al shell con
   `afterNextRender`, no con `effect`.
+- **Formularios con estética propia (tarjetas, label arriba, iconos):** NO uses
+  `mat-form-field`/`mat-select`/`mat-button-toggle`, imponen su cromo o su theming.
+  - `mat-button-toggle` **colapsa a altura 0** si lo metes en un contenedor propio con
+    `flex:1`; para segmentados hazte dos `<button role="radio">` con alto fijo.
+  - En vez de `mat-select`, usa un disparador propio (`<button>` icono+valor+caret) que
+    abre un **`mat-menu`** con buscador. El contenido del `mat-menu` conserva el
+    `_ngcontent` del componente → sus estilos van en el `.scss` del componente. El input
+    de búsqueda necesita `(click)`/`(keydown)` con `stopPropagation()`.
+  - `matDatepicker` y `<input>`/`<input type=time>` SÍ toleran vivir fuera de
+    `mat-form-field` (el date adapter es global). El calendario emergente ya es Material.
 
 # Cómo trabajas
 

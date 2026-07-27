@@ -1,13 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AuthService } from '../../../core/services/auth.service';
 import { DataService, Story } from '../../../core/services/data.service';
@@ -28,13 +26,11 @@ interface ReunionData {
   imports: [
     FormsModule,
     MatDialogModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatSelectModule,
     MatButtonModule,
-    MatButtonToggleModule,
     MatIconModule,
     MatDatepickerModule,
+    MatMenuModule,
+    MatTooltipModule,
   ],
   templateUrl: './reunion-dialog.html',
   styleUrl: './reunion-dialog.scss',
@@ -79,6 +75,16 @@ export class ReunionDialog {
     const t = this.buscarCli().trim().toLowerCase();
     const list = this.perfil.misClientes();
     return t ? list.filter((c) => c.nombre.toLowerCase().includes(t)) : list;
+  });
+
+  // Etiqueta a mostrar en el disparador del menú (nombre del seleccionado, o vacío).
+  readonly assigneeLabel = computed(() => {
+    const id = this.assignee();
+    return id ? this.hd.hdUsers().find((u) => u.id === id)?.name || id : '';
+  });
+  readonly clienteLabel = computed(() => {
+    const cod = this.clientId();
+    return cod ? this.perfil.misClientes().find((c) => c.codigo === cod)?.nombre || cod : '';
   });
 
   constructor() {

@@ -236,6 +236,8 @@ public class TransferenciaResource {
         m.put("id", t.id);
         m.put("tareaCodigo", t.tarea != null ? t.tarea.codigo : null);
         m.put("tareaTitulo", t.tarea != null ? t.tarea.titulo : null);
+        // N° de ticket del HelpDesk (si la tarea nace de un ticket) → permite abrir el ticket en la vista Tickets.
+        m.put("ticket", (t.tarea != null && t.tarea.ticketEspejo != null) ? t.tarea.ticketEspejo.helpdeskTicketId : null);
         m.put("clienteTarea", (t.tarea != null && t.tarea.cliente != null) ? t.tarea.cliente.nombre : null);
         m.put("equipoOrigenId", t.equipoOrigen != null ? t.equipoOrigen.id : null);
         m.put("equipoOrigen", t.equipoOrigen != null ? t.equipoOrigen.nombre : null);

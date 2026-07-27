@@ -9,6 +9,8 @@ export interface Transferencia {
   id: number;
   tareaCodigo: string;
   tareaTitulo: string | null;
+  /** N° de ticket del HelpDesk asociado a la tarea (si nace de un ticket); null si no. */
+  ticket: string | null;
   clienteTarea: string | null;
   equipoOrigenId: number | null;
   equipoOrigen: string | null;

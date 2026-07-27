@@ -1,59 +1,355 @@
 .bandeja {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 16px;
 }
 
-.bandeja-head {
+// ── Encabezado ──
+.bj-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  margin-bottom: 18px;
 
-  h1 { margin: 0; font-size: 1.4rem; }
-}
-
-.center { display: flex; justify-content: center; padding: 40px; }
-
-section {
-  margin-top: 22px;
-
-  h2 {
-    font-size: 1.05rem;
-    margin: 0 0 12px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .bj-title {
+    margin: 0;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    color: var(--mat-sys-on-surface, #16202a);
+  }
+  .bj-sub {
+    margin: 4px 0 0;
+    font-size: 0.9rem;
+    color: var(--mat-sys-on-surface-variant, #5a6470);
   }
 }
 
-.count {
+// Botón "Actualizar": pastilla con borde e icono de marca.
+.bj-refresh {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid color-mix(in srgb, var(--brand, #048abf) 40%, #e0e0e0);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--brand-dark, #0390bc);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, box-shadow 0.12s;
+
+  mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--brand, #048abf) 8%, #fff); }
+  &:disabled { opacity: 0.55; cursor: default; }
+}
+
+.center { display: flex; justify-content: center; padding: 48px; }
+
+// ── Hero ──
+.bj-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--brand, #048abf) 7%, #fff);
+  border: 1px solid color-mix(in srgb, var(--brand, #048abf) 16%, transparent);
+  margin-bottom: 18px;
+
+  .bj-hero-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--brand, #048abf);
+    color: #fff;
+    mat-icon { font-size: 28px; width: 28px; height: 28px; }
+  }
+
+  .bj-hero-text {
+    flex: 1;
+    min-width: 0;
+    .bj-hero-title { margin: 0 0 3px; font-size: 1.15rem; font-weight: 700; color: var(--brand-dark, #0390bc); }
+    p { margin: 0; font-size: 0.9rem; line-height: 1.4; color: var(--mat-sys-on-surface-variant, #5a6470); max-width: 62ch; }
+  }
+
+  // Ilustración simple: dos personas (equipos) con una flecha entre ellas.
+  .bj-hero-illus {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .bj-av {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      color: #fff;
+      mat-icon { font-size: 24px; width: 24px; height: 24px; }
+    }
+    .bj-av-a { background: var(--brand, #048abf); }
+    .bj-av-b { background: var(--accent, #f29e38); }
+    .bj-av-arrow { color: var(--mat-sys-on-surface-variant, #97a1ab); font-size: 26px; width: 26px; height: 26px; }
+  }
+
+  @media (max-width: 720px) {
+    .bj-hero-illus { display: none; } // en móvil, prioriza el texto
+  }
+}
+
+// ── Categoría (fila con dos mitades: info | estado) ──
+.bj-cat {
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e6e9ee);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 14px;
+
+  // Color propio de cada categoría.
+  --cat: #048abf;
+  &.cat-blue   { --cat: #048abf; }
+  &.cat-orange { --cat: #f29e38; }
+  &.cat-green  { --cat: #27ae60; }
+}
+
+.bj-cat-head {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+
+  &.is-clickable { cursor: pointer; }
+  &.is-clickable:hover { background: color-mix(in srgb, var(--cat) 4%, #fff); }
+  &:focus-visible { outline: 2px solid var(--cat); outline-offset: -2px; }
+}
+
+.bj-cat-left {
+  flex: 1 1 44%;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  min-width: 0;
+}
+
+.bj-cat-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cat) 14%, #fff);
+  color: var(--cat);
+  mat-icon { font-size: 26px; width: 26px; height: 26px; }
+}
+
+.bj-cat-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.bj-cat-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--mat-sys-on-surface, #16202a);
+
+  .bj-cat-title-sub { font-weight: 600; color: var(--mat-sys-on-surface-variant, #5a6470); font-size: 0.92rem; }
+}
+.bj-cat-desc {
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--mat-sys-on-surface-variant, #5a6470);
+}
+
+// Contador (pastilla del color de la categoría).
+.bj-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 22px;
   height: 22px;
-  padding: 0 6px;
+  padding: 0 7px;
   border-radius: 11px;
-  background: var(--brand, #04baf0);
+  background: var(--cat);
   color: #fff;
-  font-size: .8rem;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
-.empty {
-  color: var(--mat-sys-on-surface-variant, #666);
-  font-size: .9rem;
-  margin: 4px 0 0;
+// Mitad derecha: estado (vacío o resumen + chevron).
+.bj-cat-status {
+  flex: 1 1 56%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-left: 1px solid var(--mat-sys-outline-variant, #eceff3);
+  min-width: 0;
 }
 
-/* ── Grid de cards (coherente con la vista Tickets) ── */
+.bj-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+
+  .bj-empty-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--cat) 10%, #fff);
+    color: color-mix(in srgb, var(--cat) 80%, #7a828c);
+    font-size: 24px;
+  }
+  .bj-empty-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    strong { font-size: 0.98rem; color: var(--mat-sys-on-surface, #16202a); }
+    span { font-size: 0.82rem; color: var(--mat-sys-on-surface-variant, #5a6470); }
+  }
+}
+
+.bj-summary {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  strong { font-size: 0.98rem; color: var(--cat); }
+  span { font-size: 0.82rem; color: var(--mat-sys-on-surface-variant, #5a6470); }
+}
+
+.bj-chevron {
+  flex: none;
+  margin-left: auto;
+  color: var(--mat-sys-on-surface-variant, #97a1ab);
+  transition: transform 0.18s;
+  &.open { transform: rotate(180deg); }
+}
+
+// Chevron "abrir" (categoría que navega a su página interior).
+.bj-chevron-go {
+  flex: none;
+  margin-left: auto;
+  color: var(--cat);
+}
+
+// Cuerpo desplegable con las tarjetas de acción.
+.bj-cat-body {
+  padding: 4px 20px 20px;
+  border-top: 1px solid var(--mat-sys-outline-variant, #eceff3);
+}
+
+@media (max-width: 720px) {
+  .bj-cat-head { flex-direction: column; }
+  .bj-cat-status {
+    border-left: none;
+    border-top: 1px solid var(--mat-sys-outline-variant, #eceff3);
+  }
+}
+
+// ── Ayuda (pie) ──
+.bj-help {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--brand, #048abf) 6%, #f7f9fb);
+  border: 1px solid var(--mat-sys-outline-variant, #e6e9ee);
+}
+.bj-help-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  .bj-help-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid color-mix(in srgb, var(--brand, #048abf) 25%, transparent);
+    color: var(--brand, #048abf);
+  }
+  .bj-help-text {
+    flex: 1;
+    min-width: 0;
+    strong { display: block; font-size: 0.95rem; color: var(--brand-dark, #0390bc); margin-bottom: 2px; }
+    p { margin: 0; font-size: 0.86rem; line-height: 1.4; color: var(--mat-sys-on-surface-variant, #5a6470); }
+  }
+  .bj-help-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 16px;
+    border: 1px solid color-mix(in srgb, var(--brand, #048abf) 40%, #e0e0e0);
+    border-radius: 20px;
+    background: #fff;
+    color: var(--brand-dark, #0390bc);
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    mat-icon { font-size: 20px; width: 20px; height: 20px; }
+    &:hover { background: color-mix(in srgb, var(--brand, #048abf) 8%, #fff); }
+  }
+
+  @media (max-width: 560px) {
+    flex-wrap: wrap;
+    .bj-help-btn { width: 100%; justify-content: center; }
+  }
+}
+.bj-help-list {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  li { font-size: 0.86rem; line-height: 1.4; color: var(--mat-sys-on-surface-variant, #4a5561); }
+  strong { color: var(--mat-sys-on-surface, #16202a); }
+}
+
+// ── Grid de tarjetas de acción (dentro del cuerpo de cada categoría) ──
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
 }
 
-/* ── Card estilo ticket ── */
+// ── Tarjeta de acción (transferencia / solicitud / aceptada) ──
 .b-card {
   display: flex;
   flex-direction: column;
@@ -62,10 +358,10 @@ section {
   border-left: 4px solid var(--accent, #9aa0a6);
   border-radius: 12px;
   overflow: hidden;
-  transition: box-shadow .15s, transform .15s;
+  transition: box-shadow 0.15s, transform 0.15s;
 
   &:hover {
-    box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     transform: translateY(-1px);
   }
 
@@ -92,7 +388,7 @@ section {
   font-weight: 700;
   font-size: 13px;
   color: #2b2b3a;
-  background: rgba(0, 0, 0, .06);
+  background: rgba(0, 0, 0, 0.06);
   padding: 1px 7px;
   border-radius: 6px;
 }
@@ -111,7 +407,7 @@ section {
   mat-icon { font-size: 15px; height: 15px; width: 15px; }
 }
 
-/* Badges */
+// Badges de la tarjeta
 .b-badge {
   display: inline-block;
   font-size: 10.5px;
@@ -125,7 +421,7 @@ section {
 .estado-done { background: #ddefd9; color: #1b5e20; }
 .badge-tipo  { background: #e7e3fb; color: #4527a0; }
 
-/* Cuerpo */
+// Cuerpo de la tarjeta
 .b-body {
   display: flex;
   flex-direction: column;
@@ -164,7 +460,7 @@ section {
   padding: 5px 8px;
 }
 
-/* Pie con acciones */
+// Pie con acciones
 .b-foot {
   display: flex;
   align-items: center;
@@ -180,7 +476,7 @@ section {
 
 .danger { color: var(--mat-sys-error, #d32f2f); }
 
-/* Asignado (en "Trabajo de mi equipo"), como el pie de las cards de ticket */
+// Asignado (en "Trabajo de mi equipo")
 .b-assignee {
   display: inline-flex;
   align-items: center;

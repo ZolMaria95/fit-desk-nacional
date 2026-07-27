@@ -443,3 +443,41 @@ Desplegado: backend `zolmaria/fitdesk-backend:latest` (digest `sha256:ed036e17�
 **Gerencia** se añadió explícitamente (`esGerencia`): su plano es global de solo lectura; dejarla fuera le habría quitado su razón de ser.
 **Ver el completo ya es de hecho solo lectura:** `puedeOperar`/`canDrag` impiden mover/certificar tarjetas ajenas, así que quitar el filtro no otorga poder, solo visión.
 **Límite honesto:** esto es una regla de **producto** (la UI hace cumplir el modelo), NO una barrera de seguridad: el backend sigue confiando en el header `X-Actor-Hid` y entrega todas las tareas. Sube a regla de seguridad cuando llegue la identidad por token.
+
+## [2026-07-26] El sistema de diseño del modal de tarea se extiende al modal de reunión
+**Contexto:** `features/board/reunion-dialog/` (crear/editar reuniones de capacitación/presentación) seguía con el patrón viejo: 8 campos apilados sin jerarquía, encabezado con icono genérico y pie de acciones sin fijar. Tras rediseñar el modal de tarea, la dueña pidió "aplica UX/UI aquí también".
+**Decisión:** reutilizar el MISMO lenguaje visual del modal de tarea (card-detail) en vez de inventar otro, para que ambos modales se lean igual. Aplicado por Claude siguiendo el manual del agente `.claude/agents/ux-ui.md` (no se lanzó el subagente: el criterio ya está codificado y el contexto estaba cargado).
+**Cambios (solo estructura/estilo; NO se tocó lógica de guardado, validaciones, permisos `puedeAsignarAOtros`, datepickers ni los buscadores de los selects):**
+- **Encabezado** con icono de marca (`groups`) + título, informativo.
+- **3 secciones** con título en mayúsculas pequeñas: *Detalle* (tipo + tema + link) · *Programación* (fecha/hora inicio-fin) · *Asignación* (responsable + cliente).
+- **Tipo de reunión** (Capacitación/Presentación) como **segmentado de ancho completo** (dos mitades iguales), primero en "Detalle".
+- **Pie fijo** (`position: sticky; bottom:0`, borde superior) → regla de oro. Jerarquía: Eliminar (rojo, izquierda) · spacer · Cancelar · **Crear/Guardar** (relleno turquesa). En móvil, Eliminar queda solo con icono (tooltip conserva el significado) y todo pasa a 1 columna.
+- **Microcopy:** botón "Crear" al ser nueva y "Guardar" al editar; placeholders con ejemplos del dominio.
+**Aprendizaje reutilizable:** el modal de tarea dejó de ser un caso puntual y es ahora la **plantilla** de los modales del board (encabezado + `.**-sec`/`.**-sec-title` + pie fijo). Los estilos se replican por-componente (encapsulación de Angular), pero el `.sel-search` del buscador interno de los selects es global (`src/styles.scss`).
+
+## [2026-07-26] Modal de reunión v2: campos "tarjeta" según mockup de la dueña (reemplaza la v1 del mismo día)
+**Contexto:** la dueña compartió un mockup detallado y pidió "básate en esto". La v1 (secciones DETALLE/PROGRAMACIÓN/ASIGNACIÓN con `mat-form-field` crudos) quedó **descartada** el mismo día a favor de un diseño más elaborado y legible.
+**Decisión (diseño final):**
+- **Campos tipo tarjeta** (`.rf-field`): borde redondeado (12px), label ARRIBA (con `*` de requerido) e icono guía a la izquierda en cuadro suave de marca. Se abandonan los `mat-form-field` con etiqueta flotante para Tema/Link/fechas/horas → inputs propios, control total del look.
+- **Encabezado** con icono de marca + título + **subtítulo** ("Crea y agenda una capacitación o presentación.") + botón **X** de cierre.
+- **Caja de Consejo** al pie del cuerpo (fondo azul suave, icono info) — microcopy de verificación previa a guardar.
+- Botón primario **"Guardar reunión"** (con icono `event`), "Guardar cambios" al editar.
+- Ya **no hay títulos de sección** (el mockup no los tiene; el agrupamiento lo da el espaciado entre tarjetas).
+**Decisiones técnicas (trampas pagadas, ver aprendizajes):**
+- **Segmentado propio** (dos `<button role="radio">`) en vez de `mat-button-toggle`: éste **colapsaba a altura 0** dentro del modal (theming MDC frágil). El propio da alto fijo + pastilla activa clara con texto de marca.
+- **Responsable/Cliente como `mat-menu` con buscador** (disparador `.rf-trigger` = icono + valor + caret): reemplaza el `mat-select`, que exige `mat-form-field` y rompía la estética de tarjeta. El contenido proyectado del `mat-menu` conserva la encapsulación del componente, así que `.rf-menu-search` y `.rf-on` se estilizan desde el `.scss` del componente. Se agregaron los computed `assigneeLabel`/`clienteLabel` (nombre del seleccionado).
+- **`matDatepicker` sobre input propio** (sin `mat-form-field`): funciona porque `provideNativeDateAdapter()` es global; el input es `readonly` y abre el calendario al click en la tarjeta.
+- Se quitaron de los imports `MatFormFieldModule`, `MatInputModule`, `MatSelectModule`, `MatButtonToggleModule`; entraron `MatMenuModule` y `MatTooltipModule`.
+**Verificado en Chrome (Playwright, MSC001) con datos reales:** escritorio 1200×920 y móvil 390×844 (1 columna). Funcional: el segmentado cambia; el menú de Responsable filtra ("cleira" → 2 resultados, menú NO se cierra al teclear) y al elegir refleja el nombre; el datepicker abre y liga la fecha ("15/7/2026"). Sin scroll horizontal visible (`overflow-x: hidden` en el cuerpo tapa un fantasma de ~8px).
+**Estado:** vigente. Pendiente commit + deploy a Pages (frontend puro).
+
+## [2026-07-26] Rediseño de la Bandeja: overview + páginas interiores (drill-down) por categoría
+**Contexto:** la dueña dio mockups para la Bandeja de equipo. Se rediseñó siguiendo el sistema del agente `ux-ui`.
+**Overview (`features/bandeja/bandeja`):** hero "Centro de gestión entre equipos" + 3 categorías (Transferencias entrantes azul · Solicitudes de Especialistas naranja · Trabajo de mi equipo verde) con estados vacíos e ilustración persona→persona, y caja de ayuda "¿Cómo funciona?". Transferencias y Trabajo de mi equipo dejan de expandir inline y **navegan** a su página interior; Solicitudes sigue expandiendo inline (aún sin mockup propio).
+**Página interior de Transferencias (`transferencias-detalle`, ruta `/bandeja/transferencias`):** maestro-detalle (tabla + panel de detalle + actividad). Decisión clave **"solo datos reales"** (elegida por la dueña): pestañas Pendientes (`entrantes`) y Completadas (`aceptadas`) con datos y acciones; **Aceptadas/Rechazadas quedan vacías** ("historial aún no disponible") porque el backend no expone ese historial; **sin columna Prioridad** porque la transferencia no la guarda. Nada inventado. La actividad se arma con `creadoEn`/`resueltoEn` reales.
+**Página interior de Trabajo de mi equipo (`trabajo-equipo`, ruta `/bandeja/trabajo-equipo`):** solo lectura, acento verde. Acción principal **"Ver ticket en Tickets"** → `SearchService.buscar('ticket', n)` + navega a `/tickets`. Para ello se añadió el **N° de ticket al DTO de transferencia** (backend `TransferenciaResource.describir`: `t.tarea.ticketEspejo.helpdeskTicketId`) y a la interfaz `Transferencia` del front. **Requiere redeploy del backend a Render** para que los enlaces traigan el ticket con datos reales.
+**Corrección semántica importante:** el endpoint `/aceptadas` = "trabajo foráneo que lleva mi gente" (tareas que VINIERON de otros tableros y ahora lleva mi equipo), NO "mis tareas enviadas a otros". El copy del mockup ("Tareas de tu equipo que han sido transferidas a otros tableros") decía la dirección contraria; se usó copy preciso ("Tareas transferidas desde otros tableros que ahora lleva tu equipo") para no engañar.
+
+### PENDIENTE (decisión de la dueña): solicitar transferencia de un ticket DESDE la vista Tickets
+**Pedido:** que responsables de equipo y especialistas puedan pedir transferencia de un ticket desde Tickets; **el ticket NO necesita estar en el board** — la tarea se coloca en el board **al aceptarse** la transferencia.
+**Bloqueo:** hoy `crearTransferencia`/`crearSolicitud` exigen una `Tarea` existente (`Tarea.findByCodigo` → "tarea inexistente"). Transferir un ticket sin tarea **requiere cambio de backend**: crear la Tarea desde el ticket en estado "pendiente/fuera del board" al crear la transferencia, y materializarla en el board destino al aceptar. No hay camino solo-frontend. Queda para una sesión enfocada (diseño de backend + estado de la tarea + UI en el menú ⋮ del ticket-card, gateado por rol).

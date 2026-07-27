@@ -1,14 +1,11 @@
 import { Component, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { errorMsg } from '../board/transferir/enviar-equipo-dialog';
 import {
-  MiembroEquipo,
   Solicitud,
   Transferencia,
   TransferenciasService,
@@ -22,11 +19,8 @@ import {
 @Component({
   selector: 'app-bandeja',
   imports: [
-    FormsModule,
     MatButtonModule,
     MatIconModule,
-    MatFormFieldModule,
-    MatSelectModule,
     MatProgressSpinnerModule,
   ],
   templateUrl: './bandeja.html',
@@ -35,19 +29,46 @@ import {
 export class Bandeja {
   private readonly svc = inject(TransferenciasService);
   private readonly snack = inject(MatSnackBar);
+  private readonly router = inject(Router);
+
+  /** Abre la página interior (drill-down) de Transferencias entrantes. */
+  abrirTransferencias(): void {
+    void this.router.navigate(['/bandeja/transferencias']);
+  }
+
+  /** Abre la página interior (drill-down) de Trabajo de mi equipo (de otros tableros). */
+  abrirTrabajoEquipo(): void {
+    void this.router.navigate(['/bandeja/trabajo-equipo']);
+  }
 
   readonly transferencias = signal<Transferencia[]>([]);
   readonly solicitudes = signal<Solicitud[]>([]);
   /** Trabajo YA aceptado: tareas de otros equipos que ahora lleva mi gente. */
   readonly aceptadas = signal<Transferencia[]>([]);
-  private readonly miembros = signal<Record<number, MiembroEquipo[]>>({});
-  /** transferencia.id → helpdesk_user_id elegido para asignar al aceptar. */
-  readonly asignadoSel: Record<number, string> = {};
   readonly loading = signal(true);
   readonly busy = signal<string | null>(null); // "t-<id>" | "s-<id>"
 
+  /** Categorías expandidas (para ver las tarjetas de acción). Sin entrada = por defecto
+   *  abierta si tiene ítems. La clave del usuario siempre gana al default. */
+  readonly expandidas = signal<Record<string, boolean>>({});
+  /** Panel "¿Cómo funciona?" desplegado. */
+  readonly guiaAbierta = signal(false);
+
   constructor() {
     void this.cargar();
+  }
+
+  /** ¿La categoría está expandida? Default: abierta si tiene ítems. */
+  estaExpandida(key: string, count: number): boolean {
+    const e = this.expandidas();
+    return key in e ? e[key] : count > 0;
+  }
+
+  /** Alterna una categoría (solo si tiene ítems que mostrar). */
+  toggleCat(key: string, count: number): void {
+    if (!count) return;
+    const abierta = this.estaExpandida(key, count);
+    this.expandidas.update((e) => ({ ...e, [key]: !abierta }));
   }
 
   async cargar(): Promise<void> {
@@ -61,50 +82,10 @@ export class Bandeja {
       this.transferencias.set(ts);
       this.solicitudes.set(ss);
       this.aceptadas.set(ac);
-      // Miembros de cada equipo destino distinto (para el picker "asignar a").
-      const ids = [...new Set(ts.map((t) => t.equipoDestinoId).filter((x): x is number => x != null))];
-      const map: Record<number, MiembroEquipo[]> = {};
-      await Promise.all(ids.map(async (id) => { map[id] = await this.svc.miembrosEquipo(id); }));
-      this.miembros.set(map);
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo cargar la bandeja.'), 'OK', { duration: 5000 });
     } finally {
       this.loading.set(false);
-    }
-  }
-
-  miembrosDe(equipoDestinoId: number | null): MiembroEquipo[] {
-    return equipoDestinoId != null ? (this.miembros()[equipoDestinoId] ?? []) : [];
-  }
-
-  async aceptar(t: Transferencia): Promise<void> {
-    const hid = this.asignadoSel[t.id];
-    if (!hid) {
-      this.snack.open('Elige a quién asignar la tarea.', 'OK', { duration: 3000 });
-      return;
-    }
-    this.busy.set('t-' + t.id);
-    try {
-      await this.svc.aceptarTransferencia(t.id, hid);
-      this.snack.open('Transferencia aceptada; la tarea quedó asignada.', 'OK', { duration: 4000 });
-      await this.cargar();
-    } catch (e: unknown) {
-      this.snack.open(errorMsg(e, 'No se pudo aceptar.'), 'OK', { duration: 5000 });
-    } finally {
-      this.busy.set(null);
-    }
-  }
-
-  async rechazarTransferencia(t: Transferencia): Promise<void> {
-    this.busy.set('t-' + t.id);
-    try {
-      await this.svc.rechazarTransferencia(t.id);
-      this.snack.open('Transferencia rechazada.', 'OK', { duration: 3000 });
-      await this.cargar();
-    } catch (e: unknown) {
-      this.snack.open(errorMsg(e, 'No se pudo rechazar.'), 'OK', { duration: 5000 });
-    } finally {
-      this.busy.set(null);
     }
   }
 
