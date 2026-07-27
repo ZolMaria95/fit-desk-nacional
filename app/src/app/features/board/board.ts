@@ -759,7 +759,11 @@ export class Board implements OnDestroy {
     if (card.tipo === 'REUNION') {
       this.dialog.open(ReunionDialog, { data: { story: card }, width: '520px', maxWidth: '95vw' });
     } else {
-      this.dialog.open(CardDetailDialog, { data: { story: card }, width: '560px', maxWidth: '95vw' });
+      // El modal debe mostrar el MISMO asignado que la tarjeta: el efectivo (si el ticket está
+      // sincronizado, manda su asignado en vivo). Sin esto, la card seguía al ticket (p. ej. tras
+      // reasignar en Tickets) pero el modal mostraba el `assignee` cacheado de la story (el viejo).
+      const story: Story = { ...card, assignee: this.effAssignee(card) };
+      this.dialog.open(CardDetailDialog, { data: { story }, width: '560px', maxWidth: '95vw' });
     }
   }
   openNew(): void {
