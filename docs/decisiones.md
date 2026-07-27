@@ -521,3 +521,10 @@ Completa el pedido "también para especialistas". El especialista escala un tick
 - `MensajeDialog` (mensaje obligatorio) abierto desde el modal de tarea (menú ⋮ "Mensaje al equipo", `puedeMensaje` = Quarkus + RE/admin).
 - Bandeja: sección **"Mensajes del origen"** (solo si hay) con tarjetas {tarea/#ticket, de, mensaje} + botón "Visto".
 **Nota:** MVP unidireccional (origen → equipo que desarrolla). Un hilo bidireccional (respuestas) quedaría para después.
+
+## [2026-07-27] Deploy en producción de todo el lote (transferir/escalar ticket + mensajes)
+Desplegado y verificado en prod:
+- **Frontend** → GitHub Pages (deploy commit `ec0f8bf`).
+- **Backend** → imagen `zolmaria/fitdesk-backend:latest` (digest `53ee45f`) construida `linux/amd64` y subida a Docker Hub; Render **Manual Deploy** por la dueña → live. Flyway aplicó **V13 + V14** a Neon al arrancar (aditivas, sin downtime de datos).
+- Verificación en prod: `/api/mensajes/entrantes` → 200; `/api/transferencias` con validación nueva; y ciclo E2E del mensaje (enviar→entrantes→visto) OK contra la base real.
+Código en `main` hasta `5eccf80` (+ esta nota). Pendiente futuro: hilo bidireccional de mensajes (respuestas); verificación visual con Playwright de los menús de Tickets.
