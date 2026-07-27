@@ -43,6 +43,9 @@
       @if (mostrarBandeja()) {
         <a class="nav-item" routerLink="/bandeja" routerLinkActive="active">
           <mat-icon>inbox</mat-icon><span>Bandeja</span>
+          @if (bandejaPendientes()) {
+            <span class="nav-badge" [attr.aria-label]="bandejaPendientes() + ' pendientes en la bandeja'">{{ bandejaPendientes() }}</span>
+          }
         </a>
       }
 

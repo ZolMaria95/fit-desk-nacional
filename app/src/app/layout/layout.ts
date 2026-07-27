@@ -18,6 +18,7 @@ import { HelpdeskService } from '../core/services/helpdesk.service';
 import { ShellService } from '../core/services/shell.service';
 import { SearchService } from '../core/services/search.service';
 import { PerfilService } from '../core/services/perfil.service';
+import { TransferenciasService } from '../core/services/transferencias.service';
 import { PerfilDialog } from '../features/perfil/perfil-dialog';
 import { ReminderAlertDialog, ReminderItem } from '../features/pendientes/reminder-alert-dialog/reminder-alert-dialog';
 
@@ -56,6 +57,11 @@ export class Layout {
   readonly shell = inject(ShellService);
   readonly perfil = inject(PerfilService);
   private readonly search = inject(SearchService);
+  private readonly transferencias = inject(TransferenciasService);
+
+  /** Badge del menú "Bandeja": pendientes (transferencias + solicitudes + mensajes). */
+  readonly bandejaPendientes = this.transferencias.pendientesBandeja;
+  private bandejaPedida = false;
 
   /** Evita apilar varias alertas de recordatorio a la vez. */
   private alertOpen = false;
@@ -107,6 +113,14 @@ export class Layout {
       if (!this.auth.session() && !this.router.url.startsWith('/login')) {
         this.dialog.closeAll();
         this.router.navigate(['/login']);
+      }
+    });
+    // Badge de la Bandeja: al cargar los roles (ser RE/ADMIN en modo Quarkus), trae el
+    // conteo de pendientes UNA vez para el menú. Luego la propia Bandeja lo mantiene al día.
+    effect(() => {
+      if (this.mostrarBandeja() && !this.bandejaPedida) {
+        this.bandejaPedida = true;
+        void this.transferencias.refrescarPendientesBandeja();
       }
     });
     // Carga los datos (Firebase/localStorage) y arranca el sync en tiempo real.

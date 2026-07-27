@@ -76,6 +76,8 @@ export class Bandeja {
       this.solicitudes.set(ss);
       this.aceptadas.set(ac);
       this.mensajes.set(ms);
+      // Badge del menú: pendientes = transferencias + solicitudes + mensajes (no el trabajo aceptado).
+      this.svc.pendientesBandeja.set(ts.length + ss.length + ms.length);
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo cargar la bandeja.'), 'OK', { duration: 5000 });
     } finally {
@@ -89,6 +91,8 @@ export class Bandeja {
     try {
       await this.svc.marcarMensajeVisto(m.id);
       this.mensajes.update((list) => list.filter((x) => x.id !== m.id));
+      this.svc.pendientesBandeja.update((n) => Math.max(0, n - 1)); // baja el badge del menú
+
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo marcar como visto.'), 'OK', { duration: 5000 });
     } finally {

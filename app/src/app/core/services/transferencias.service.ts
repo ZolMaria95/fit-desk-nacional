@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
@@ -146,6 +146,24 @@ export class TransferenciasService {
   }
   rechazarSolicitud(id: number, motivo?: string) {
     return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/rechazar`, { motivo }, this.actorOpts()));
+  }
+
+  /** Total de pendientes de la Bandeja (transferencias + solicitudes + mensajes entrantes),
+   *  para el badge de notificación del menú. Lo pobla el Layout y lo mantiene la Bandeja. */
+  readonly pendientesBandeja = signal(0);
+
+  /** Refresca el contador de pendientes de la Bandeja (best-effort; vacío para no-RE). */
+  async refrescarPendientesBandeja(): Promise<void> {
+    try {
+      const [t, s, m] = await Promise.all([
+        this.transferenciasEntrantes(),
+        this.solicitudesEntrantes(),
+        this.mensajesEntrantes(),
+      ]);
+      this.pendientesBandeja.set(t.length + s.length + m.length);
+    } catch {
+      /* best-effort: si falla, se queda el último valor */
+    }
   }
 
   // ── Mensajes entre equipos (sobre una tarea/ticket) ──
