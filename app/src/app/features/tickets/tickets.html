@@ -122,6 +122,16 @@
   <h2>Tickets Helpdesk</h2>
   <span class="hd-results">{{ pagedRows().length }} de {{ tabTotal() }}</span>
   <span class="grow"></span>
+  <!-- Botón VISIBLE para volver a "todos los tickets": el "Limpiar filtros" que había
+       vivía dentro del panel Filtros del drawer (plegado por defecto), así que tras una
+       búsqueda global no había forma evidente de deshacerla (ni el ↻ la quita: query()
+       respeta la búsqueda activa). Solo aparece cuando hay algo que limpiar. -->
+  @if (hasFilters()) {
+    <button mat-stroked-button class="hd-clear" (click)="clearFilters()"
+            matTooltip="Quitar la búsqueda y los filtros activos" aria-label="Limpiar búsqueda y filtros">
+      <mat-icon>filter_alt_off</mat-icon> Limpiar
+    </button>
+  }
   <button mat-icon-button class="hd-refresh" (click)="refresh()" [disabled]="loading()"
           matTooltip="Refrescar tickets" aria-label="Refrescar tickets">
     <mat-icon>refresh</mat-icon>
@@ -163,11 +173,13 @@
       <div class="hd-board-info in">
         <mat-icon>dashboard</mat-icon>
         <span>Ticket <strong>#{{ filterTicket() }}</strong> está en el tablero <strong>{{ tb.board }}</strong>@if (tb.asignado) { · lo lleva <strong>{{ tb.asignado }}</strong> } @else { · <strong>sin asignar</strong> }</span>
+        <button type="button" class="hd-board-clear" (click)="clearFilters()" matTooltip="Ver todos los tickets" aria-label="Ver todos los tickets"><mat-icon>close</mat-icon></button>
       </div>
     } @else {
       <div class="hd-board-info out">
         <mat-icon>warning</mat-icon>
         <span>El ticket <strong>#{{ filterTicket() }}</strong> no está en ningún tablero (nadie lo tiene como tarea asignada).</span>
+        <button type="button" class="hd-board-clear" (click)="clearFilters()" matTooltip="Ver todos los tickets" aria-label="Ver todos los tickets"><mat-icon>close</mat-icon></button>
       </div>
     }
   }

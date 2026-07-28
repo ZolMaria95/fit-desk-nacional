@@ -21,6 +21,19 @@
   }
 
   .grow { flex: 1 1 auto; }
+
+  // Botón "Limpiar" (solo visible con búsqueda/filtro activo): compacto para no
+  // competir con el título ni empujar el ↻.
+  .hd-clear {
+    flex: 0 0 auto;
+    height: 34px;
+    line-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
+    --mdc-outlined-button-label-text-color: #c0392b;
+    --mdc-outlined-button-outline-color: rgba(192, 57, 43, 0.4);
+    mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 2px; }
+  }
 }
 
 .hd-status {
@@ -122,6 +135,27 @@
   &.out {
     background: rgba(231, 76, 60, 0.12);
     color: #c0392b;
+  }
+
+  span { flex: 1 1 auto; min-width: 0; }
+
+  // "×" para deshacer la búsqueda desde el propio banner (lo más a la vista).
+  .hd-board-clear {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.75;
+    transition: opacity 0.12s, background 0.12s;
+    mat-icon { font-size: 18px; width: 18px; height: 18px; margin: 0; }
+    &:hover { opacity: 1; background: rgba(0, 0, 0, 0.08); }
   }
 }
 
