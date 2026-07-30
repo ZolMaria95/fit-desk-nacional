@@ -7,6 +7,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 import { AuthService } from '../../../core/services/auth.service';
 import { DataService, Story } from '../../../core/services/data.service';
 import { HelpdeskService } from '../../../core/services/helpdesk.service';
@@ -88,6 +89,7 @@ export class ReunionDialog {
   });
 
   constructor() {
+    wireDialogEsc(this.ref); // ESC cierra primero el datepicker/menú abierto, no el modal
     this.perfil.cargarMiPerfil(); // clientes del equipo del creador
     const pi = this.parseDT(this.story?.inicio);
     if (pi) { this.inicioFecha.set(pi.fecha); this.inicioHora.set(pi.hora); }

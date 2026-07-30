@@ -8,6 +8,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 import { HdUser, HelpdeskService } from '../../../core/services/helpdesk.service';
 import { Ticket } from '../ticket-utils';
 import { estadoStyle } from '../tickets-card-utils';
@@ -52,6 +53,7 @@ export class AssignTicketDialog {
   });
 
   constructor() {
+    wireDialogEsc(this.ref); // ESC cierra primero el listado abierto, no el modal
     this.hd.getHdUsers().then((users) => this.empleados.set(users));
   }
 

@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { clipboardToHtml, insertCodeBlock } from '../ticket-utils';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 
 export interface ComposeData {
   /** HTML inicial a editar (borrador previo). */
@@ -31,6 +32,7 @@ export class ComposeDialog {
   readonly editor = viewChild.required<ElementRef<HTMLElement>>('editor');
 
   constructor() {
+    wireDialogEsc(this.ref); // ESC solo cierra este editor ampliado; el composer conserva su texto
     afterNextRender(() => {
       const el = this.editor().nativeElement;
       el.innerHTML = this.data.html || '';

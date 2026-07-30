@@ -7,6 +7,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { HdUser, HelpdeskService } from '../../../core/services/helpdesk.service';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 import { AdminApiService, Equipo } from '../../admin/admin-api.service';
 import { TransferenciasService } from '../../../core/services/transferencias.service';
 import { errorMsg } from './enviar-equipo-dialog';
@@ -102,6 +103,7 @@ export class EscalarDialog {
   readonly usuarios = signal<HdUser[]>(this.helpdesk.hdUsers());
 
   constructor() {
+    wireDialogEsc(this.ref); // ESC cierra primero el mat-select abierto, no el modal
     this.adminApi.equipos().then((es) => this.equipos.set(es)).catch(() => {});
     this.helpdesk.getHdUsers().then((us) => this.usuarios.set(us)).catch(() => {});
   }

@@ -13,6 +13,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 import { AuthService } from '../../../core/services/auth.service';
 import { DataService, Story } from '../../../core/services/data.service';
 import { HdClient, HdUser, HelpdeskService } from '../../../core/services/helpdesk.service';
@@ -188,6 +189,7 @@ export class CardDetailDialog {
   });
 
   constructor() {
+    wireDialogEsc(this.ref); // ESC cierra primero el popup abierto (autocomplete/menu/…), no el modal
     this.syncAssigneeModel();
     // Refresca desde el API y vuelve a garantizar que el asignado actual aparezca.
     this.helpdesk.getHdUsers().then((users) => {

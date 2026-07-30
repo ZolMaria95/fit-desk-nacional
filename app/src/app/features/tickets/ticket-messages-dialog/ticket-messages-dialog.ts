@@ -1,5 +1,7 @@
-import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { wireDialogEsc } from '../../../core/dialog-esc';
+import { clearDraft, loadDraft, saveDraft } from '../../../core/draft-store';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -48,7 +50,7 @@ export interface TicketMessagesData {
   styleUrl: './ticket-messages-dialog.scss',
   host: { '[class.reader-expanded]': 'readerExpanded()' },
 })
-export class TicketMessagesDialog {
+export class TicketMessagesDialog implements OnDestroy {
   private readonly hd = inject(HelpdeskService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
@@ -123,8 +125,74 @@ export class TicketMessagesDialog {
    *  se oculta por CSS (no se quita del DOM) → no se pierde el borrador ni la edición. */
   readonly readerExpanded = signal(false);
 
+  // ── Borrador automático del mensaje en curso (solo mensaje NUEVO, no ediciones) ──
+  /** Clave del borrador por ticket. */
+  private readonly draftKey = 'msg_' + this.ticketId;
+  /** Último HTML del composer (cacheado en cada input) para poder re-guardarlo al cerrar
+   *  sin depender del DOM (que ya puede estar destruido en ngOnDestroy). Se vacía al enviar. */
+  private lastComposerHtml = '';
+  /** Debounce manual del autoguardado (mismo patrón que streamDebounce en DataService). */
+  private draftTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor() {
     this.load();
+    // ESC jerárquico: cierra primero el visor de imagen, luego la lectura ampliada, y solo
+    // si no hay nada propio en primer plano cierra el modal. Los popups del CDK (menú de
+    // estado, diálogos anidados) los resuelve el propio helper (overlay superior).
+    wireDialogEsc(this.dialogRef, () => {
+      if (this.lightbox()) { this.lightbox.set(null); return true; }
+      if (this.readerExpanded()) { this.readerExpanded.set(false); return true; }
+      return false;
+    });
+    // Restaura el borrador vigente (< 90 s) tras el primer render (el composer ya existe).
+    afterNextRender(() => {
+      // Sin composer en el DOM (solo lectura / sesión expirada) o editando → no restaurar.
+      if (this.editingId() || this.soloLectura() || this.sessionExpired()) return;
+      const html = loadDraft(this.draftKey);
+      if (!html) return;
+      const el = this.composerInput().nativeElement;
+      if (el.textContent?.trim() || el.querySelector('img')) return; // ya hay algo escrito
+      el.innerHTML = html;
+      this.lastComposerHtml = html;
+      this.snack.open('Se restauró tu borrador.', 'OK', { duration: 3500 });
+    });
+  }
+
+  ngOnDestroy(): void {
+    if (this.draftTimer) clearTimeout(this.draftTimer);
+    // Cierre sin envío: conserva el borrador 90 s DESDE el cierre (re-estampa la marca).
+    // Solo texto: los adjuntos (File) no se pueden serializar. Tras un envío exitoso
+    // `lastComposerHtml` quedó en '' → no se re-guarda nada.
+    if (!this.editingId() && this.hasText(this.lastComposerHtml)) {
+      saveDraft(this.draftKey, this.lastComposerHtml);
+    }
+  }
+
+  /** Descarta el borrador (envío exitoso): borra la clave y limpia el estado cacheado. */
+  private discardDraft(): void {
+    if (this.draftTimer) { clearTimeout(this.draftTimer); this.draftTimer = null; }
+    this.lastComposerHtml = '';
+    clearDraft(this.draftKey);
+  }
+
+  /** ¿El HTML tiene texto real o una imagen? (composer "no vacío"). */
+  private hasText(html: string): boolean {
+    if (!html) return false;
+    if (html.includes('<img')) return true;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return !!tmp.textContent?.trim();
+  }
+
+  /** Autoguardado del composer mientras se escribe (debounce 500 ms). No guarda en edición. */
+  onComposerInput(): void {
+    if (this.editingId()) return;
+    this.lastComposerHtml = this.composerInput().nativeElement.innerHTML;
+    if (this.draftTimer) clearTimeout(this.draftTimer);
+    this.draftTimer = setTimeout(() => {
+      if (this.hasText(this.lastComposerHtml)) saveDraft(this.draftKey, this.lastComposerHtml);
+      else clearDraft(this.draftKey); // el usuario borró todo → no dejar borrador vacío
+    }, 500);
   }
 
   private async load(): Promise<void> {
@@ -433,6 +501,7 @@ export class TicketMessagesDialog {
     if (html === undefined) return; // cancelado
     el.innerHTML = html;
     el.focus();
+    this.onComposerInput(); // asignar innerHTML por código no dispara (input) → persistir aquí
   }
 
   /** Carga el mensaje propio en el composer para editarlo (solo texto). */
@@ -495,6 +564,8 @@ export class TicketMessagesDialog {
       this.revokeAllPreviews();
       this.composerFiles = [];
       this.sendStatus.set('Enviado ✓');
+      // Envío exitoso → descartar el borrador (regla: se borra solo al enviar o tras 90 s).
+      this.discardDraft();
       this.load();
     } else {
       this.sendStatus.set('Error al enviar.');

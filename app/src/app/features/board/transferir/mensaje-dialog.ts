@@ -6,6 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TransferenciasService } from '../../../core/services/transferencias.service';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 import { errorMsg } from './enviar-equipo-dialog';
 
 export interface MensajeData {
@@ -48,6 +49,10 @@ export class MensajeDialog {
 
   texto = '';
   readonly busy = signal(false);
+
+  constructor() {
+    wireDialogEsc(this.ref); // ESC no debe cerrar el modal y perder el mensaje escrito
+  }
 
   async enviar(): Promise<void> {
     if (!this.texto.trim() || this.busy()) return;

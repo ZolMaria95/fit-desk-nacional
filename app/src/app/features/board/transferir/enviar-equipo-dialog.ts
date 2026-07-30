@@ -8,6 +8,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AdminApiService, Equipo } from '../../admin/admin-api.service';
 import { TransferenciasService } from '../../../core/services/transferencias.service';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 
 export interface EnviarEquipoData {
   /** Camino clásico: la tarea ya existe en un board. */
@@ -78,6 +79,7 @@ export class EnviarEquipoDialog {
   readonly busy = signal(false);
 
   constructor() {
+    wireDialogEsc(this.ref); // ESC cierra primero el mat-select abierto, no el modal
     this.adminApi.equipos().then((es) => this.equipos.set(es)).catch(() => {});
   }
 

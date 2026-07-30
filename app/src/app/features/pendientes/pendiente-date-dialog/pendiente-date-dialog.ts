@@ -5,6 +5,7 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { wireDialogEsc } from '../../../core/dialog-esc';
 
 export interface PendienteDateData {
   title: string;
@@ -80,6 +81,10 @@ export class PendienteDateDialog {
   date: Date | null = this.data.dueDate ? new Date(this.data.dueDate + 'T00:00:00') : new Date();
   time = this.data.dueTime || this.fmtTime(this.now); // por defecto, la hora actual
   nota = this.data.nota || '';
+
+  constructor() {
+    wireDialogEsc(this.ref); // ESC cierra primero el datepicker abierto, no el modal
+  }
 
   private fmtTime(d: Date): string {
     const p = (n: number) => String(n).padStart(2, '0');

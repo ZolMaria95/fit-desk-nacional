@@ -168,7 +168,7 @@
   </div>
   <div #composerInput class="composer-input" contenteditable="true" role="textbox" aria-multiline="true"
        aria-label="Escribir mensaje" data-placeholder="Escribir mensaje…" (paste)="onPaste($event)"
-       [attr.contenteditable]="sending() ? 'false' : 'true'"></div>
+       (input)="onComposerInput()" [attr.contenteditable]="sending() ? 'false' : 'true'"></div>
   <div class="composer-actions">
     @if (!editingId()) {
       <label class="attach-label" matTooltip="Adjuntar archivo">
