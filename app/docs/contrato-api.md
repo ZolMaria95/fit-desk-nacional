@@ -62,6 +62,9 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
   equipoId, equipo, regional, fechaInicio, fechaFin, diasLaborables, diasVacacion, tipo
   (VACACIONES|PERMISO), estado, nota, registradoPor, creadoEn }`. El backend recalcula
   `diasVacacion = round(diasLaborables × 1,36)`. El "saldo" NO se lleva aquí (va en el formato).
+- **Feriados** `/api/feriados` (días no laborables de la empresa, nacionales, para el calendario de
+  Vacaciones): `GET` (lista, **lectura abierta**); `POST`, `DELETE /{id}` — **solo ADMIN** (si no → 403).
+  DTO: `{ id, nombre, fechaInicio, fechaFin, registradoPor, creadoEn }`. Puede ser un día o un rango.
 
 ## Modelo de dominio (resumen)
 - **TicketEspejo** = encabezado **liviano** del ticket (número, cliente, estado, prioridad, fechas,

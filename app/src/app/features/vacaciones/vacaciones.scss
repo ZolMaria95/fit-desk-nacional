@@ -96,8 +96,38 @@
   }
 }
 
+// Feriado: día no laborable de la empresa. Tinte suave + pastilla ámbar con el nombre.
+.vac-cell.feriado { background: #fff8ec; border-color: #f3d9a4; }
+.vac-feriado {
+  display: flex; align-items: center; gap: 2px;
+  background: #fde9c8; color: #92400e; font-size: 9.5px; font-weight: 700; line-height: 1.4;
+  border-radius: 5px; padding: 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  mat-icon { font-size: 11px; width: 11px; height: 11px; flex: none; }
+}
+
 // ── Panel lateral ──
 .vac-summary { display: flex; flex-direction: column; gap: 12px; }
+
+// Botón "+" compacto en la cabecera de un bloque (registrar feriado).
+.vac-mini-add {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border: none; border-radius: 7px; cursor: pointer;
+  background: color-mix(in srgb, var(--brand, #048abf) 12%, #fff); color: var(--brand-dark, #0390bc);
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  &:hover { background: color-mix(in srgb, var(--brand, #048abf) 20%, #fff); }
+}
+
+// Lista de feriados en el panel.
+.vac-ferlist { display: flex; flex-direction: column; gap: 4px; }
+.vac-ferrow {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid var(--mat-sys-outline-variant, #e6e6ea);
+  border-left: 4px solid #e0a63c; border-radius: 6px; padding: 6px 8px;
+}
+.vac-fer-ic { flex: none; font-size: 17px; width: 17px; height: 17px; color: #b45309; }
+.vac-fer-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vac-fer-name { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vac-fer-fecha { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
 .vac-block {
   background: var(--mat-sys-surface-container-low, #f0f4f9);
   border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);

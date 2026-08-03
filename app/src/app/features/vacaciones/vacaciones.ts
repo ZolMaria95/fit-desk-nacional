@@ -9,9 +9,10 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
 import { TransferenciasService } from '../../core/services/transferencias.service';
-import { Vacacion, VacacionesService } from '../../core/services/vacaciones.service';
+import { Feriado, Vacacion, VacacionesService } from '../../core/services/vacaciones.service';
 import { errorMsg } from '../board/transferir/enviar-equipo-dialog';
 import { VacacionDialog, VacacionDialogData, VacacionDialogResult } from './vacacion-dialog/vacacion-dialog';
+import { FeriadoDialog, FeriadoDialogResult } from './feriado-dialog/feriado-dialog';
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -39,7 +40,7 @@ function fmtDay(key: string): string { const d = parseISO(key); return `${d.getD
 function fmtRange(v: Vacacion): string { return `${fmtDay(v.fechaInicio)} → ${fmtDay(v.fechaFin)}`; }
 
 interface DiaEmp { hid: string; short: string; full: string; color: Color; tipo: string; }
-interface VacCell { dayNum: number; isOther: boolean; isToday: boolean; dateKey: string; items: DiaEmp[]; overflow: number; }
+interface VacCell { dayNum: number; isOther: boolean; isToday: boolean; dateKey: string; items: DiaEmp[]; overflow: number; feriado: string | null; }
 
 /**
  * Sección VACACIONES: calendario mensual (mismo esquema que HelpDesk Semanal) que muestra los
@@ -71,6 +72,8 @@ export class Vacaciones {
 
   /** Todas las vacaciones (lectura abierta); el filtro por equipo es en cliente. */
   private readonly todas = signal<Vacacion[]>([]);
+  /** Feriados de la empresa (nacionales); se muestran en el calendario en ambas vistas. */
+  readonly feriados = signal<Feriado[]>([]);
   /** Hids que el actor puede gestionar (además de las suyas). Vacío para un empleado normal. */
   private readonly gestionables = signal<Set<string>>(new Set());
   /** Empleados a los que el actor puede registrarles vacaciones (para el diálogo). */
@@ -115,12 +118,22 @@ export class Vacaciones {
   async cargar(): Promise<void> {
     this.loading.set(true);
     try {
-      this.todas.set(await this.svc.listar());
+      const [vac, fer] = await Promise.all([this.svc.listar(), this.svc.listarFeriados()]);
+      this.todas.set(vac);
+      this.feriados.set(fer);
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudieron cargar las vacaciones.'), 'OK', { duration: 5000 });
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** Nombre del feriado que cubre la fecha (o null). */
+  private nombreFeriado(date: Date): string | null {
+    for (const f of this.feriados()) {
+      if (date >= parseISO(f.fechaInicio) && date <= parseISO(f.fechaFin)) return f.nombre;
+    }
+    return null;
   }
 
   // ── Equipos presentes (para el selector de la vista "Por equipo") ──
@@ -181,6 +194,7 @@ export class Vacaciones {
         dateKey: isoKey(date),
         items,
         overflow: Math.max(0, activos.length - 3),
+        feriado: this.nombreFeriado(date),
       });
     }
     return cells;
@@ -223,6 +237,42 @@ export class Vacaciones {
     const d = parseISO(target.fechaInicio);
     this.viewMonth.set(new Date(d.getFullYear(), d.getMonth(), 1));
     this.selectedDay.set(target.fechaInicio);
+  }
+
+  // ── Feriados (día no laborable de la empresa; solo ADMIN registra/borra) ──
+  /** Feriados ordenados para el panel, con rango formateado. */
+  readonly feriadosLista = computed(() =>
+    [...this.feriados()]
+      .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio))
+      .map((f) => ({
+        id: f.id,
+        nombre: f.nombre,
+        rango: f.fechaInicio === f.fechaFin ? fmtDay(f.fechaInicio) : `${fmtDay(f.fechaInicio)} → ${fmtDay(f.fechaFin)}`,
+      })),
+  );
+
+  async abrirFeriado(fecha?: string): Promise<void> {
+    const res = (await firstValueFrom(
+      this.dialog.open(FeriadoDialog, { data: { fecha: fecha || this.selectedDay() }, width: '420px', maxWidth: '95vw' }).afterClosed(),
+    )) as FeriadoDialogResult | undefined;
+    if (!res) return;
+    try {
+      await this.svc.crearFeriado(res);
+      this.snack.open('Feriado registrado.', 'OK', { duration: 3000 });
+      await this.cargar();
+    } catch (e: unknown) {
+      this.snack.open(errorMsg(e, 'No se pudo registrar el feriado.'), 'OK', { duration: 5000 });
+    }
+  }
+
+  async eliminarFeriado(id: number): Promise<void> {
+    try {
+      await this.svc.eliminarFeriado(id);
+      this.snack.open('Feriado eliminado.', 'OK', { duration: 3000 });
+      await this.cargar();
+    } catch (e: unknown) {
+      this.snack.open(errorMsg(e, 'No se pudo eliminar el feriado.'), 'OK', { duration: 5000 });
+    }
   }
 
   // ── Permisos de edición ──

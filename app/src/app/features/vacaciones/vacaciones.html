@@ -55,8 +55,12 @@
           [class.other]="c.isOther"
           [class.today]="c.isToday"
           [class.sel]="c.dateKey === selectedDay()"
+          [class.feriado]="!!c.feriado"
           (click)="onCellClick(c)">
           <span class="vac-cell-num">{{ c.dayNum }}</span>
+          @if (c.feriado) {
+            <span class="vac-feriado" [title]="c.feriado"><mat-icon>flag</mat-icon>{{ c.feriado }}</span>
+          }
           <span class="vac-cell-chips">
             @for (it of c.items; track it.hid) {
               <span class="vac-chip" [style.background]="it.color.bg" [style.color]="it.color.fg" [title]="it.full">{{ it.short }}</span>
@@ -111,6 +115,32 @@
           </button>
         } @empty {
           <div class="vac-empty">Sin vacaciones registradas.</div>
+        }
+      </div>
+    </div>
+
+    <!-- Feriados de la empresa (nacionales) -->
+    <div class="vac-block">
+      <div class="vac-block-head">
+        <span class="vac-block-title">Feriados</span>
+        @if (esAdmin()) {
+          <button type="button" class="vac-mini-add" (click)="abrirFeriado()" matTooltip="Registrar feriado" aria-label="Registrar feriado"><mat-icon>add</mat-icon></button>
+        }
+      </div>
+      <div class="vac-ferlist">
+        @for (f of feriadosLista(); track f.id) {
+          <div class="vac-ferrow">
+            <mat-icon class="vac-fer-ic">flag</mat-icon>
+            <span class="vac-fer-txt">
+              <span class="vac-fer-name">{{ f.nombre }}</span>
+              <span class="vac-fer-fecha">{{ f.rango }}</span>
+            </span>
+            @if (esAdmin()) {
+              <button type="button" class="vac-edit" (click)="eliminarFeriado(f.id)" matTooltip="Eliminar feriado" aria-label="Eliminar feriado"><mat-icon>delete_outline</mat-icon></button>
+            }
+          </div>
+        } @empty {
+          <div class="vac-empty">Sin feriados registrados.</div>
         }
       </div>
     </div>

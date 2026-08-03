@@ -37,6 +37,16 @@ export interface VacacionInput {
   nota?: string;
 }
 
+/** Feriado / día no laborable de la empresa (nacional). Puede ser un día o un rango (puente). */
+export interface Feriado {
+  id: number;
+  nombre: string;
+  fechaInicio: string; // YYYY-MM-DD
+  fechaFin: string;    // YYYY-MM-DD
+  registradoPor: string | null;
+  creadoEn: string | null;
+}
+
 /**
  * Cliente del API de Vacaciones (Quarkus). Lectura abierta (todos ven el calendario);
  * escritura gateada en el backend (propias ∪ responsable de equipo ∪ admin). Actor en
@@ -69,5 +79,16 @@ export class VacacionesService {
 
   eliminar(id: number) {
     return firstValueFrom(this.http.delete<void>(`${this.base}/api/vacaciones/${id}`, this.actorOpts()));
+  }
+
+  // ── Feriados (días no laborables de la empresa; escritura solo ADMIN) ──
+  listarFeriados() {
+    return firstValueFrom(this.http.get<Feriado[]>(`${this.base}/api/feriados`, this.actorOpts()));
+  }
+  crearFeriado(b: { nombre: string; fechaInicio: string; fechaFin: string }) {
+    return firstValueFrom(this.http.post<Feriado>(`${this.base}/api/feriados`, b, this.actorOpts()));
+  }
+  eliminarFeriado(id: number) {
+    return firstValueFrom(this.http.delete<void>(`${this.base}/api/feriados/${id}`, this.actorOpts()));
   }
 }
