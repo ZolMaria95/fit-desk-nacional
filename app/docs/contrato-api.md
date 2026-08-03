@@ -55,6 +55,13 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - **Administración** `/api/admin/…`: `clientes` (CRUD), `equipos` (GET/POST/PUT), `asignaciones`
   (CRUD), `usuarios` (GET), `mis-roles/{hid}` (roles de plataforma del actor),
   `sync/tickets` (+ `/import`).
+- **Vacaciones** `/api/vacaciones` (sección Vacaciones, calendario por equipo y nacional):
+  `GET` (sin filtro = nacional; `?equipo={id}` = un equipo) — **lectura abierta a cualquier actor**;
+  `POST`, `PUT /{id}`, `DELETE /{id}` — escritura autorizada: **cada empleado las SUYAS**, el
+  Responsable las de su equipo, el ADMIN cualquiera (si no → 403). DTO: `{ id, usuarioHid, empleado,
+  equipoId, equipo, regional, fechaInicio, fechaFin, diasLaborables, diasVacacion, tipo
+  (VACACIONES|PERMISO), estado, nota, registradoPor, creadoEn }`. El backend recalcula
+  `diasVacacion = round(diasLaborables × 1,36)`. El "saldo" NO se lleva aquí (va en el formato).
 
 ## Modelo de dominio (resumen)
 - **TicketEspejo** = encabezado **liviano** del ticket (número, cliente, estado, prioridad, fechas,

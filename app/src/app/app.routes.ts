@@ -21,6 +21,7 @@ export const routes: Routes = [
       { path: 'consultas', loadComponent: () => import('./features/consultas/consultas').then((m) => m.Consultas) },
       { path: 'tickets', loadComponent: () => import('./features/tickets/tickets').then((m) => m.Tickets) },
       { path: 'semanal', loadComponent: () => import('./features/semanal/semanal').then((m) => m.Semanal) },
+      { path: 'vacaciones', loadComponent: () => import('./features/vacaciones/vacaciones').then((m) => m.Vacaciones) },
       { path: 'mi-panel', canActivate: [solGuard], loadComponent: () => import('./features/mi-panel/mi-panel').then((m) => m.MiPanel) },
       { path: 'pendientes', loadComponent: () => import('./features/pendientes/pendientes').then((m) => m.Pendientes) },
       { path: 'bandeja', canActivate: [bandejaGuard], loadComponent: () => import('./features/bandeja/bandeja').then((m) => m.Bandeja) },

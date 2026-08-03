@@ -1,0 +1,151 @@
+<div class="vac-toolbar">
+  <h2>Vacaciones</h2>
+
+  <!-- Vista: por equipo / nacional (todos pueden ver ambas) -->
+  <div class="vac-viewseg" role="radiogroup" aria-label="Vista">
+    <button type="button" role="radio" [attr.aria-checked]="vista() === 'equipo'" [class.on]="vista() === 'equipo'" (click)="setVista('equipo')">
+      <mat-icon>groups</mat-icon> Por equipo
+    </button>
+    <button type="button" role="radio" [attr.aria-checked]="vista() === 'nacional'" [class.on]="vista() === 'nacional'" (click)="setVista('nacional')">
+      <mat-icon>public</mat-icon> Nacional
+    </button>
+  </div>
+
+  @if (vista() === 'equipo') {
+    <select class="vac-team" [ngModel]="equipoSel()" (ngModelChange)="equipoSel.set(+$event)" aria-label="Equipo">
+      @for (e of equipos(); track e.id) { <option [value]="e.id">{{ e.nombre }}</option> }
+      @if (!equipos().length) { <option [value]="null">Sin vacaciones registradas</option> }
+    </select>
+  }
+
+  <span class="grow"></span>
+
+  <div class="vac-nav">
+    <button mat-icon-button (click)="prevMonth()" aria-label="Mes anterior"><mat-icon>chevron_left</mat-icon></button>
+    <span class="vac-period">{{ periodLabel() }}</span>
+    <button mat-icon-button (click)="nextMonth()" aria-label="Mes siguiente"><mat-icon>chevron_right</mat-icon></button>
+    <button mat-stroked-button (click)="goToday()">Hoy</button>
+  </div>
+
+  @if (puedeAgregar()) {
+    <button mat-flat-button color="primary" (click)="abrirNuevo()"><mat-icon>add</mat-icon> Agregar vacaciones</button>
+  }
+</div>
+
+<div class="vac-layout">
+  <!-- Calendario -->
+  <section class="vac-calendar-wrap">
+    <div class="vac-calendar-header">
+      <h3>{{ periodLabel() }}</h3>
+      <span class="vac-legend-mini">
+        <span class="leg"><span class="dot dot-vac"></span>Vacaciones</span>
+        <span class="leg"><span class="dot dot-perm"></span>Permiso</span>
+      </span>
+    </div>
+
+    @if (loading()) {
+      <div class="vac-loading">Cargando vacaciones…</div>
+    }
+
+    <div class="vac-calendar">
+      @for (d of DAY_LABELS; track d) { <div class="vac-dayname">{{ d }}</div> }
+      @for (c of calendarCells(); track $index) {
+        <button
+          class="vac-cell"
+          [class.other]="c.isOther"
+          [class.today]="c.isToday"
+          [class.sel]="c.dateKey === selectedDay()"
+          (click)="onCellClick(c)">
+          <span class="vac-cell-num">{{ c.dayNum }}</span>
+          <span class="vac-cell-chips">
+            @for (it of c.items; track it.hid) {
+              <span class="vac-chip" [style.background]="it.color.bg" [style.color]="it.color.fg" [title]="it.full">{{ it.short }}</span>
+            }
+            @if (c.overflow > 0) { <span class="vac-chip more">+{{ c.overflow }}</span> }
+          </span>
+        </button>
+      }
+    </div>
+  </section>
+
+  <!-- Panel lateral -->
+  <aside class="vac-summary">
+    <!-- Día seleccionado -->
+    <div class="vac-block">
+      <div class="vac-block-head">
+        <span class="vac-block-title">{{ selectedLabel() }}</span>
+        <span class="vac-count">{{ diaSeleccionado().length }}</span>
+      </div>
+      <div class="vac-daylist">
+        @for (row of diaSeleccionado(); track row.v.id) {
+          <div class="vac-dayrow" [style.borderLeftColor]="row.color.fg">
+            <span class="vac-dot" [style.background]="row.color.fg"></span>
+            <span class="vac-dayrow-txt">
+              <span class="vac-emp">{{ row.v.empleado }}</span>
+              <span class="vac-meta">{{ row.v.tipo === 'PERMISO' ? 'Permiso' : 'Vacaciones' }} · {{ row.rango }} · {{ row.v.diasVacacion }} días</span>
+            </span>
+            @if (puedeEditar(row.v)) {
+              <button class="vac-edit" (click)="editar(row.v)" matTooltip="Editar" aria-label="Editar"><mat-icon>edit</mat-icon></button>
+            }
+          </div>
+        } @empty {
+          <div class="vac-empty">Nadie de vacaciones este día.</div>
+        }
+      </div>
+      @if (puedeAgregar()) {
+        <button mat-stroked-button class="vac-add-day" (click)="abrirNuevo(selectedDay())"><mat-icon>add</mat-icon> Agregar para este día</button>
+      }
+    </div>
+
+    <!-- Calculadora del factor 1,36 -->
+    <div class="vac-block">
+      <div class="vac-block-head"><span class="vac-block-title">Calculadora (factor 1,36)</span></div>
+      <div class="vac-calc">
+        <label class="vac-calc-in">
+          <span>Días laborables</span>
+          <input type="number" min="0" max="60" [ngModel]="calcDias" (ngModelChange)="calcDias = +$event || 0" />
+        </label>
+        <div class="vac-calc-eq"><span class="k">= Días de vacaciones</span><span class="v">{{ calcVac() }}</span></div>
+      </div>
+      <p class="vac-note">Ej.: 5 laborables = 7 días · 3 laborables = 4 días · 11 ≈ 15 días. El saldo lo lleva la unidad administrativa en el formato.</p>
+    </div>
+
+    <!-- Leyenda de empleados -->
+    <div class="vac-block">
+      <div class="vac-block-head"><span class="vac-block-title">Empleados{{ vista() === 'nacional' ? ' (nacional)' : '' }}</span></div>
+      <div class="vac-legend">
+        @for (l of leyenda(); track l.name) {
+          <div class="vac-legrow" [style.borderLeftColor]="l.color.fg">
+            <span class="vac-dot" [style.background]="l.color.fg"></span>
+            <span class="vac-leg-name">{{ l.name }}</span>
+            <span class="vac-leg-dias" [style.color]="l.color.fg">{{ l.dias }} días</span>
+          </div>
+        } @empty {
+          <div class="vac-empty">Sin vacaciones registradas.</div>
+        }
+      </div>
+    </div>
+
+    <!-- Solicitud: formato + pasos -->
+    <div class="vac-block">
+      <div class="vac-block-head"><span class="vac-block-title">Solicitar vacaciones</span></div>
+      <a class="vac-download" href="formato-solicitud-vacaciones.xlsx" download="Solicitud_Vacaciones.xlsx">
+        <mat-icon>download</mat-icon> Descargar formato de solicitud
+      </a>
+      <ol class="vac-pasos">
+        <li>Descarga y llena el formato (fechas y días laborables).</li>
+        <li>Revisa el cálculo (días laborables × 1,36).</li>
+        <li>Fírmalo y envíalo a tu jefe inmediato para aprobación.</li>
+      </ol>
+      <p class="vac-note">Pasos provisionales — se actualizarán con el detalle oficial.</p>
+    </div>
+
+    <!-- Lineamientos de la empresa -->
+    <details class="vac-block vac-details">
+      <summary><mat-icon>gavel</mat-icon> Lineamientos de la empresa</summary>
+      <ol class="vac-lineamientos">
+        @for (l of lineamientos; track $index) { <li>{{ l }}</li> }
+      </ol>
+    </details>
+  </aside>
+</div>
