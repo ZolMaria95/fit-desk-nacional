@@ -97,19 +97,6 @@
       }
     </div>
 
-    <!-- Calculadora del factor 1,36 (aplica a PERMISOS con cargo a vacaciones) -->
-    <div class="vac-block">
-      <div class="vac-block-head"><span class="vac-block-title">Calculadora de permisos (1,36)</span></div>
-      <div class="vac-calc">
-        <label class="vac-calc-in">
-          <span>Días laborables</span>
-          <input type="number" min="0" max="60" [ngModel]="calcDias" (ngModelChange)="calcDias = +$event || 0" />
-        </label>
-        <div class="vac-calc-eq"><span class="k">= Días de vacaciones</span><span class="v">{{ calcVac() }}</span></div>
-      </div>
-      <p class="vac-note">Ej.: 5 laborables = 7 días · 3 laborables = 4 días · 11 ≈ 15 días. El saldo lo lleva la unidad administrativa en el formato.</p>
-    </div>
-
     <!-- Leyenda de empleados -->
     <div class="vac-block">
       <div class="vac-block-head"><span class="vac-block-title">Empleados{{ vista() === 'nacional' ? ' (nacional)' : '' }}</span></div>

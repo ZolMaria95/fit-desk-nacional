@@ -79,10 +79,6 @@ export class Vacaciones {
   readonly esAdmin = this.auth.esAdminPlataforma;
   private readonly miHid = computed(() => (this.auth.session()?.id || '').trim());
 
-  // ── Calculadora del factor 1,36 ──
-  calcDias = 5;
-  readonly calcVac = computed(() => Math.round(Math.max(0, this.calcDias || 0) * 1.36));
-
   constructor() {
     this.hd.getHdUsers(); // catálogo para resolver nombres / picker de admin
     void this.cargarPermisos();
