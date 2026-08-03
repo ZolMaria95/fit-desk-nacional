@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { AuthService } from '../../core/services/auth.service';
+import { AuthService, LoginError } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -34,13 +34,36 @@ export class Login {
       await this.auth.login(this.usuario.trim(), this.password);
       this.router.navigate(['/tickets']);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/401|credenciales/i.test(msg)) this.error.set('Usuario o contraseña incorrectos.');
-      else if (/409|active/i.test(msg)) this.error.set('Ya tienes una sesión activa. Espera unos segundos y vuelve a intentar.');
-      else this.error.set('Error de conexión. Verifica tu red e intenta de nuevo.');
+      this.error.set(this.mensajeLogin(e));
       this.password = '';
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /**
+   * Traduce el fallo de login a un mensaje HONESTO según el código HTTP y el motivo real
+   * del HelpDesk. Antes, cualquier cosa que no fuera 401/409 caía en "revisa tu red",
+   * ocultando p. ej. un 500 del HelpDesk (bug de su servidor, no de la red ni la clave).
+   */
+  private mensajeLogin(e: unknown): string {
+    const err = e as Partial<LoginError> & { message?: string };
+    let status = typeof err?.status === 'number' ? err.status : 0;
+    // Fallback: rescatar el código de mensajes tipo "… (500)" (p. ej. el fallo de /users/me).
+    if (!status && err?.message) {
+      const m = /\((\d{3})\)/.exec(err.message);
+      if (m) status = Number(m[1]);
+    }
+    const motivo = (err?.serverMessage || '').trim();
+    if (status === 401) return 'Usuario o contraseña incorrectos.';
+    if (status === 409) return 'Ya tienes una sesión activa. Espera unos segundos y vuelve a intentar.';
+    if (status === 400 || status === 422) {
+      return `El HelpDesk rechazó el acceso (${status})${motivo ? ': ' + motivo : ''}.`;
+    }
+    if (status >= 500) {
+      return `El HelpDesk tuvo un error al iniciar tu sesión (${status}). No es tu red ni tu contraseña; por favor repórtalo a soporte del HelpDesk.`;
+    }
+    if (status === 0) return 'No se pudo conectar con el servidor. Verifica tu red e intenta de nuevo.';
+    return `No se pudo iniciar sesión (${status})${motivo ? ': ' + motivo : ''}.`;
   }
 }

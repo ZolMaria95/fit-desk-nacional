@@ -6,6 +6,36 @@ const SESSION_KEY = 'fit-daily_session';
 
 interface TeamMember { id: string; name?: string; role?: string; color?: string; }
 
+/** Error de login enriquecido con el código HTTP y el motivo REAL que devolvió el HelpDesk. */
+export interface LoginError extends Error {
+  status: number;          // código HTTP de la respuesta (0 = no hubo respuesta / fallo de red)
+  code?: string;           // código de negocio del HelpDesk (p. ej. INVALID_CREDENTIALS)
+  serverMessage?: string;  // mensaje legible del HelpDesk (para mostrarlo tal cual)
+}
+
+/**
+ * Construye un {@link LoginError} desde la respuesta fallida del HelpDesk, rescatando el
+ * motivo real del cuerpo (que antes se descartaba). Así la pantalla puede decir la verdad
+ * —p. ej. un 500 del HelpDesk— en vez del genérico "revisa tu red".
+ * Formatos: HelpDesk `{ error: { code, message } }`; validación FastAPI `{ detail: [{ msg }] }`.
+ */
+async function loginError(r: Response): Promise<LoginError> {
+  let code = '';
+  let serverMessage = '';
+  try {
+    const body = await r.clone().json();
+    code = body?.error?.code ?? '';
+    serverMessage = body?.error?.message ?? body?.detail?.[0]?.msg ?? '';
+  } catch {
+    try { serverMessage = (await r.clone().text()).slice(0, 200); } catch { /* cuerpo ilegible */ }
+  }
+  const err = new Error(`Login fallido (${r.status})`) as LoginError;
+  err.status = r.status;
+  err.code = code;
+  err.serverMessage = serverMessage;
+  return err;
+}
+
 /**
  * Autenticación contra el API del Helpdesk (vía proxy) + sesión local.
  * Porta js/helpdesk-auth.js y la lógica de sesión/permisos de js/app.js.
@@ -138,7 +168,7 @@ export class AuthService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username_or_email: usernameOrEmail, password, force_logout: 'true' }),
     });
-    if (!r.ok) throw new Error(`Login fallido (${r.status}): ${await r.text()}`);
+    if (!r.ok) throw await loginError(r);
     const { access_token, refresh_token } = await r.json();
 
     const me = await fetch(`${this.base}/users/me`, { headers: { Authorization: `Bearer ${access_token}` } });
