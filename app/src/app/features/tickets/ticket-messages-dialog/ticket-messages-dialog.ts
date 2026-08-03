@@ -15,7 +15,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { HelpdeskService } from '../../../core/services/helpdesk.service';
 import { ComposeDialog } from '../compose-dialog/compose-dialog';
 import { EMPLEADOS } from '../helpdesk.constants';
-import { Ticket, clipboardToHtml, editorToMessageHtml, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
+import { Ticket, clipboardToHtml, editorToMessageHtml, extFromMime, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
 import { estadoStyle, fmtIngreso, fmtMod } from '../tickets-card-utils';
 import { prioBadgeClase } from '../../board/board-utils';
 import { esSoloLectura } from '../../../core/helpdesk-estados';
@@ -371,9 +371,13 @@ export class TicketMessagesDialog implements OnDestroy {
     }
     const a = document.createElement('a');
     a.href = res.url;
-    // Nombre con nuestra convención + la extensión real del header (para que abra bien).
-    const ext = (res.filename.match(/\.[^.\s]+$/) || [''])[0];
-    a.download = nombre ? `${nombre}${nombre.endsWith(ext) ? '' : ext}` : res.filename || `adjunto_${this.ticketId}`;
+    // Extensión: primero del nombre real (Content-Disposition); si ese header no llegó
+    // (cross-origin sin exponer) y el nombre viene sin extensión, se deduce del tipo MIME
+    // —que SÍ es legible— para que el archivo (p. ej. .xls) baje con su extensión y abra bien.
+    const ext = (res.filename.match(/\.[^.\s]+$/) || [''])[0] || extFromMime(res.type);
+    a.download = nombre
+      ? `${nombre}${ext && !nombre.endsWith(ext) ? ext : ''}`
+      : res.filename || `adjunto_${this.ticketId}${ext}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(res.url), 10000);
   }

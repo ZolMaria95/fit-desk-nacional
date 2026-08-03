@@ -568,8 +568,13 @@ export class HelpdeskService {
     }
   }
 
-  /** Blob URL + nombre real (de Content-Disposition) de un adjunto, para descargarlo. */
-  async fetchAttachment(attachId: string): Promise<{ url: string; filename: string } | null> {
+  /**
+   * Blob URL + nombre real + tipo MIME de un adjunto, para descargarlo.
+   * `filename` sale de `Content-Disposition`; en cross-origin (Pages→Render) ese header
+   * puede no ser legible si el backend no lo expone, por eso también devolvemos `type`
+   * (el Content-Type del blob, SÍ legible) para deducir la extensión como respaldo.
+   */
+  async fetchAttachment(attachId: string): Promise<{ url: string; filename: string; type: string } | null> {
     try {
       const resp = await firstValueFrom(
         this.http.get(`${this.base}/attachments/${attachId}`, {
@@ -579,7 +584,11 @@ export class HelpdeskService {
         }),
       );
       if (!resp.body) return null;
-      return { url: URL.createObjectURL(resp.body), filename: attachFilename(resp.headers.get('Content-Disposition')) };
+      return {
+        url: URL.createObjectURL(resp.body),
+        filename: attachFilename(resp.headers.get('Content-Disposition')),
+        type: resp.body.type || resp.headers.get('Content-Type') || '',
+      };
     } catch {
       return null;
     }

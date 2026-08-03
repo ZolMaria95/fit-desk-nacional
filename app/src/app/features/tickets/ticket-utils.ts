@@ -334,6 +334,39 @@ export function ticketAttachIds(t: any): string[] {
   return [...new Set(ids)].filter((id) => /^\d+$/.test(id));
 }
 
+/**
+ * Extensión de archivo (con punto, p. ej. ".xls") a partir del tipo MIME. Sirve de RESPALDO
+ * cuando no se puede leer el nombre real del `Content-Disposition` (cross-origin). Devuelve ''
+ * si el tipo es genérico/desconocido (p. ej. application/octet-stream) — ahí no se puede saber.
+ */
+export function extFromMime(mime: string): string {
+  const m = (mime || '').split(';')[0].trim().toLowerCase();
+  const MAP: Record<string, string> = {
+    'application/vnd.ms-excel': '.xls',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+    'application/vnd.ms-excel.sheet.macroenabled.12': '.xlsm',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'application/vnd.ms-powerpoint': '.ppt',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+    'application/pdf': '.pdf',
+    'application/zip': '.zip',
+    'application/x-zip-compressed': '.zip',
+    'application/json': '.json',
+    'text/xml': '.xml',
+    'application/xml': '.xml',
+    'text/csv': '.csv',
+    'text/plain': '.txt',
+    'text/html': '.html',
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/svg+xml': '.svg',
+  };
+  return MAP[m] ?? '';
+}
+
 export function mapTicket(t: any): Ticket {
   return {
     ticket: String(t.ticket_id || ''),
