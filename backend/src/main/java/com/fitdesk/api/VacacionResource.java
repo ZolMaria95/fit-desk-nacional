@@ -1,6 +1,8 @@
 package com.fitdesk.api;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -123,18 +125,36 @@ public class VacacionResource {
         return Response.noContent().build();
     }
 
-    // ── Aplica los campos editables + recalcula días de vacaciones (factor 1,36) ──
+    // ── Aplica los campos editables + calcula días según el TIPO ──
+    // VACACIONES: rango de calendario (inicio→fin), días = días de calendario, SIN factor.
+    // PERMISO (con cargo a vacaciones): se ingresan días laborables y días = round(laborables×1,36).
     private static void aplicar(Vacacion v, JsonNode in, LocalDate inicio, LocalDate fin) {
-        v.fechaInicio = inicio;
-        v.fechaFin = fin;
-        v.diasLaborables = in.has("diasLaborables") ? Math.max(0, in.get("diasLaborables").asInt(0)) : v.diasLaborables;
-        v.diasVacacion = Vacacion.calcularDiasVacacion(v.diasLaborables);
         String tipo = text(in, "tipo");
         if (tipo != null) {
             v.tipo = "PERMISO".equalsIgnoreCase(tipo) ? "PERMISO" : "VACACIONES";
         }
-        String nota = text(in, "nota");
-        v.nota = nota; // permite limpiarla
+        v.fechaInicio = inicio;
+        v.fechaFin = fin;
+        if ("PERMISO".equals(v.tipo)) {
+            v.diasLaborables = in.has("diasLaborables") ? Math.max(0, in.get("diasLaborables").asInt(0)) : v.diasLaborables;
+            v.diasVacacion = Vacacion.calcularDiasVacacion(v.diasLaborables); // × 1,36
+        } else {
+            v.diasVacacion = (int) (ChronoUnit.DAYS.between(inicio, fin) + 1); // días de calendario, inclusive
+            v.diasLaborables = laborablesEnRango(inicio, fin); // informativo
+        }
+        v.nota = text(in, "nota"); // permite limpiarla
+    }
+
+    /** Cuenta los días laborables (lun–vie) en el rango, inclusive. */
+    private static int laborablesEnRango(LocalDate inicio, LocalDate fin) {
+        int n = 0;
+        for (LocalDate d = inicio; !d.isAfter(fin); d = d.plusDays(1)) {
+            DayOfWeek g = d.getDayOfWeek();
+            if (g != DayOfWeek.SATURDAY && g != DayOfWeek.SUNDAY) {
+                n++;
+            }
+        }
+        return n;
     }
 
     // ── ¿El actor puede gestionar vacaciones de este empleado? ──

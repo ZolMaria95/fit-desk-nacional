@@ -72,17 +72,28 @@ function fmt(k: string): string {
           <span class="vd-lbl">Fecha de inicio</span>
           <input type="date" [ngModel]="fechaInicio()" (ngModelChange)="fechaInicio.set($event)" />
         </label>
-        <label class="vd-field">
-          <span class="vd-lbl">Días laborables</span>
-          <input type="number" min="1" max="60" [ngModel]="diasLaborables()" (ngModelChange)="diasLaborables.set(+$event || 0)" />
-        </label>
+        @if (esPermiso()) {
+          <label class="vd-field">
+            <span class="vd-lbl">Días laborables</span>
+            <input type="number" min="1" max="60" [ngModel]="diasLaborables()" (ngModelChange)="diasLaborables.set(+$event || 0)" />
+          </label>
+        } @else {
+          <label class="vd-field">
+            <span class="vd-lbl">Fecha de fin</span>
+            <input type="date" [ngModel]="fechaFin()" (ngModelChange)="fechaFin.set($event)" [min]="fechaInicio()" />
+          </label>
+        }
       </div>
 
-      <!-- Resultado del cálculo (factor 1,36) -->
+      <!-- Resultado: en PERMISO aplica el factor 1,36; en VACACIONES es el rango de calendario. -->
       <div class="vd-calc">
         <div><span class="k">Días de vacaciones</span><span class="v">{{ diasVac() }}</span></div>
-        <div><span class="k">Termina</span><span class="v">{{ fechaFin() ? fmt(fechaFin()) : '—' }}</span></div>
-        <p class="vd-formula">{{ diasLaborables() }} laborables × 1,36 = {{ diasVac() }} días</p>
+        @if (esPermiso()) {
+          <div><span class="k">Termina</span><span class="v">{{ fechaFinEfectiva() ? fmt(fechaFinEfectiva()) : '—' }}</span></div>
+          <p class="vd-formula">{{ diasLaborables() }} laborables × 1,36 = {{ diasVac() }} días (permiso con cargo).</p>
+        } @else {
+          <p class="vd-formula">Rango de calendario: {{ diasVac() }} {{ diasVac() === 1 ? 'día' : 'días' }} (incluye laborables y no laborables).</p>
+        }
       </div>
 
       @if (avisoFinde()) { <div class="vd-warn"><mat-icon>info</mat-icon> El período no incluye un fin de semana (lineamiento 4).</div> }
@@ -143,6 +154,9 @@ export class VacacionDialog {
   });
   readonly tipo = signal<'VACACIONES' | 'PERMISO'>(this.data.registro?.tipo ?? 'VACACIONES');
   readonly fechaInicio = signal(this.data.registro?.fechaInicio ?? this.data.fechaInicio);
+  /** Fecha fin: la elige el usuario en VACACIONES; en PERMISO se calcula (ver fechaFinEfectiva). */
+  readonly fechaFin = signal(this.data.registro?.fechaFin ?? this.data.registro?.fechaInicio ?? this.data.fechaInicio);
+  /** Días laborables: solo se ingresan en PERMISO (base del factor 1,36). */
   readonly diasLaborables = signal(this.data.registro?.diasLaborables || 5);
   readonly nota = signal(this.data.registro?.nota ?? '');
 
@@ -159,25 +173,38 @@ export class VacacionDialog {
     return this.data.empleados.find((e) => e.id === hid)?.name || this.data.registro?.empleado || hid || '—';
   }
 
-  readonly diasVac = computed(() => Math.round(Math.max(0, this.diasLaborables() || 0) * 1.36));
-  readonly fechaFin = computed(() => {
+  readonly esPermiso = computed(() => this.tipo() === 'PERMISO');
+
+  /** Días de vacaciones: PERMISO = días laborables × 1,36; VACACIONES = días de calendario del rango. */
+  readonly diasVac = computed(() => {
+    if (this.esPermiso()) return Math.round(Math.max(0, this.diasLaborables() || 0) * 1.36);
+    const ini = this.fechaInicio(); const fin = this.fechaFin();
+    if (!ini || !fin || fin < ini) return 0;
+    return Math.round((parseISO(fin).getTime() - parseISO(ini).getTime()) / 86400000) + 1;
+  });
+  /** Fecha fin efectiva: en VACACIONES es la elegida; en PERMISO se deriva de los días. */
+  readonly fechaFinEfectiva = computed(() => {
+    if (!this.esPermiso()) return this.fechaFin();
     const ini = this.fechaInicio(); const n = this.diasVac();
     return ini && n > 0 ? addDays(ini, n - 1) : '';
   });
 
-  /** Aviso: el rango no incluye sábado ni domingo. */
+  /** Aviso: el período no incluye sábado ni domingo (lineamiento 4). */
   readonly avisoFinde = computed(() => {
-    const ini = this.fechaInicio(); const fin = this.fechaFin();
+    const ini = this.fechaInicio(); const fin = this.fechaFinEfectiva();
     if (!ini || !fin) return false;
     let d = parseISO(ini); const end = parseISO(fin);
     while (d <= end) { const g = d.getDay(); if (g === 0 || g === 6) return false; d = new Date(d.getTime() + 86400000); }
     return true;
   });
-  /** Aviso: menos de 15 días de vacaciones (regla general de período completo). */
-  readonly avisoQuince = computed(() => this.diasVac() > 0 && this.diasVac() < 15);
+  /** Aviso: menos de 15 días (regla general de período completo, solo vacaciones). */
+  readonly avisoQuince = computed(() => !this.esPermiso() && this.diasVac() > 0 && this.diasVac() < 15);
 
   valido(): boolean {
-    return !!this.empleadoHid() && !!this.fechaInicio() && this.diasLaborables() >= 1 && !!this.fechaFin();
+    if (!this.empleadoHid() || !this.fechaInicio()) return false;
+    if (this.esPermiso()) return this.diasLaborables() >= 1;
+    const fin = this.fechaFin();
+    return !!fin && fin >= this.fechaInicio(); // comparación ISO (aaaa-mm-dd) directa
   }
 
   guardar(): void {
@@ -185,8 +212,9 @@ export class VacacionDialog {
     const input: VacacionInput = {
       usuarioHid: this.empleadoHid(),
       fechaInicio: this.fechaInicio(),
-      fechaFin: this.fechaFin(),
-      diasLaborables: this.diasLaborables(),
+      fechaFin: this.fechaFinEfectiva(),
+      // Días laborables solo tiene sentido en PERMISO; en VACACIONES el backend cuenta los del rango.
+      diasLaborables: this.esPermiso() ? this.diasLaborables() : 0,
       tipo: this.tipo(),
       nota: (this.nota() || '').trim() || undefined,
     };
