@@ -101,12 +101,14 @@
     <div class="vac-block">
       <div class="vac-block-head"><span class="vac-block-title">Empleados{{ vista() === 'nacional' ? ' (nacional)' : '' }}</span></div>
       <div class="vac-legend">
-        @for (l of leyenda(); track l.name) {
-          <div class="vac-legrow" [style.borderLeftColor]="l.color.fg">
+        @for (l of leyenda(); track l.hid) {
+          <button type="button" class="vac-legrow" [style.borderLeftColor]="l.color.fg"
+                  (click)="irAEmpleado(l.hid)" [title]="'Ir al período de ' + l.name">
             <span class="vac-dot" [style.background]="l.color.fg"></span>
             <span class="vac-leg-name">{{ l.name }}</span>
             <span class="vac-leg-dias" [style.color]="l.color.fg">{{ l.dias }} días</span>
-          </div>
+            <mat-icon class="vac-leg-go">chevron_right</mat-icon>
+          </button>
         } @empty {
           <div class="vac-empty">Sin vacaciones registradas.</div>
         }

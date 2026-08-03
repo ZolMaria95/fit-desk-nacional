@@ -200,15 +200,30 @@ export class Vacaciones {
 
   /** Leyenda: empleados en la vista con su color y total de días de vacaciones. */
   readonly leyenda = computed(() => {
-    const acc = new Map<string, { name: string; color: Color; dias: number }>();
+    const acc = new Map<string, { hid: string; name: string; color: Color; dias: number }>();
     for (const v of this.lista()) {
       const k = v.usuarioHid || v.empleado || '';
-      const e = acc.get(k) || { name: v.empleado || '—', color: this.colorOf(v), dias: 0 };
+      const e = acc.get(k) || { hid: k, name: v.empleado || '—', color: this.colorOf(v), dias: 0 };
       e.dias += v.diasVacacion || 0;
       acc.set(k, e);
     }
     return [...acc.values()].sort((a, b) => a.name.localeCompare(b.name));
   });
+
+  /** Al clicar un empleado en el panel: salta el calendario a su período (vigente/próximo, o el
+   *  más reciente si no hay) y selecciona su día de inicio para verlo en el detalle. */
+  irAEmpleado(hid: string): void {
+    const suyas = this.lista().filter((v) => (v.usuarioHid || v.empleado || '') === hid);
+    if (!suyas.length) return;
+    const t = today();
+    const vigentes = suyas
+      .filter((v) => parseISO(v.fechaFin) >= t)
+      .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio));
+    const target = vigentes[0] ?? [...suyas].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))[0];
+    const d = parseISO(target.fechaInicio);
+    this.viewMonth.set(new Date(d.getFullYear(), d.getMonth(), 1));
+    this.selectedDay.set(target.fechaInicio);
+  }
 
   // ── Permisos de edición ──
   puedeEditar(v: Vacacion): boolean {
