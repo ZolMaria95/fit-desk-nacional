@@ -1,1 +1,0 @@
-function s(o,e){o.disableClose=true,o.keydownEvents().subscribe(i=>{i.key==="Escape"&&(e&&e()||o.close());}),o.backdropClick().subscribe(()=>o.close());}export{s};
