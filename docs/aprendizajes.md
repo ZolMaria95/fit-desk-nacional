@@ -6,6 +6,180 @@ Hechos descubiertos sobre el código real, el HelpDesk, Firebase y el negocio. *
 
 ---
 
+### [2026-09-17] La carrera de `persist()` fire-and-forget (ver aprendizaje de abajo) puede BORRAR
+### datos reales, no solo mostrar uno viejo — y cómo se recuperaron con `pageinspect`/`pg_surgery`
+**Fuente:** los recordatorios de Diana Fiallo (31 tickets en `ticket_pendiente`) desaparecieron de
+producción. La causa más probable es la MISMA carrera documentada abajo (2026-09-15), pero con una
+consecuencia más grave de la anticipada: `putHdPendientes()` no solo "muestra desactualizado" — hace
+un `DELETE ... WHERE usuario = actor AND ticket NOT IN (keep)` cada vez que el actor guarda su lista.
+Si una versión vieja/vacía del `_hdPendientes` local gana la carrera y se guarda DESPUÉS de la
+versión real, el backend la toma como la nueva verdad y BORRA todo lo que no traía. Ver detalle
+completo del incidente y la recuperación en `docs/decisiones.md` ([2026-09-17]).
+**Implicación:** (1) el aprendizaje de abajo subestimaba el riesgo — no es solo un problema de UX
+("no se ve hasta recargar"), es un vector de pérdida de datos real en CUALQUIER overlay con el mismo
+patrón "reconciliar y borrar lo ausente" (`hdActions`, `hdNotes`, `hdPendientes`, y cualquiera que
+use `TicketX.delete(... not in ...)` sobre el actor). Antes de tocar ese código conviene revisar los
+otros `putHdX` por el mismo patrón. (2) **Técnica de recuperación reusable**: un `DELETE` en Postgres
+no destruye la fila al instante — la tupla sigue en la página del heap hasta que el autovacuum la
+recicla. Si se actúa ANTES de eso (`pg_stat_user_tables.last_autovacuum` / `n_dead_tup` dicen si
+sigue ahí), se puede instalar `pageinspect` (inspecciona páginas crudas) para localizar con
+`heap_page_items()` las tuplas con `lp_flags=1` (dato intacto) vs `lp_flags=3` (ya podado, dato
+perdido), e instalar `pg_surgery` para revivirlas con `heap_force_freeze(tabla, ARRAY[ctids])` — sin
+necesidad de decodificar los bytes a mano. Después hace falta `REINDEX TABLE` (la cirugía no toca los
+índices) y `VACUUM ANALYZE`. Cuanto más tiempo pase (o más lecturas normales ocurran, que pueden
+disparar poda oportunista/HOT), más chance de que el dato ya no esté — hay que actuar rápido y
+primero DESACTIVAR `autovacuum_enabled` en la tabla afectada antes de investigar.
+
+### [2026-09-15] `persist()` de los overlays legacy (`hdActions`/`hdNotes`/`hdPendientes`) es
+### fire-and-forget — un `refresh()` inmediato después puede leer el dato viejo
+**Fuente:** al agregar "Crear recordatorio" en Pendientes, el flujo `data.setHdPendiente(...)` +
+`this.refresh()` (que hace un GET a `/hdPendientes-visibles`) no mostraba el recordatorio recién
+creado hasta recargar la página — aunque el `PUT` sí había llegado bien al backend (confirmado por
+curl un momento después). `DataService.persist()`/`fbPut()` no devuelven una promesa que se pueda
+esperar: lanzan el `fetch` y siguen. Un `refresh()` disparado justo después corre en paralelo, no
+después, y puede ganarle la carrera al propio guardado.
+**Implicación:** cualquier acción nueva sobre `hdActions`/`hdNotes`/`hdPendientes`/`hdActions`-like
+que necesite reflejarse en la MISMA pantalla al instante no puede confiar en "escribir y refrescar"
+— hay que actualizar la señal local de forma optimista (como ya hace `crear()` en `pendientes.ts`)
+o esperar explícitamente. Esto es preexistente en todo el patrón de overlays (no es un bug nuevo),
+así que conviene revisarlo si aparece el mismo síntoma ("no se ve hasta recargar") en otra pantalla
+que use `setHdAction`/`setHdNote`/`setHdPendiente` seguido de un refresh inmediato.
+
+### [2026-09-15] `data.stories()` es GLOBAL (todos los boards), no del board actual
+**Fuente:** al investigar por qué el hipervínculo de una tarea sin ticket en la campanita a veces no
+abría el modal, se confirmó que `GET /api/legacy/stories` (`LegacyReadResource.stories()`) devuelve
+**todas** las `Tarea` del sistema sin filtrar por board ni usuario (`Tarea.list("pendienteTransferencia = false order by codigo")`).
+**Implicación:** buscar una tarea por código en `data.stories()` no depende de en qué board/pantalla
+esté parado el usuario — el problema real de "no encuentra la tarea" casi siempre es de **timing**
+(la lista aún no cargó, `ensureInit()` no resolvió) y no de alcance. La corrección correcta es
+`await data.ensureInit()` antes de buscar (memoizado: gratis si ya cargó), no ampliar ningún filtro.
+
+### [2026-09-15] Este workspace NO es el repo que despliega — el servidor clona de GitLab
+**Fuente:** al preparar el deploy del 7º lote, `git remote -v` en este workspace mostró GitHub
+(`fit-desk-nacional`), pero SSH al servidor AWS mostró que `~/fitdesk/fit-desk` y
+`~/fitdesk/fit-desk-api` son clones de `gitlab.fit-bank.com/servicios/{fit-desk,fit-desk-api}` —
+historiales de commits completamente distintos y no relacionados.
+**Implicación:** para desplegar, el código de este workspace (`app/`, `backend/`) hay que llevarlo a
+mano a un clon de esos repos de GitLab (copiar los archivos tocados, nunca un `rsync --delete` ciego
+de la carpeta completa — ver el aprendizaje de abajo sobre contaminación), commitear ahí y pushear.
+El historial de commits de este workspace (GitHub) es solo de trabajo/planeación, no representa lo
+que corre en producción. El token de GitLab queda visible en texto plano en
+`~/fitdesk/fit-desk-api/.git/config` y `~/fitdesk/fit-desk/.git/config` del servidor (por SSH,
+`git remote -v` ahí). No commitear ese token en ningún repo.
+
+### [2026-09-15] `app/` local tiene contaminación: resto de un backend FastAPI huérfano
+**Fuente:** al copiar `app/` sobre un clon limpio del repo real `fit-desk` (GitLab) para preparar el
+deploy, aparecieron archivos Python sueltos en la raíz (`main.py`, `database.py`, `config.py`,
+`models/`, `routers/`, `schemas/`, `utils/`, `__pycache__/`) que NO existen en el repo real — y
+faltaban `.gitignore` y `src/environments/environment.onprem.ts`, además de que `Dockerfile`/
+`angular.json`/`nginx.conf` locales estaban desactualizados respecto al repo real.
+**Implicación:** el `app/` de este workspace acumuló sobras del "backend FastAPI/Mongo huérfano" que
+menciona el `CLAUDE.md` raíz del proyecto. **Nunca hacer `rsync --delete`/copiar `app/` completo
+sobre el repo real** — se perdería `.gitignore` y archivos de entorno, y se ensuciaría el repo con
+código Python que no pertenece ahí. Para desplegar, copiar únicamente los archivos `.ts`/`.html`/
+`.scss` específicos que se sabe que se tocaron (cruzarlos contra `docs/decisiones.md` del día).
+
+### [2026-09-15] `MatMenu` cierra el panel con CUALQUIER click interno, no solo en `mat-menu-item`
+**Fuente:** al agregar pestañas (Todas/Tareas/Tickets) dentro del `mat-menu` de la campanita, cada
+clic en una pestaña cerraba el panel entero — se asumía (siguiendo el precedente de `.notif-item`,
+que sigue funcionando bien sin cerrar el menú) que un `<button type="button">` plano, sin la
+directiva `mat-menu-item`, no dispara el auto-cierre. Verificado en Chrome real con Playwright: SÍ
+lo dispara igual.
+**Implicación:** cualquier control dentro de un `mat-menu` que deba cambiar estado local SIN cerrar
+el panel (pestañas, toggles, "marcar todas leídas") necesita `(click)="$event.stopPropagation(); ..."`
+explícito — no alcanza con evitar la directiva `mat-menu-item`. Los controles que SÍ deben cerrar el
+panel (como `.notif-item-link`, que navega/abre un modal) no necesitan el `stopPropagation`.
+
+### [2026-09-15] `:host-context()` + `::ng-deep` NO alcanza contenido portado a un overlay del CDK
+**Fuente:** el CSS del panel de la campanita (`.notif-panel` dentro de un `mat-menu`) no se pudo
+estilar para tema oscuro con `:host-context(html[data-theme='dark']) { ::ng-deep .notif-panel {...} }`
+— compilaba pero nunca aplicaba, aunque el `data-theme="dark"` sí estaba puesto en `<html>`.
+**Implicación:** Angular compila `:host-context(X) ::ng-deep .foo` exigiendo que `.foo` sea
+**descendiente en el DOM** del elemento host del componente (`[_nghost-xxx]`) — pero `mat-menu`,
+`mat-dialog` y cualquier overlay del CDK se **portan a `<body>`**, fuera del árbol del componente que
+los abre, así que esa condición de ancestría nunca se cumple aunque `.foo` exista y sea visible en
+pantalla. Un `::ng-deep .foo {}` SIN `:host-context` sí funciona (queda global, sin exigir ancestro),
+por eso el estilo base (claro) funcionaba y solo fallaba la variante oscura anidada. **Fix:** escribir
+el ancestro a mano dentro del propio `::ng-deep`: `::ng-deep html[data-theme='dark'] .foo { ... }`
+(ver `layout.scss`). Aplica a cualquier estilo condicionado por tema/estado que deba llegar a un
+`mat-menu`/`mat-dialog`/`mat-select` panel-class.
+
+### [2026-09-10] `environment.quarkusApiUrl` vacío ('') es VÁLIDO en onprem/AWS — nunca `!!chequear`
+**Fuente:** bug real en producción (ticket 10206 sin tarea), causado por `HelpdeskService` repitiendo
+un patrón ya identificado y corregido antes en `PerfilService.usaQuarkus()`.
+**Implicación:** en onprem/AWS, `environment.onprem.ts` fija `quarkusApiUrl: ''` A PROPÓSITO (mismo
+origen, URLs relativas, sin CORS). Cualquier código que escriba `if (!environment.quarkusApiUrl)
+return;` o similar está roto en ese entorno — un string vacío es *falsy* en JS, así que ese chequeo
+confunde "mismo origen" con "sin backend". El chequeo correcto es solo
+`environment.dataBackend === 'quarkus'`. Antes de escribir código nuevo que dependa de
+`quarkusApiUrl`, grep `!environment.quarkusApiUrl` en el archivo — es un patrón fácil de copiar sin
+darse cuenta del entorno donde realmente corre en producción.
+
+### [2026-09-10] `layout.ts` cierra TODOS los diálogos cuando `auth.session()` se pierde
+**Fuente:** `layout.ts:117-123` (`effect` que reacciona a `!auth.session()`), descubierto al depurar
+por qué un `ConfirmDialog` se cerraba solo en pruebas locales sin backend HelpDesk real.
+**Implicación:** cualquier diálogo abierto (incluidos los de confirmación) se cierra sin previo aviso
+si la sesión desaparece entre medio — normal en producción (token vencido de verdad), pero en un
+entorno de prueba SIN sesión real del HelpDesk la sesión puede ser inestable y cerrar diálogos que
+parecen "fallar" sin ser un bug del componente. Al depurar un diálogo que se cierra solo, revisar
+primero si `auth.session()` sigue viva antes de sospechar del propio componente.
+
+### [2026-09-10] `Solicitud.transferencia`/`Transferencia.despachadorDestino` no sirven para "quién canceló"
+**Fuente:** diseño de `TransferenciaResource.cancelar`/`SolicitudResource.cancelar`.
+**Implicación:** ninguna de las dos entidades tenía un campo "quién resolvió desde origen" (solo
+`despachadorDestino`, del lado receptor). Al cancelar no se intentó forzar ese campo: el estado
+`CANCELADA` + `resueltoEn` ya bastan para diferenciar. Si en el futuro se necesita auditar
+específicamente quién canceló, haría falta un campo nuevo (`Transferencia` no lo tiene hoy).
+
+### [2026-09-10] El client_id del ticket no es el "código" interno de Cliente en FitDesk
+**Fuente:** `LegacyWriteService.clienteBy()` (patrón ya existente) y `TicketEspejo.cliente`, al
+diseñar la resolución de tablero de `desde-ticket-asignado`.
+**Implicación:** el frontend solo conoce el `client_id` numérico del HelpDesk (`Ticket.clientId`), no
+el `codigo` (slug) que usa `Cliente.findByCodigo`. Cualquier endpoint nuevo que reciba un "cliente"
+desde el frontend a partir de un `Ticket` debe probar por `codigo` **y**, como respaldo, por
+`helpdesk_client_id` — igual que ya hace `clienteBy()`. Ignorar esto deja el mapeo cliente→equipo
+mudo para todo ticket cuyo cliente aún no tenga su código de FitDesk memorizado en el frontend.
+
+### [2026-09-10] `Actor.equiposComoResponsable` con alcance GLOBAL devuelve TODOS los equipos
+**Fuente:** `Actor.java:173-197`, al diseñar el fallback "equipo del actor" de la creación automática
+de tarea.
+**Implicación:** para un RESPONSABLE_EQUIPO de alcance GLOBAL (o análogo), "el primero por id" de ese
+conjunto es prácticamente arbitrario — no es realmente "su equipo". Se usa solo como último recurso,
+después de `equiposComoMiembro` (el caso normal y más significativo). Cualquier lógica que necesite
+"el equipo natural de una persona" debe preferir `equiposComoMiembro` primero.
+
+### [2026-09-09] El API propio y el proxy del HelpDesk comparten origen → la URL base no los distingue
+**Fuente:** diagnóstico del cierre de sesión al transferir (reporte de la dueña) + `helpdesk-auth.interceptor.ts`,
+`environment.cloud.ts` y el andamiaje on-prem (`quarkusApiUrl: ''`).
+**Implicación:** `req.url.startsWith(environment.helpdeskProxyUrl)` es cierto **para todas** las peticiones en
+producción (y con base vacía, literalmente para cualquier URL). Para saber si algo va al HelpDesk hay que mirar
+la **ruta** `/api/v1/`, no la base. Cualquier lógica futura que dependa de "¿es del HelpDesk?" debe usar la ruta.
+
+### [2026-09-09] La transferencia se autoriza contra el equipo del BOARD, no contra el del actor
+**Fuente:** `TransferenciaResource.crear` (`origen = tarea.board.equipo`) + `Actor.equiposGestionables`.
+**Implicación:** un Responsable puede ver una tarea (por alcance de lectura) y **no** poder transferirla. El
+selector de destino, además, **excluye el equipo origen**, así que cuando el origen es un equipo ajeno el usuario
+percibe que "falta un equipo en la lista". Cualquier acción sobre tareas de otros boards necesita el mismo
+chequeo por board, no el permiso global de rol.
+
+### [2026-09-09] MSC001 está cableado como ADMIN en el frontend Y en el backend
+**Fuente:** `auth.service.ts:54,70` (`esMSC001`, bootstrap) y `Actor.esAdmin` (`"MSC001".equalsIgnoreCase(hid)`).
+**Implicación:** **no se puede probar ninguna denegación de permisos con MSC001**: gobierna todos los equipos por
+definición, en las dos capas. Para ejercitar un 403 hay que usar otro actor (p. ej. mandando `X-Actor-Hid` de otro
+responsable) o un usuario real distinto.
+
+### [2026-09-09] `Tarea.ticketEspejo` es `@ManyToOne` sin `fetch = LAZY` → EAGER
+**Fuente:** `core/Tarea.java:33-36`, al valorar el coste de añadir `ticket` al DTO de Solicitud.
+**Implicación:** exponer el N° de ticket en cualquier DTO que ya materialice la `Tarea` **no cuesta consultas
+extra** ni necesita fetch join. Vale para Solicitud, Transferencia y Mensaje.
+
+### [2026-09-09] Medir contraste: `color-mix` se computa como `color(srgb ...)`, con valores 0–1
+**Fuente:** medición del chip del N° de ticket con Playwright.
+**Implicación:** un parser que asuma `rgb(0-255)` da números **falsos** (medí 2,79 donde eran 3,16). Lo fiable es
+resolver el color pintándolo en un `<canvas>` 1×1 sobre el fondo real y leer el píxel: así se manejan a la vez la
+notación nueva y el alfa. Con eso: el azul `--brand-dark` sobre el tinte del chip da **3,16** (insuficiente) y el
+`#01566f` que se dejó, **7,06**.
+
 ### [2026-07-18] Arquitectura de búsqueda/filtros de Tickets y Board (para futuros cambios)
 **Fuente:** implementación del lote UX (tickets.ts, board.ts, shell.service.ts).
 - Cada vista **publica su panel de filtros** al drawer del shell vía `ShellService.setFilters(templateRef)` (`afterNextRender`), y lo limpia en `ngOnDestroy`. El drawer del `Layout` los renderiza.
@@ -514,3 +688,465 @@ La búsqueda global (buscador del drawer) filtra la vista de Tickets, pero el ú
 
 ### [2026-08-03] Adjuntos bajaban SIN extensión (.xls/.zip no abrían) — CORS no exponía Content-Disposition
 En producción (Pages `zolmaria95.github.io` → Render, **cross-origin**) el navegador no podía leer el header **`Content-Disposition`**: no está en la *safelist* de CORS y el backend no lo exponía. `attachFilename(resp.headers.get('Content-Disposition'))` devolvía `null`→`''`, y `openAttachment` guardaba el archivo con el nombre de nuestra convención **sin extensión** (p. ej. `adjunto_29624-2`), así que Excel/Windows no abría el `.xls`/`.zip`. El proxy `HelpdeskProxyResource` SÍ reenvía el header (no está en `SKIP_RESP`) y el HelpDesk manda `filename*=UTF-8''adjunto_<ticket>_<N>.<ext>` — el problema era solo la exposición CORS. **Fixes:** (1) backend `quarkus.http.cors.exposed-headers=Content-Disposition` (raíz; cubre todos los tipos, incl. `application/octet-stream` que por MIME no se puede deducir; requiere redeploy Render). (2) frontend: `fetchAttachment` devuelve el `type` (Content-Type del blob, que SÍ es safelisted) y `openAttachment` deduce la extensión con `extFromMime()` (nuevo en `ticket-utils.ts`) cuando el nombre no la trae — alivio inmediato para tipos conocidos sin esperar al backend. Verificado E2E con Playwright (capturando `a.download`): `.zip` y `.png` ya con extensión; el octet-stream `-8` quedó sin extensión hasta el fix de backend. Commit `cd512c2`; front en Pages `5cf1957`; imagen backend subida (falta Manual Deploy en Render). **Dato reutilizable:** cualquier header de respuesta que el front necesite leer cross-origin debe ir en `exposed-headers`.
+
+### [2026-08-21] Recordatorio de reuniones: reutilizar el poller de tickets + ventana auto-expirable
+El poller global de recordatorios (`layout.ts#checkReminders`, cada 30 s en el shell, con sonido y **dedup
+diario por-navegador** `ALERTED_KEY`) ya existía para tickets; se **extendió** a reuniones sin duplicar
+infra. Nuevo helper `reunionesDue(now, todayStr)`: recorre `data.stories()`, filtra `tipo==='REUNION'` con
+`inicio`, `lead = recordatorioMin ?? 20` (`lead<=0` → sin recordatorio), `dispararEn = inicio − lead*60000`,
+y es **due** si `dispararEn <= now < inicio` (ventana ANTES del inicio → **auto-expira**, no re-alerta mañana;
+contrasta con los tickets, que se alertan por fecha del día). Relevancia: `dueño===yo` o (`esResponsableEquipo()`
+y `s.board ∈ boards()`). Dedup con clave propia `'reunion|'+id` (separada de la de tickets), ambos sets se
+marcan a la vez; los ítems de reunión y ticket se **mezclan en la MISMA alerta**. `ReminderItem` se generalizó
+con `kind?:'ticket'|'reunion'` (+ `titulo/hora/link`); "Ver pendientes" (→ /pendientes) solo si `hasTickets`.
+**Backend:** campo `tarea.recordatorio_min` (Flyway `V18`, nullable) + `Tarea.recordatorioMin` +
+`applyFields` (patrón V17: entero>0 o null) + `LegacyReadResource.stories()` lo emite. **Reutilizable:**
+para probar el poller sin depender del reloj, crear la reunión con `inicio` unos minutos en el futuro y un
+`recordatorioMin` grande (p. ej. `inicio=now+20`, `recordatorio=30` → `dispararEn=now−10`, ventana de 20 min);
+`new Date(s.inicio)` se parsea en la **zona horaria del navegador** (Playwright = local del Mac), así que el
+`inicio` debe ir en hora local. La ventana `now < inicio` la hace inmune a esperas largas del poll.
+
+### [2026-08-24] El preview de adjunto-imagen del ticket ocultaba "Enviar" (regresión de la regla de oro)
+Tras agregar el preview inline de adjuntos imagen, el **adjunto general del ticket** (`.ticket-attach`, dentro
+del bloque `Adjunto del ticket:`) se renderiza en `.conv-summary`, que es **`flex: 0 0 auto` (FIJO, no
+scrollea)**. El thumb grande (`.conv-thumb-img` 220×160) inflaba ese resumen fijo; con 1-2 imágenes + texto,
+empujaba la fila `.composer-actions` (botón **Enviar**) fuera del `:host` (`overflow:hidden`, `max-height:88dvh`)
+→ Enviar oculto. **Es un problema de adjunto, NO de texto** (el composer-input ya capaba a 30dvh con scroll).
+**Fix (solo `ticket-messages-dialog.scss`):** el preview del adjunto del ticket se hace **COMPACTO**
+(`.ticket-attach .conv-thumb-img` → max 40×64; descarga al lado con `position: static`) — **sigue visible, solo
+más pequeño** (la dueña: "el adjunto general debe estar visible, podría cambiar el tamaño, pero no
+desaparecer"); click → lightbox con la imagen completa. El preview grande se conserva para los **adjuntos de
+mensaje** (viven en `.conv-body`, que SÍ scrollea). Defensa en profundidad: `.ticket-attach` con
+`max-height:96px+overflow` (varias imágenes scrollean) y `.conv-summary` con `max-height:46dvh+overflow` PERO
+**SIN `min-height:0`** (con él, flexbox lo encogía a 67px y ocultaba el N°/título; sin él nunca baja de su
+contenido). **Verificado** (Playwright, ticket #33598 real vía proxy): 1280×800 y 390×844 → Enviar visible,
+thumb del adjunto visible (40px), resumen completo (257px, sin scroll), sin overflow horizontal. Pages
+`a498f8a`; GitLab front `251d8c9`.
+
+### [2026-08-25] Copiar mensaje + descargar conversación (PDF) en el modal de ticket
+Dos utilidades nuevas en `ticket-messages-dialog` (100% frontend): botón **copiar** por mensaje
+(`.conv-copy` en `.conv-meta`) y botón **descargar conversación** (PDF) en `.conv-head`.
+- **Gotcha reutilizable — portapapeles:** `navigator.clipboard.writeText` SOLO funciona en **contexto
+  seguro** (HTTPS/localhost). El build **on-prem se sirve por HTTP sobre IP** → ahí la API moderna está
+  bloqueada. Nuevo helper `core/clipboard.ts#copyText()` intenta la API moderna y cae a un fallback
+  `document.execCommand('copy')` (textarea temporal). Devuelve bool → feedback por snackbar.
+- **Texto con saltos:** `stripHtml` colapsa los `\n`; para copiar/PDF se agregó `htmlToText()` en
+  `ticket-utils.ts` (br/cierres de bloque → `\n`). Se usa en ambos.
+- **PDF (jsPDF, ya dependencia, import dinámico → lazy chunk ~9kB):** recorre **`sortedRaw` (TODOS los
+  mensajes, no `messages()` que es solo el bloque paginado cargado)** → el PDF incluye los mensajes
+  "anteriores" aún no renderizados. Encabezado (N°/asunto/cliente/estado/generado) + por mensaje
+  `fecha · autor` (regla #8: NOMBRE, `entry_user_name||entry_user_id`, nunca solo el código) + cuerpo
+  con `splitTextToSize` + `[Adjunto: nombre]` + paginación manual (`addPage` cuando `y` supera el alto).
+- **Verificación (Playwright, ticket #33598 real):** copiar → texto exacto del mensaje + snackbar; PDF →
+  se capturó el Blob (hook a `URL.createObjectURL`) y se inspeccionó inflando los streams FlateDecode con
+  `zlib` (stdlib): **18 líneas de mensaje vs 15 cargadas en el DOM** (confirma que exporta los no
+  cargados), 7 adjuntos, autores por nombre, 0 códigos filtrados. Móvil 390×844 sin desborde, Enviar
+  visible, sin errores de consola nuevos. Build cloud OK. **NO desplegado** (regla de la dueña: esperar
+  su luz verde) — ver [[regla-no-desplegar-sin-permiso]] equivalente en memoria.
+
+### [2026-09-01] Bug on-prem: guards `dataBackend==='quarkus' && !!quarkusApiUrl` rompen con URL vacía (same-origin)
+En `environment.onprem.ts` el `quarkusApiUrl` (y `helpdeskProxyUrl`) es **''** a propósito (mismo-origen →
+URLs relativas `/api/...`, sin CORS). Pero dos feature-detection guards exigían `!!url`, y `!!'' === false`:
+- `perfil.service.ts#usaQuarkus()` → **false** on-prem → se saltaban `cargarMiPerfil` / `cargarEquiposRevisar`
+  / `cargarFotos` → `equiposRevisar` vacío → la pestaña **Tickets/Equipo NO filtraba** por los clientes del
+  equipo (mandaba la consulta sin `client_id` → todos los clientes).
+- `data.service.ts#useQuarkus()` (y su wrapper público `usesQuarkus()`) → **false** on-prem → la capa de
+  datos caía al **Firebase legacy** (`environment.onprem` aún trae `firebaseDbUrl` real) en vez de Postgres →
+  el **board mostraba datos desactualizados** (del Firebase viejo). Y como el layout gatea
+  `mostrarAdmin = puedeAdministrar() && data.usesQuarkus()` y `mostrarBandeja = puedeTransferir() && usesQuarkus()`,
+  **MSC001 (ADMIN+RESPONSABLE_EQUIPO) no veía Administración ni Bandeja**.
+**Fix:** ambos guards → solo `environment.dataBackend === 'quarkus'` (base vacía = URLs relativas VÁLIDAS).
+Seguro en todos los entornos: solo `onprem` tenía quarkus+URL-vacía; `prod`/dev son firebase; cloud/quarkus
+tienen URL no vacía. **Verificado on-prem** (túnel, KIMA001): la consulta de tickets ahora lleva
+`client_id=50,64,...` (11 clientes Cuenca); el board pega a `/api/legacy/stories` (Postgres), 0 llamadas a
+firebaseio; roles MSC001 = `["ADMIN","RESPONSABLE_EQUIPO"]`. GitLab `servicios/fit-desk` `41f1b0d..36aa97b`;
+server reconstruido (solo frontend). **Reutilizable:** en el build same-origin, NUNCA uses `!!url` como
+feature-flag; chequea `dataBackend`/`dataBackend!=='firebase'`. La verificación local del on-prem solo cubrió
+login+boards → estos features (perfil/roles/board-source) se colaron; conviene probar E2E el resto on-prem.
+
+### [2026-09-02] Descargas de adjuntos: qué se comprobó en vivo y qué quedó SIN reproducir
+Reporte de la dueña en el nacional: los adjuntos **no descargan** — en la **app instalada** no pasa nada, y
+en el **navegador** baja "algo vacío o dañado"; al precisar, dijo **con peso pero SIN extensión**. Señaló el
+**ticket 33565**. Investigado en vivo contra producción (con su sesión ya abierta en el perfil de Playwright).
+
+**Medido en el nacional (ticket 33565, adjuntos 401251/401252):**
+- `content-disposition: attachment; filename*=UTF-8''adjunto_33565_1.docx` → **la cabecera SÍ llega y SÍ
+  trae la extensión**, y la leen igual `fetch` **y XHR** (que es lo que usa `HttpClient`). O sea que **no**
+  es el caso de jul-2026 (CORS ocultando el header): el nombre se resuelve bien.
+- `content-type: application/octet-stream` → `extFromMime` devuelve `''`. **La extensión depende hoy al
+  100% de `Content-Disposition`**: correcto pero frágil, está a una cabecera de romperse.
+- **En Chrome de escritorio la versión DESPLEGADA descarga bien:** al pulsar los adjuntos quedaron en disco
+  `adjunto-33565-1.docx` y `adjunto-general-33565.docx`, ambos `Microsoft Word 2007+` íntegros. **El síntoma
+  de la dueña NO se reprodujo en escritorio.**
+
+**Conclusión honesta:** el fallo es **específico de su entorno** (todo apunta a la **PWA instalada** — su
+primer síntoma: "no pasa nada"), no al camino de escritorio. La causa más probable es el **ancla suelta**: el
+código desplegado hace `document.createElement('a')` + `click()` **sin agregarla al DOM**; eso funciona en
+una pestaña normal pero es el patrón que falla en la ventana **standalone**. **Comprobado en vivo** que el
+mecanismo del fix (ancla **en el DOM**) descarga el mismo adjunto real de forma limpia:
+`PRUEBA-FIX-endom.docx`, 196369 bytes == los del servidor, CRC del zip OK. Lo que **no** se pudo probar es la
+PWA instalada en sí → **lo confirma la dueña al desplegar**.
+
+**Cambios hechos (defensivos; ninguno rompe el camino que ya funciona):**
+1. **Ancla dentro del DOM** al disparar la descarga (agregar → `click()` → quitar).
+2. **Red de seguridad para la extensión:** cascada `extDe()` = nombre real → MIME → **firma binaria**
+   (`extFromBytes` en `ticket-utils.ts`), que no depende de ninguna cabecera. Lee los primeros 8 KB;
+   reconoce PDF/PNG/JPG/GIF/WEBP/XML/RAR/7z/GZ, distingue los **ZIP de Office** (xlsx/docx/pptx por `xl/`,
+   `word/`, `ppt/` en el índice; si no, `.zip`) y los **OLE2 legacy** (xls/doc/ppt por el nombre de entrada
+   del directorio en **UTF-16LE**). Verificado: **12/12 formatos** con archivos reales.
+3. **⭐ Bug REAL e independiente (0 KB):** en el reporte de Vacaciones (`reporte-dialog`) se llamaba
+   `URL.revokeObjectURL(a.href)` **en la línea siguiente al `click()`** — carrera contra el navegador, que
+   aún no terminó de leer el blob → archivo **vacío**. Fix: revocar con retraso (10 s).
+
+**Regla reutilizable:** toda descarga va por `core/descargar.ts` (`descargarUrl`/`descargarBlob`). **Nunca**
+crear anclas sueltas ni revocar el blob justo después del `click()`, y **nunca** depender solo de
+`Content-Disposition` para el nombre.
+**Gotcha de instrumentación:** una descarga real **tumba la conexión del MCP de Playwright** (la página queda
+en `about:blank`); para depurar, guardar la evidencia en `sessionStorage` o mirar el disco después — y ojo:
+que la conexión se caiga **no** significa que la descarga fallara (de hecho sí ocurrió).
+
+### [2026-09-02] Tema oscuro: por qué no bastaba con `styles.scss` (dos trampas)
+Al verificar el tema oscuro antes de desplegarlo se vio que **el asunto del ticket era invisible**:
+tarjeta blanca + texto casi blanco → contraste **1.22** (mínimo legible AA = 4.5). Dos causas distintas,
+las dos reutilizables:
+
+1. **Estilos INLINE no los pisa ninguna hoja de estilos.** El tinte del encabezado y los badges de
+   estado/tipo salen de `[style.background]` calculado en TS (`clientStyle`, `estadoStyle`, `tipoStyle`)
+   con pasteles claros fijos. Ningún `html[data-theme='dark'] …` puede ganarles. **Fix:** esas funciones
+   reciben ahora un flag `oscuro` y devuelven variante oscura (fondo tintado oscuro + texto vivo); la
+   tarjeta las llama dentro de `computed()` leyendo la señal del `ThemeService` → **repinta sola** al
+   conmutar, sin recargar. `clientStyle` (compartida con el Board) mezcla sobre base oscura y con **menos
+   peso** (0.09 vs 0.14): sobre negro el acento satura antes.
+2. **⭐ `html[data-theme='dark']` NO funciona dentro del `.scss` de un componente.** Con encapsulación
+   emulada, Angular le pega el atributo del componente **también al `html`**:
+   `html[data-theme=dark][_ngcontent-%COMP%] .ticket-card[_ngcontent-%COMP%]` → jamás casa (el `<html>`
+   no lleva `_ngcontent`). **Hay que usar `:host-context(html[data-theme='dark'])`**, que compila a
+   `html[data-theme=dark] [_nghost-%COMP%] …`. Esta trampa es silenciosa: compila y no avisa.
+
+**Medido antes/después** (Tickets, 144 elementos de texto): asunto **1.22 → 14.34**; badges de estado/tipo
+**7.06–7.71**; N° de ticket (`.tc-id`) 1.12 → legible; elementos bajo 4.5 pasaron de **35 a 18**. Lo que
+queda por debajo es el badge de prioridad (blanco sobre naranja, **2.65**), que es **igual en modo claro**
+— defecto preexistente de diseño, no regresión del oscuro.
+**Alcance real:** esto cubre la tarjeta de Tickets. **Board, modales, Vacaciones y Administración siguen
+sin su paso a oscuro** (mismo patrón: buscar colores RAW y estilos inline en cada componente).
+**Método para auditar:** recorrer el DOM calculando el contraste real (color computado vs primer ancestro
+con fondo no transparente) — mucho más fiable que mirar capturas, donde un pastel a escala engaña.
+
+### [2026-09-02] Tema oscuro completo: las 8 secciones + pestañas de Administración
+Tras el hallazgo de que el oscuro solo cubría la tarjeta de Tickets, se hizo el paso completo. **Tres
+patrones** explican TODO lo que faltaba, y conviene buscarlos en ese orden al portar un componente:
+
+1. **Superficie clara + texto que ya viró.** El caso más común (Admin, Bandeja, Mi Panel, Semanal,
+   Vacaciones): el texto usa `--mat-sys-on-surface` (que vira solo) pero el contenedor seguía en `#fff`.
+   Se arregla oscureciendo la SUPERFICIE, no el texto.
+2. **Color heredado.** Elementos sin `color` propio (`.s-name`, `.s-count`, `.sem-assignee`) heredaban
+   tinta oscura de un ancestro. Se fija el `color` en el contenedor y heredan bien.
+3. **⭐ Estilos INLINE calculados en TS.** No los pisa ninguna hoja de estilos. Aparecieron **tres** veces:
+   badges de estado/tipo (`tickets-card-utils`), tinte del post-it (`clientStyle`, compartido Board+Tickets)
+   y la **paleta de 12 colores por consultor** de Semanal (`PALETTE` → se añadió `PALETTE_DARK`). El patrón
+   de solución es siempre el mismo: la función recibe un flag `oscuro` y el componente la llama dentro de
+   un `computed()` que lee la señal del `ThemeService` → **repinta solo al conmutar, sin recargar**.
+
+**Método que funcionó (y ahorra mucho tiempo):** no adivinar selectores leyendo el `.scss`, sino
+**preguntarle al DOM en caliente** qué ancestro pinta el fondo claro y qué color computa el texto. Así
+aparecieron `.vac-ferrow` (sin guion, no `.vac-fer-row` como sugería el .scss) y el color inline de Semanal.
+La auditoría debe **componer el alfa** subiendo por los ancestros: si no, un `rgba(255,255,255,0.035)` se
+lee como blanco opaco y genera falsos positivos (me pasó: reporté 35 fallos que no existían).
+
+**Resultado medido** (elementos de texto con contraste < 4.5 AA, y "ilegibles" = < 2.5):
+Tickets 0/0 · Semanal 0/0 · Pendientes 0/0 · Vacaciones 1/0 · Bandeja 1/1 · Admin 1/0 (y sus 4 pestañas
+internas —Regionales, Equipos, Clientes, Asignaciones— 1/0 cada una) · Mi Panel 5/0 · Board 139/24.
+Los 24 del Board son **un solo tipo**: el label del checkbox "Finalizado" **deshabilitado**, que Material
+baja al 38% (contraste 1.13). Es el estado deshabilitado, no una regresión — pero en oscuro desaparece del
+todo; queda como pendiente menor a decidir si se sube su alfa.
+**Pendiente:** el badge de prioridad (blanco sobre naranja, 2.65) está **igual en claro** — defecto de
+diseño preexistente, no del oscuro.
+
+### [2026-09-03] Alerta de novedades: abrir el ticket desde el popup + BUG que la dejaba muda
+**Petición:** al saltar la alerta de tickets nuevos, hacer clic en el N° debe **abrir el modal del ticket**
+(antes el número era un `<span>` inerte y el único botón llevaba a la lista sin filtrar).
+
+**Implementado** en `reminder-alert-dialog.ts`: el N° pasa a `<button class="ra-tk ra-tk-btn">` que abre
+`TicketMessagesDialog` **encima** de la alerta (la alerta NO se cierra → si llegaron varias novedades, se
+atiende una y las demás siguen a la vista). Aplica a las dos alertas con `#N` (novedades y recordatorios);
+las **reuniones no se tocan** (su `.ra-tk` muestra la hora, no un ticket).
+- **⚠️ El import de `TicketMessagesDialog` es DINÁMICO a propósito.** `ReminderAlertDialog` lo importa
+  `layout.ts` (el shell) → vive en el **bundle principal**; un import estático arrastraría el modal de
+  conversación entero a la carga inicial. Verificado: `main` 478 734 → 478 709 bytes (no creció).
+- **ESC jerárquico: no hizo falta tocar nada.** El `OverlayKeyboardDispatcher` del CDK entrega el keydown
+  solo al overlay superior → el 1er ESC cierra el ticket (que usa `wireDialogEsc`) y deja la alerta; el 2º
+  cierra la alerta. Comprobado.
+
+**⭐ BUG ENCONTRADO (preexistente y YA EN PRODUCCIÓN desde el Lote 1, `e2bf028`):**
+`perfil.cargarEquiposRevisar()` se llamaba **solo desde `tickets.ts`**, pero el poll de novedades vive en
+el shell (`layout.ts#checkNuevosTickets`) y depende de `perfil.equiposRevisar()` para saber qué clientes
+vigilar. Si el usuario **no abría la pestaña Tickets**, esa señal estaba vacía → `ids.length === 0` → el
+poll salía por el `return` temprano **sin alertar nunca**. Justo el escenario que la función debía cubrir
+("aparece en cualquier pantalla"): un responsable que entra al Board y se queda ahí no recibía nada.
+**Fix:** cargar `cargarEquiposRevisar()` en el shell, junto a `cargarMiPerfil()`.
+**Así se detectó:** al intentar provocar la alerta desde Vacaciones no saltaba en 160 s, y las **marcas de
+agua no se movían** — señal de que `revisar()` ni siquiera llegaba a ejecutarse (su primer `setWm` va
+después de consultar). Descartadas una a una las precondiciones (roles OK, 11 clientes del equipo OK,
+consulta de tickets 200 con 30 resultados) quedó el eslabón que faltaba.
+
+**Verificado E2E** (build `cloud` local + Playwright, sesión reutilizada sin login nuevo): la alerta salta
+**a los 20 s desde Vacaciones** (antes, nunca); clic en `#33565` abre ese ticket exacto con la alerta
+debajo (2 overlays); ESC jerárquico correcto; tema **oscuro** legible; **390×844** sin desborde
+(modal 374 px); **0 errores de consola**.
+**Truco para provocar la alerta en pruebas:** NO borrar las marcas de agua (la 1ª corrida haría *baseline*
+y no alerta) sino **atrasarlas** (`Date.now() - 86400000`), y hacerlo **fuera de la pestaña Tickets**,
+porque al ver "Equipo" corre `marcarVistos()` y las vuelve a poner al día. El dedup de popup es en memoria:
+para repetir la prueba hay que **recargar**.
+
+### [2026-09-07] El menú lateral se quedaba abierto al estrechar la ventana (realimentación de `opened`)
+**Síntoma (dueña):** en la **PWA instalada en el Mac**, al cambiar el tamaño de la ventana el panel de
+navegación quedaba abierto tapando el contenido. "Se arreglaba" al pulsar otra sección.
+
+**Causa raíz — una realimentación entre plantilla y señal.** En `layout.html`:
+`[opened]="opened()"` junto a `(openedChange)="drawerOpen.set($event)"`, y en `layout.ts`
+`opened = fixed() || drawerOpen()`. En escritorio `fixed()` es true → Material abre el drawer → emite
+`openedChange(true)` → **`drawerOpen` queda encendido**. Al estrechar, `fixed()` pasa a false pero
+`opened()` sigue dando true por `drawerOpen` → el panel permanece abierto, ahora en modo `over` con
+backdrop. Lo único que lo cerraba era `NavigationEnd` (de ahí que navegar lo "arreglara").
+**Fix:** un `effect` que observa `fixed()` y pone `drawerOpen` en false al cruzar a móvil — la misma línea
+que ya existía en la suscripción de navegación, aplicada también al cambio de breakpoint.
+
+**Dato que evitó perseguir un fantasma:** en **carga limpia a 390 px NO se reproduce** (drawer cerrado, 0
+desborde). El fallo es exclusivo del **redimensionado**, que es lo que hace quien usa la PWA en una ventana.
+Al depurar responsive, distinguir siempre "cargar estrecho" de "estrechar cargado": son caminos distintos.
+**Verificado** (build cloud + Playwright): 1440 abierto/side → 420 **cerrado**/over → ☰ abre → navegar cierra
+→ 1440 otra vez abierto/side, sin `inert` pegado ni desborde.
+
+**Descartado de paso:** abrir un modal **no** descuadra el layout (sin `cdk-global-scrollblock`, mismos
+anchos antes y después) — el síntoma "al saltar las alertas se daña la visualización" no se reprodujo y la
+dueña confirmó que ya no ocurre.
+
+### [2026-09-07] ⭐ Adjuntos que "no hacen nada": un `await` entre el clic y la descarga la bloquea
+**Síntoma (dueña, 3ª vez que lo reporta):** en la **PWA instalada (Chrome/Mac)**, pulsar un adjunto —o el
+"descargar general"— **no hace absolutamente nada**. Su pestaña de Red lo dejó claro: **ninguna petición a
+`/api/v1/attachments/…`**, solo el poll de fondo. Sin descarga, sin petición y sin error.
+
+**Causa: la introduje yo al arreglar la extensión.** `descargar()` pasó a ser `async` y quedó así:
+```ts
+const ext = await this.extDe(info);   // ← espera
+descargarUrl(info.url, …);            // ← ya fuera del gesto del usuario
+```
+Chrome **bloquea en silencio** las descargas que no salen de un gesto de usuario, y la ventana
+**standalone de una PWA es mucho más estricta que una pestaña** — por eso en Chrome de escritorio yo la veía
+funcionar y en su PWA no. Que no hubiera petición encaja perfecto: el blob ya estaba resuelto en
+`attachInfo`, así que el camino no necesita red; lo único que faltaba era el clic, y estaba bloqueado.
+
+**Fix:** `descargar()` vuelve a ser **síncrono** en el camino normal. La extensión se resuelve primero por
+las dos vías que NO esperan (nombre de `Content-Disposition` → MIME) y se dispara la descarga en el acto;
+solo si ambas fallan se cae al paso lento (leer la firma binaria), aceptando ahí la pérdida del gesto porque
+es preferible a bajar el archivo sin extensión. Mismo criterio en `openAttachment`.
+
+**Regla para no repetirlo:** entre el `(click)` y el `descargarUrl()` **no puede haber ningún `await`**.
+Si hace falta algo asíncrono, resolverlo ANTES (al abrir el diálogo, como ya hace `resolverAdjunto`) o
+asumir que esa rama puede no descargar en PWA.
+**Verificado:** clic en el chip → `adjunto_33565-1.docx` y en el general → `adjunto-general_33565.docx`,
+ambos **196 369 bytes, 13 entradas, `word/` presente y CRC OK** (idénticos al original).
+**Falta confirmar en la PWA instalada de la dueña** — es el entorno donde falla y el único que no puedo probar.
+
+### [2026-09-07] "Mi Panel" invisible para los responsables: rol del HelpDesk + usuario en duro
+**Reporte (dueña):** la pantalla **Mi Panel** no se muestra a los perfiles de *Responsable de Equipo*,
+y debería.
+
+**Causa:** el permiso era herencia del legacy —
+`puedeVerMiPanel = esScrumMaster() || esMSC001()` — o sea un **rol del HelpDesk** (`role === 'Scrum
+Master'`) más el **usuario MSC001 escrito en duro**. Ningún responsable lo veía salvo la dueña. Es el mismo
+error ya corregido en `puedeEliminarTarea` y `veTableroCompleto`, y advertido dos veces en este archivo:
+**los permisos salen de los roles de PLATAFORMA, nunca del `role_description` del HelpDesk.**
+**Fix:** `puedeVerMiPanel = esAdminPlataforma() || esResponsableEquipo()`, movido al bloque de roles de
+plataforma. `esScrumMaster` queda **sin usar** en toda la app.
+
+**⭐ El fallo de fondo era peor que el permiso.** Mi Panel filtraba sus tickets por **`CLIENTES_VALIDOS`**,
+una lista de clientes **escrita a mano** (los de Cuenca). Abrir el menú sin tocar eso habría hecho que un
+responsable de otra regional viera **los pendientes de Cuenca como si fueran suyos** — peor que no ver la
+pantalla. Es el mismo resto de nacionalización que se corrigió en la pestaña Equipo de Tickets en jul-2026,
+y que entonces se dejó anotado como pendiente en otras vistas.
+**Fix:** el alcance sale ahora de `perfil.equiposRevisar()` cruzado con el catálogo del HelpDesk mediante
+**`equipoClientIdsDe`** (el mismo helper que ya usan Tickets/Equipo y el poller de novedades del shell), y
+se filtra por **`clientId`** en vez de por nombre. Se añadió **selector "Equipo a revisar"** para el
+responsable regional (mismo texto y comportamiento que en Tickets). Si no hay ids (ADMIN sin equipo, o
+catálogo aún cargando) **no se filtra**: mejor el panorama completo que una pantalla vacía.
+
+**Lección:** al abrir una pantalla a más perfiles, revisar **qué datos filtra** antes que el permiso. El
+permiso es una línea; el alcance es lo que decide si la pantalla dice la verdad.
+**Verificado:** build limpio; el ítem aparece en el menú y la pantalla renderiza; y la cadena de filtrado
+probada con 5 casos deterministas sobre el helper real (responsable de Cuenca ve solo Cuenca, el de Quito
+solo Quito, el regional ve ambos, con el selector filtra a uno, y un admin sin equipos ve todo).
+**Sin verificar en vivo:** que un responsable que NO sea MSC001 lo vea — hace falta iniciar sesión con uno.
+**Pendiente relacionado:** `tickets.ts:212` (Estadísticas) **sigue usando `CLIENTES_VALIDOS`**.
+
+### [2026-09-07] "Estadísticas" ya no existía: lo que quedaba era código muerto con la última lista de Cuenca
+Al ir a corregir la sección de **Estadísticas** de Tickets —que según el ADR de jul-2026 "seguía usando
+`CLIENTES_VALIDOS`"— resultó que **la pantalla ya no existe**: no hay markup en `tickets.html` ni computeds
+de stats en `tickets.ts`. Se debió eliminar con la limpieza de agosto (Burndown/Progreso/Consultas).
+*(Corrige lo que yo mismo había afirmado un rato antes: no había nada que arreglar ahí.)*
+
+**Lo que sí quedaba, y sí valía la pena quitar:**
+1. `tickets.ts` → `validClientIds`, un `computed` **sin un solo llamador** cuyo único cometido era cruzar
+   `CLIENTES_VALIDOS` con el catálogo del API.
+2. `helpdesk.constants.ts` → **`CLIENTES_VALIDOS`**, la lista de ~18 clientes de Cuenca **escrita a mano**.
+   Con el punto 1 fuera, se quedaba sin usar: era **el último hardcode de Cuenca del frontend**.
+3. `tickets.scss` → todo el bloque `.hd-stats-*` (cabecera, grid, tabla) de una sección inexistente…
+   **incluida la regla de tema oscuro que yo mismo le había añadido** unos días antes, tematizando una
+   tabla que nadie pinta.
+
+**Por qué importa quitarlo y no solo dejarlo:** una lista de clientes de una regional, exportada y a mano,
+es una invitación a que alguien la reutilice "porque ya está ahí" — que es justo el origen del bug de Mi
+Panel del mismo día. Borrarla cierra esa puerta.
+
+**Verificado:** build limpio y **0 referencias** a `CLIENTES_VALIDOS`, `validClientIds` o `hd-stats` en todo
+el proyecto.
+**Anotado (preexistente, no lo causó el tema oscuro):** varios `.scss` superan el presupuesto de 8 kB del
+build (`ticket-messages-dialog` 14,17 kB, `transferencias-detalle` 13,13 kB, `vacaciones` 10,14 kB). Mis
+bloques oscuros aportan ~8 líneas de 885 en el peor caso: el exceso venía de antes. Son avisos, no errores.
+
+### [2026-09-07] Alertas de novedades: a quién le tocan, y no auto-avisarse
+**Reporte:** el responsable del equipo PRUEBA recibía alertas de tickets de **Cuenca**. Salieron **dos
+causas independientes**:
+
+**1. El alcance estaba mal planteado.** La alerta usaba `/perfil/equipos-clientes`, que devuelve
+**miembro ∪ responsable**. JPHP001 tiene una asignación **activa de ESPECIALISTA con alcance EQUIPO =
+CUENCA**: pertenece a ese equipo aunque no lo dirija, así que Cuenca entraba en su alcance.
+**Fix:** el endpoint marca cada equipo con **`esResponsable`** (aditivo, sin migración) y la alerta usa solo
+`equiposQueLidero`. Además se añadió un segundo origen —**tickets asignados a mí**, vía `assigned_user_id`—
+fusionado y deduplicado por número, y el poll dejó de estar restringido a responsables (los consultores
+también reciben lo suyo). Quien no dirige ningún equipo sigue haciendo **1 petición por ciclo**.
+
+**2. ⭐ El proxy de IT sirve respuestas del API CACHEADAS — incluidas las de permisos.** La asignación
+`RESPONSABLE_EQUIPO → PRUEBA` de JPHP001 **venció el 2026-07-20** y el backend la filtra bien, pero:
+`/api/admin/mis-roles/JPHP001` devuelve `["ESPECIALISTA"]` directo al backend y por el nginx del servidor,
+y **`["ESPECIALISTA","RESPONSABLE_EQUIPO"]` por el dominio**. Ni un cache-buster en la query lo evita.
+**Es infraestructura, fuera de nuestro código → reportado a IT.** Método de diagnóstico reutilizable:
+comparar la misma respuesta por los tres caminos (backend directo / nginx / dominio) aísla al culpable.
+
+**3. No auto-avisarse.** Nadie debe recibir alerta de su propia acción: si el asignado comenta, no se avisa
+a sí mismo; si escribe el cliente, sí. Si el responsable cambia el estado o reasigna, avisa al asignado,
+no a él.
+- El listado de tickets **no dice quién modificó** (solo `modified_date`), y `ticket_espejo` tampoco.
+- **`Ticket.usuarioUltimoMsg` NO sirve** aunque lo parezca: solo lo rellena `applyMessages`, llamada desde
+  un único sitio (`searchTicketRemote`), así que llega vacío en el listado; y **descarta a propósito** las
+  entradas automáticas, que son justo las de los cambios de estado/asignación.
+- **Verificado contra el API real** (era el riesgo del diseño): la entrada automática trae al usuario REAL,
+  no una cuenta de sistema → `system_message=true`, **`entry_user_id=DACM001`**, "El usuario DANIEL ARMANDO
+  DEL CASTILLO MONTENEGRO cambió el estado".
+- **Implementación:** el listado (1 petición) detecta candidatos por fecha; **solo para los de tipo
+  'actividad'** se piden los mensajes y se miran **todas** las entradas posteriores a la marca —no solo la
+  última, para que "comento yo y después el cliente" sí alerte—. Si todas son mías, silencio. Para los
+  'nuevo' basta `usuarioIngreso` del propio ticket: **sin petición extra**. Si no hay rastro que atribuir,
+  **se alerta igual**.
+
+**Verificado con datos reales de producción:** #33444 (último evento: DACM001 cambió el estado) → silencio
+para DACM001, alerta para los demás; #32976 (último: comentario de JPHP001) → silencio para JPHP001, alerta
+para los demás. Y con los datos reales de JPHP001, su alcance pasa de {Banco del Austro, COAC 4 Ríos, COAC
+Pruebas} a **solo {COAC Pruebas}**.
+
+### [2026-09-08] Tema oscuro: los `color-mix(..., #fff)` dejaban filas casi blancas con texto claro
+**Reporte:** en Administración, al pasar el ratón o seleccionar una fila, el texto blanco casi no se ve.
+
+**Causa:** hover y fila seleccionada no usan un color fijo, sino una **mezcla anclada a blanco**:
+`background: color-mix(in srgb, var(--brand) 4%, #fff)` → 96% blanco. Mi paso a oscuro cubrió las
+**superficies** (`.admin-card`, `.grid thead th`…) pero no estas **mezclas**, así que la fila se volvía casi
+blanca mientras el texto seguía claro. Medido: contraste **1.16** en hover y **1.09** en seleccionada.
+
+**No era un caso aislado:** el patrón aparecía **44 veces en 8 archivos** (Administración, Bandeja y sus 3
+subvistas, Vacaciones, y 2 diálogos). Además, `vacacion-dialog.ts` **no tenía bloque oscuro en absoluto** —
+se saltó entero en el paso a oscuro porque sus estilos son *inline* en el `.ts`, no un `.scss`.
+
+**Fix — parametrizar la base en vez de parchear regla por regla:** se sustituye el `#fff` del segundo
+argumento por **`var(--mix-base, #fff)`**, y cada componente define `--mix-base: #fff` en `:host` y
+`#1a222b` en su bloque `:host-context(...dark)`. Una variable por archivo arregla sus 6–9 reglas de golpe y
+deja el modo claro **idéntico**.
+**Resultado medido:** hover **1.16 → 12.6**, seleccionada **1.09 → 11.91**; en claro sigue en 9.32/8.75.
+
+**Lección para el próximo paso a oscuro:** buscar no solo colores fijos, sino **mezclas ancladas a un color
+claro** (`color-mix`, `lighten()`, `rgba(255,255,255,…)`) y **estilos inline en `.ts`**, que no aparecen al
+recorrer los `.scss`.
+
+### [2026-09-08] El N° de ticket de la alerta nunca fue azul: dos clases en el mismo elemento, gana la última
+
+El botón del N° en el popup de novedades lleva **dos clases a la vez**: `class="ra-tk ra-tk-btn"`.
+`.ra-tk` ponía el azul (`color: var(--mat-sys-primary)`) y `.ra-tk-btn` —definida **después** en la misma
+hoja y con la **misma especificidad** (una clase)— ponía `color: inherit` para "no pisar el azul". El
+resultado real es el contrario: **gana la última regla**, así que el N° heredaba el gris del texto de la
+fila (`rgb(170,182,194)` en oscuro) y nunca se vio azul. El comentario del código afirmaba lo contrario.
+
+**El orden del atributo `class` no decide nada**: entre reglas de igual especificidad manda el orden en el
+que aparecen en la hoja de estilos. Un `color: inherit` no es neutral, es una declaración que compite.
+
+**Fix:** poner el color **explícito** en `.ra-tk-btn` (`var(--mat-sys-primary, #048abf)`) en lugar de
+`inherit`, y subrayarlo **siempre** —no solo en `:hover`— porque en táctil no hay hover que delate que se
+puede pulsar. Medido: oscuro `#4fb8e0` sobre `#161d25` = **7.49**; claro `#00658d` sobre `#f0f4f9` = **5.86**.
+
+**Trampa aparte, ya pisada dos veces en esta sesión:** los estilos de este componente van en un
+**template literal** (`styles: \`...\``), así que un backtick dentro de un comentario CSS **corta la cadena**
+y el build revienta con errores de TypeScript que no señalan el comentario. En estos `.ts`, comentarios sin
+backticks.
+
+### [2026-09-08] Tema oscuro: fondos `#fff` FIJOS en campos de escritura (letra blanca sobre blanco)
+
+Reportado: en el modo oscuro, el área para responder una conversación de ticket era **blanca con la letra
+también blanca** — no se veía lo que se escribía.
+
+**Causa.** `.composer-input` tenía `background: #fff` **fijo**, mientras que `color` sí seguía al tema
+(`var(--mat-sys-on-surface)`, que en oscuro es claro). El bloque oscuro del archivo **sí mencionaba**
+`.composer-input`, pero solo para `border-color`: el fondo se quedó atrás. Contraste real: **1.0**.
+
+**No era un caso aislado.** El mismo patrón estaba en el buscador de **Bandeja → Trabajo del equipo** y
+**Bandeja → Solicitudes** (contraste **1.0** en los dos): `.td-search` es un contenedor con
+`background: #fff` y el `input` dentro va `transparent`, heredando un color claro. `transferencias-detalle`
+—hermano de esos dos— **sí tenía** la línea correcta (`.td-refresh, .td-search, .td-filter, .td-list-card
+{ background: #131a21; }`); a los otros dos solo se les copió el `::placeholder`. Copia-pega a medias.
+
+**Por qué el barrido anterior no lo cazó.** El de `--mix-base` buscaba `color-mix(..., #fff)`; esto es un
+`#fff` a secas, otro patrón. Y un grep ingenuo de "¿el selector aparece en el bloque oscuro?" da **falso
+negativo** cuando aparece pero para otra propiedad (justo el caso de `.composer-input`).
+
+**Cómo detectarlo bien** (lo que funcionó): análisis estático que comprueba si el bloque oscuro redefine
+**`background` para ese selector** —no si lo menciona— y, sobre todo, **medir contraste en el navegador en
+oscuro** recorriendo `input, textarea, select, [contenteditable]`, **componiendo el alpha hacia arriba**
+por los ancestros (si no, un `rgba` translúcido se lee como blanco opaco y salen falsos positivos, como ya
+pasó una vez). Ojo: la mayoría de campos viven en **diálogos y subrutas**, así que hay que navegarlas — un
+barrido de las pantallas principales dio "0 problemas" y sin embargo había tres bugs.
+
+**Trampa de verificación:** tras reconstruir, el navegador seguía sirviendo los chunks viejos y el contraste
+medía 1.0 igual. Antes de dar por malo un fix, confirmar que el bundle nuevo llegó (`grep` del color en
+`dist/app/browser/*.js` — los estilos de componente lazy viajan **en los chunks JS**, no en `styles.css`).
+
+**Medido tras el fix:** composer **1.0 → 13.13**; los dos buscadores de Bandeja **1.0 → 17.54**; modo claro
+sin cambios (21). De paso, en el composer los recuadros de código pasan a velo blanco en oscuro
+(`rgba(0,0,0,.05)` sobre fondo oscuro desaparecía).
+
+### [2026-09-08] ⭐ Estilos de componente NO alcanzan al HTML puesto con `[innerHTML]` (hace falta `::ng-deep`)
+
+Reportado: en oscuro **no se veía el texto de la conversación**. Medido: el contenedor `.conv-text` estaba
+bien (contraste 7.95), pero dentro había 22 elementos con **`style="color: rgb(0,0,0)"` en línea** →
+contraste **1.28**, texto negro sobre burbuja oscura.
+
+**De dónde salen esos colores.** El HelpDesk guarda el HTML del mensaje tal cual se pegó (Word/Outlook), y
+`serializePasted` (`ticket-utils.ts`) **los conserva a propósito** al pegar en el composer ("Conserva
+color/fondo/fuente como estilo saneado"). O sea: entran por las dos puntas, leyendo y escribiendo.
+
+**La trampa que costó un intento.** El primer arreglo —una regla normal en el bloque oscuro del `.scss`—
+**compiló y no aplicó**. Causa: el cuerpo del mensaje se inserta con `[innerHTML]`, así que sus nodos **no
+llevan el atributo `_ngcontent-*`** del componente y ninguna regla encapsulada les alcanza, por específica
+que sea. Verificado en el DOM: el contenedor tenía `_ngcontent-ng-c4012762155` y el hijo insertado **solo
+`style`**. La solución es `::ng-deep` (prefijado por `:host-context(...dark)` para no escaparse del
+componente ni del tema).
+
+**Cómo reconocerlo rápido:** si una regla está en el bundle (`grep` del selector en `dist/app/browser/*.js`)
+pero `getComputedStyle` no la refleja, sospecha de encapsulación + contenido dinámico, no de caché.
+*(Aunque el caché también engaña: en esta misma sesión el navegador sirvió chunks viejos dos veces y el
+contraste medía igual de mal. Comprobar siempre que el bundle nuevo llegó ANTES de dar el fix por malo.)*
+
+**Fix:** en oscuro se neutraliza el color en línea del cuerpo (`::ng-deep .conv-text *:not(a)` y lo mismo
+para `.composer-input`) para que herede el del tema. Medido: **1.28 → 7.95**; en claro el negro original se
+respeta (18.12). **Efecto secundario asumido:** en oscuro se pierde el color intencionado (un resalte en
+rojo se ve del color del tema). Un mensaje ilegible es peor que un resalte perdido.
+
+**Consecuencia latente:** las reglas que ya existían para `.conv-text :where(pre, code)` (fondo y borde de
+los bloques de código) **tampoco aplicaban nunca**, por el mismo motivo. No se tocan aquí, pero conviene
+saberlo si algún día se ven "sin estilo".

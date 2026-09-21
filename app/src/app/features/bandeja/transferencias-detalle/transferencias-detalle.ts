@@ -1,13 +1,17 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ConfirmDialog } from '../../board/confirm-dialog/confirm-dialog';
+import { abrirTicketDialog } from '../../../core/ticket-dialog';
 import { errorMsg } from '../../board/transferir/enviar-equipo-dialog';
 import {
   MiembroEquipo,
@@ -42,6 +46,7 @@ type TabKey = 'pendientes' | 'enviadas' | 'aceptadas' | 'rechazadas' | 'completa
 export class TransferenciasDetalle {
   private readonly svc = inject(TransferenciasService);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   readonly pendientes = signal<Transferencia[]>([]);
   readonly completadas = signal<Transferencia[]>([]);
@@ -156,12 +161,25 @@ export class TransferenciasDetalle {
     this.seleccionadaId.set(t.id);
   }
 
+  /** Abre la conversación del ticket asociado SIN salir de la Bandeja. */
+  abrirTicket(numero: string | null | undefined, ev?: Event): void {
+    ev?.stopPropagation(); // la fila entera es clicable: no seleccionarla además
+    if (!numero) return;
+    void abrirTicketDialog(this.dialog, { ticketId: numero });
+  }
+
   miembrosDe(equipoDestinoId: number | null): MiembroEquipo[] {
     return equipoDestinoId != null ? (this.miembros()[equipoDestinoId] ?? []) : [];
   }
 
   estadoLabel(e: Transferencia['estado']): string {
-    return { PENDIENTE: 'Pendiente', ACEPTADA: 'Aceptada', RECHAZADA: 'Rechazada', COMPLETADA: 'Completada' }[e] ?? e;
+    return {
+      PENDIENTE: 'Pendiente',
+      ACEPTADA: 'Aceptada',
+      RECHAZADA: 'Rechazada',
+      COMPLETADA: 'Completada',
+      CANCELADA: 'Cancelada',
+    }[e] ?? e;
   }
 
   /** "20/05/2025 10:32" (o "—"). */
@@ -199,6 +217,32 @@ export class TransferenciasDetalle {
       await this.cargar();
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo rechazar.'), 'OK', { duration: 5000 });
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  /** Retira un envío PROPIO mientras sigue pendiente de respuesta. */
+  async cancelar(t: Transferencia): Promise<void> {
+    const ok = await firstValueFrom(
+      this.dialog
+        .open(ConfirmDialog, {
+          data: {
+            title: 'Cancelar envío',
+            message: `¿Cancelar el envío de "${t.tareaTitulo || t.tareaCodigo}" a ${t.equipoDestino || 'el equipo destino'}? La tarea sigue en tu tablero.`,
+            confirmText: 'Cancelar envío',
+          },
+        })
+        .afterClosed(),
+    );
+    if (!ok) return;
+    this.busy.set('t-' + t.id);
+    try {
+      await this.svc.cancelarTransferencia(t.id);
+      this.snack.open('Envío cancelado.', 'OK', { duration: 3000 });
+      await this.cargar();
+    } catch (e: unknown) {
+      this.snack.open(errorMsg(e, 'No se pudo cancelar.'), 'OK', { duration: 5000 });
     } finally {
       this.busy.set(null);
     }

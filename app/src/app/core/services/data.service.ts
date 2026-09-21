@@ -10,7 +10,6 @@ export interface BoardInfo { codigo: string; nombre: string; equipo: string | nu
 export interface Story {
   id: string;
   board?: string; // codigo del board/tablero al que pertenece (multi-equipo)
-  sprint: string;
   status: string;
   priority: string;
   description: string;
@@ -29,15 +28,15 @@ export interface Story {
   clientName?: string; // nombre del cliente (de tareas con ticket) para no depender del catálogo
   // Tipo de tarea + reunión (V11).
   tipo?: string; // 'DESARROLLO_SOPORTE' (default) | 'REUNION'
-  subtipo?: string; // 'CAPACITACION' | 'PRESENTACION' (solo reunión)
+  subtipo?: string; // 'CAPACITACION' | 'PRESENTACION' | 'TRABAJO' (solo reunión)
   tema?: string;
   link?: string;
   inicio?: string; // ISO local "YYYY-MM-DDThh:mm"
   fin?: string;
+  recordatorioMin?: number; // reunión: minutos antes del inicio para la alerta (default 20 si no está)
   [k: string]: unknown;
 }
 
-export interface Sprint { id: string; name: string; status: string; capacity: number; goal?: string; start?: string; end?: string; [k: string]: unknown; }
 export interface TeamMember { id: string; name: string; role?: string; color?: string; [k: string]: unknown; }
 export interface Client { id: string; name: string; [k: string]: unknown; }
 
@@ -50,7 +49,6 @@ export interface Client { id: string; name: string; [k: string]: unknown; }
 @Injectable({ providedIn: 'root' })
 export class DataService {
   // ── Estado reactivo ──
-  readonly sprints = signal<{ sprints: Sprint[]; active: string }>({ sprints: [], active: '' });
   readonly stories = signal<Story[]>([]);
   readonly team = signal<TeamMember[]>([]);
   readonly clients = signal<Client[]>([]);
@@ -64,10 +62,12 @@ export class DataService {
   private _progress: { entries: any[] } = { entries: [] };
   private _queries: { queries: any[] } = { queries: [] };
   private _weekly: { weeks: Record<string, any> } = { weeks: {} };
+  private _turnoSenior: { weeks: Record<string, any> } = { weeks: {} };
   private _hdActions: Record<string, boolean> = {};
   private _hdNotes: Record<string, string> = {};
   private _solNotes: Record<string, string> = {};
   private _hdPendientes: Record<string, any> = {};
+  private _hdGuardados: Record<string, boolean> = {};
 
   private readonly recentWrites = new Map<string, number>();
 
@@ -77,7 +77,10 @@ export class DataService {
   }
   /** Fase 3: la capa de datos apunta a Quarkus (endpoints /api/legacy/*) en vez de Firebase. */
   private useQuarkus(): boolean {
-    return environment.dataBackend === 'quarkus' && !!environment.quarkusApiUrl;
+    // `quarkusApiUrl` vacío es VÁLIDO on-prem (mismo-origen: URLs relativas /api/legacy/*). Sin este
+    // fix, con `quarkusApiUrl: ''` el board leía del Firebase viejo (legacy) en vez de Postgres → datos
+    // desactualizados. Basta con que la fuente de datos sea Quarkus.
+    return environment.dataBackend === 'quarkus';
   }
   private dbUrl(path: string): string {
     return `${environment.firebaseDbUrl}/fit-daily/${path}.json`;
@@ -119,17 +122,10 @@ export class DataService {
     }
   }
 
-  /** Cambia el tablero de la vista: fija `currentBoard` y recarga SUS sprints (por board). */
-  async switchBoard(codigo: string): Promise<void> {
+  /** Cambia el tablero de la vista (fija `currentBoard`). El tablero es continuo (sin sprints). */
+  switchBoard(codigo: string): void {
     if (!codigo) return;
     this.currentBoard.set(codigo);
-    if (!this.useQuarkus()) return;
-    try {
-      const sp = await this.fbGet(`sprints?board=${encodeURIComponent(codigo)}`);
-      this.sprints.set(sp || { sprints: [], active: '' });
-    } catch {
-      this.sprints.set({ sprints: [], active: '' });
-    }
   }
 
   /**
@@ -163,6 +159,27 @@ export class DataService {
     const url = this.useQuarkus() ? this.apiUrl(path) : this.dbUrl(path);
     fetch(url, { method: 'DELETE', headers: this.actorHeaders() }).catch((err) => console.warn(`[write DELETE] ${path}:`, err));
   }
+  /**
+   * PATCH que SÍ se ESPERA y CONFIRMA (a diferencia de `fbPatch`, fire-and-forget). Lo usa la
+   * CREACIÓN de tareas: la tarjeta solo se da por guardada si el backend responde OK, así una
+   * tarea recién creada no se pierde si la app se cierra justo después (regla de oro: await+confirmar).
+   * Devuelve true si el backend aceptó el guardado.
+   */
+  private async fbPatchAwait(path: string, data: unknown): Promise<boolean> {
+    this.markStoryWrite(path, data);
+    const url = this.useQuarkus() ? this.apiUrl(path) : this.dbUrl(path);
+    try {
+      const r = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...this.actorHeaders() },
+        body: JSON.stringify(data),
+      });
+      return r.ok;
+    } catch (err) {
+      console.warn(`[write PATCH await] ${path}:`, err);
+      return false;
+    }
+  }
 
   // ── localStorage fallback ──
   // Devuelve `any` a propósito: el blob de localStorage es heterogéneo y se
@@ -179,13 +196,6 @@ export class DataService {
     // Modo Quarkus → PUT al backend; Firebase → PUT a Firebase; si no, localStorage.
     if (this.useQuarkus() || this.fbReady()) this.fbPut(key, data);
     else this.lsPut(key, data);
-  }
-  /** Persiste el nodo sprints del TABLERO ACTUAL (en Quarkus el PUT lleva ?board=). */
-  private persistSprints(node: unknown): void {
-    const b = this.currentBoard();
-    const key = this.useQuarkus() && b ? `sprints?board=${encodeURIComponent(b)}` : 'sprints';
-    if (this.useQuarkus() || this.fbReady()) this.fbPut(key, node);
-    else this.lsPut('sprints', node);
   }
   private async loadLocal(path: string): Promise<any> {
     const r = await fetch(path);
@@ -217,8 +227,8 @@ export class DataService {
     if (this.useQuarkus()) {
       await this.initFromQuarkus();
     } else if (this.fbReady()) {
-      const [fbSp, fbSt, fbPr, fbQu, fbWk, fbHdA, fbHdN, fbSolN, fbHdP] = await Promise.all([
-        this.fbGet('sprints'), this.fbGet('stories'), this.fbGet('progress'), this.fbGet('queries'),
+      const [fbSt, fbPr, fbQu, fbWk, fbHdA, fbHdN, fbSolN, fbHdP] = await Promise.all([
+        this.fbGet('stories'), this.fbGet('progress'), this.fbGet('queries'),
         this.fbGet('weeklySupport'), this.fbGet('hdActions'), this.fbGet('hdNotes'), this.fbGet('solNotes'),
         this.fbGet('hdPendientes'),
       ]);
@@ -235,12 +245,10 @@ export class DataService {
       this.team.set(localUsers.users || []);
       this.fbPut('users', localUsers);
 
-      const [sp, pr, qu] = await Promise.all([
-        seedOrLoad(fbSp, 'data/sprints.json', 'sprints'),
+      const [pr, qu] = await Promise.all([
         seedOrLoad(fbPr, 'data/progress.json', 'progress'),
         seedOrLoad(fbQu, 'data/queries.json', 'queries'),
       ]);
-      this.sprints.set(sp);
       this._progress = pr;
       this._queries = qu;
 
@@ -267,14 +275,12 @@ export class DataService {
       if (!fbHdP && Object.keys(this._hdPendientes).length) this.fbPut('hdPendientes', this._hdPendientes);
     } else {
       const saved = this.lsGet();
-      const [sp, st, pr, qu, tm] = await Promise.all([
-        saved.sprints ?? this.loadLocal('data/sprints.json'),
+      const [st, pr, qu, tm] = await Promise.all([
         saved.stories ?? this.loadLocal('data/stories.json'),
         saved.progress ?? this.loadLocal('data/progress.json'),
         saved.queries ?? this.loadLocal('data/queries.json'),
         this.loadLocal('data/users.json'),
       ]);
-      this.sprints.set(sp);
       this.stories.set(st.stories || []);
       this._progress = pr;
       this._queries = qu;
@@ -293,12 +299,11 @@ export class DataService {
    * No escribe nada en Firebase (regla de oro del Strangler Fig).
    */
   private async initFromQuarkus(): Promise<void> {
-    const [sp, st, pr, qu, wk, hdA, hdN, solN, hdP, us] = await Promise.all([
-      this.fbGet('sprints'), this.fbGet('stories'), this.fbGet('progress'), this.fbGet('queries'),
+    const [st, pr, qu, wk, hdA, hdN, solN, hdP, us] = await Promise.all([
+      this.fbGet('stories'), this.fbGet('progress'), this.fbGet('queries'),
       this.fbGet('weeklySupport'), this.fbGet('hdActions'), this.fbGet('hdNotes'), this.fbGet('solNotes'),
       this.fbGet('hdPendientes'), this.fbGet('users'),
     ]);
-    this.sprints.set(sp || { sprints: [], active: '' });
     this.stories.set(this.normalizeStories(st));
     this._progress = pr || { entries: [] };
     this._queries = qu || { queries: [] };
@@ -326,90 +331,78 @@ export class DataService {
     }
   }
 
-  // ── Sprints ──
-  getSprints() { return this.sprints(); }
-  getActiveSprint(): Sprint | undefined { const s = this.sprints(); return s.sprints.find((x) => x.id === s.active); }
-  setActiveSprint(id: string): void { const s = { ...this.sprints(), active: id }; this.sprints.set(s); this.persistSprints(s); }
-
-  /** Crea un sprint nuevo: cierra el activo y migra las tareas no aprobadas. Port de data.js. */
-  addSprint(data: Partial<Sprint>): Sprint {
-    const cur = this.sprints();
-    const nums = cur.sprints.map((s) => parseInt(String(s.id).replace('SP-', ''), 10)).filter((n) => !isNaN(n));
-    const nextNum = Math.max(0, ...nums) + 1;
-    const nextId = 'SP-' + String(nextNum).padStart(2, '0');
-    const prevId = cur.active;
-
-    const sprint: Sprint = { id: nextId, name: `Sprint ${nextNum}`, status: 'active', capacity: 0, ...data };
-    const sprints = cur.sprints.map((s) => (s.status === 'active' ? { ...s, status: 'completed' } : s));
-    sprints.push(sprint);
-    const next = { active: nextId, sprints };
-    this.sprints.set(next);
-    this.persistSprints(next);
-
-    // Migrar tareas del sprint anterior que NO estén done-aprobadas — SOLO del tablero actual
-    // (los codigos de sprint son únicos por board: otro board puede tener el mismo prevId).
-    const board = this.currentBoard();
-    const migrated = this.stories().map((t) =>
-      t.sprint === prevId && (!board || (t.board || 'CUENCA') === board) && !(t.status === 'done' && t.approved)
-        ? { ...t, sprint: nextId } : t,
-    );
-    this.stories.set(migrated);
-    this.persistMigratedStories(migrated, prevId, nextId);
-    return sprint;
-  }
-
-  updateSprint(id: string, data: Partial<Sprint>): void {
-    const cur = this.sprints();
-    const sprints = cur.sprints.map((s) => (s.id === id ? { ...s, ...data } : s));
-    const next = { ...cur, sprints };
-    this.sprints.set(next);
-    this.persistSprints(next);
-  }
-
-  /** Borra un sprint (no si es el único). Reasigna el activo. Las tareas NO se eliminan. */
-  deleteSprint(id: string): void {
-    const cur = this.sprints();
-    if (cur.sprints.length <= 1) return;
-    const sprints = cur.sprints.filter((s) => s.id !== id);
-    const active = cur.active === id ? sprints[sprints.length - 1].id : cur.active;
-    const next = { active, sprints };
-    this.sprints.set(next);
-    this.persistSprints(next);
-  }
-
-  private persistMigratedStories(all: Story[], prevId: string, nextId: string): void {
-    if (this.fbReady() || this.useQuarkus()) {
-      const patch: Record<string, string> = {};
-      all.forEach((t) => { if (t.sprint === nextId) patch[`${t.id}/sprint`] = nextId; });
-      if (Object.keys(patch).length) this.fbPatch('stories/stories', patch);
-    } else {
-      this.lsPut('stories', { stories: all });
-    }
-  }
-
   // ── Tasks (stories) ──
   getAllStories(): Story[] { return this.stories(); }
-  /** Stories de un sprint, acotadas al tablero actual (los codigos de sprint son únicos POR board). */
-  getStoriesBySprint(id: string): Story[] {
+  /** Tareas del TABLERO ACTUAL (tablero continuo por equipo; ya no hay sprints). */
+  getStoriesByBoard(): Story[] {
     const b = this.currentBoard();
-    return this.stories().filter((s) => s.sprint === id && (!b || (s.board || 'CUENCA') === b));
+    return this.stories().filter((s) => !b || (s.board || 'CUENCA') === b);
   }
 
-  addStory(data: Partial<Story>): Story {
-    const arr = this.stories();
-    // Id TA-NNN del set GLOBAL (codigo único en todos los boards).
-    const nums = arr.map((s) => parseInt(s.id.replace('TA-', ''), 10)).filter((n) => !isNaN(n));
-    const next = 'TA-' + String(Math.max(0, ...nums) + 1).padStart(3, '0');
-    const task: Story = {
-      id: next, board: this.currentBoard() || 'CUENCA', sprint: this.sprints().active,
+  /**
+   * Crea una tarea con GUARDADO CONFIRMADO e ID DEL SERVIDOR. Dos problemas que resuelve:
+   *  1) Antes se agregaba optimista y se persistía en 2º plano (fire-and-forget): si la app se cerraba
+   *     justo después, la tarjeta se perdía (nunca llegaba a la BD) — incidente TA-230.
+   *  2) El id TA-NNN lo calculaba el navegador (max+1 de SU vista): una vista desactualizada podía
+   *     chocar y PISAR la tarea de otro.
+   * Ahora: en modo Quarkus se hace **POST** y el BACKEND asigna el id de forma atómica; la tarjeta se
+   * agrega al tablero SOLO cuando el backend confirma. Si el backend aún no tiene el POST (no desplegado),
+   * hace FALLBACK al PATCH con id local pero igualmente ESPERADO+confirmado. Si falla, LANZA (el modal avisa).
+   */
+  async addStory(data: Partial<Story>): Promise<Story> {
+    const nextLocalId = () => {
+      const nums = this.stories().map((s) => parseInt(s.id.replace('TA-', ''), 10)).filter((n) => !isNaN(n));
+      return 'TA-' + String(Math.max(0, ...nums) + 1).padStart(3, '0');
+    };
+    const base: Story = {
+      id: '', board: this.currentBoard() || 'CUENCA',
       status: 'todo', priority: 'media', description: '',
       assignee: null, client: null, ticket: '', dueDate: '', points: 1, progress: 0,
       approved: false, approvedDate: null, waitingClient: false, waitingDate: null, ...data,
     };
-    this.stories.set([...arr, task]);
-    if (this.fbReady() || this.useQuarkus()) this.fbPatch('stories/stories', { [task.id]: task });
-    else this.lsPut('stories', { stories: this.stories() });
+    let task: Story;
+    if (this.useQuarkus()) {
+      const serverId = await this.fbPostStory(base); // id atómico del backend (o null si no está el endpoint)
+      if (serverId) {
+        task = { ...base, id: serverId };
+      } else {
+        // Fallback (backend sin POST o error puntual): id local + PATCH ESPERADO (no fire-and-forget).
+        task = { ...base, id: nextLocalId() };
+        const ok = await this.fbPatchAwait('stories/stories', { [task.id]: task });
+        if (!ok) throw new Error('No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.');
+      }
+    } else if (this.fbReady()) {
+      task = { ...base, id: nextLocalId() };
+      const ok = await this.fbPatchAwait('stories/stories', { [task.id]: task });
+      if (!ok) throw new Error('No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.');
+    } else {
+      task = { ...base, id: nextLocalId() };
+      this.lsPut('stories', { stories: [...this.stories(), task] });
+    }
+    // Solo tras confirmar el guardado se muestra en el tablero.
+    this.stories.set([...this.stories(), task]);
     return task;
+  }
+
+  /**
+   * POST de creación: el backend asigna el id de forma atómica y lo devuelve. Retorna el id, o `null`
+   * si el endpoint no existe (backend viejo) o falla — el caller hace fallback al PATCH confirmado.
+   */
+  private async fbPostStory(task: Story): Promise<string | null> {
+    this.markStoryWrite('stories/stories');
+    try {
+      const r = await fetch(this.apiUrl('stories/stories'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...this.actorHeaders() },
+        body: JSON.stringify(task),
+      });
+      if (!r.ok) return null; // incl. 404/405 (backend sin el POST) → el caller hace fallback
+      const created = await r.json().catch(() => null);
+      return (created && created.id) || null;
+    } catch (err) {
+      console.warn('[create POST] stories:', err);
+      return null;
+    }
   }
 
   updateStoryStatus(id: string, status: string) { this.patchStoryField(id, { status }); }
@@ -429,6 +422,13 @@ export class DataService {
   setWaitingClient(id: string, waiting: boolean) {
     this.patchStoryField(id, { waitingClient: waiting, waitingDate: waiting ? new Date().toISOString().split('T')[0] : null });
   }
+  /**
+   * Escritura coalescida: aplica VARIOS campos de una tarea en UN SOLO PATCH.
+   * Úsalo cuando una misma tarea cambia varios campos a la vez (p. ej. la sincronización
+   * con el HelpDesk) para no disparar PATCH concurrentes a la misma fila (el backend hace
+   * read-modify-write y dos PATCH simultáneos a la misma tarea se pisan → 500 + update perdido).
+   */
+  patchStory(id: string, fields: Partial<Story>): void { this.patchStoryField(id, fields); }
 
   deleteStory(id: string): void {
     this.stories.set(this.stories().filter((s) => s.id !== id));
@@ -505,18 +505,64 @@ export class DataService {
       return [];
     }
   }
+  /**
+   * PUT dirigido a UN solo pendiente (nunca reconcilia el resto del mapa). Incidente 2026-09-17:
+   * `setHdPendiente`/`updateHdPendiente`/`removeHdPendiente` reenviaban TODO `_hdPendientes` por
+   * el PUT reconciliador de `/hdPendientes` — si ese mapa local no reflejaba fielmente el estado
+   * real del servidor en ese momento (sesión recién cargada, otra pestaña vieja, etc.), el backend
+   * "reconciliaba" borrando TODOS los pendientes reales del actor ausentes del envío. Pasó tres
+   * veces (crear en ráfaga, eliminar uno, postergar uno). Fire-and-forget a propósito, igual que el
+   * resto de los overlays legacy — la actualización optimista de `_hdPendientes` y de la señal local
+   * (en `pendientes.ts`) es la que se ve al instante.
+   */
+  private putHdPendiente(ticketId: string, data: unknown): void {
+    const url = `${this.apiUrl('hdPendientes')}/${encodeURIComponent(ticketId)}`;
+    fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...this.actorHeaders() }, body: JSON.stringify(data) })
+      .catch((err) => console.warn(`[write PUT] hdPendientes/${ticketId}:`, err));
+  }
   setHdPendiente(ticketId: string, data: any) {
-    this._hdPendientes[String(ticketId)] = { ...data, addedAt: new Date().toISOString() };
-    this.persist('hdPendientes', this._hdPendientes);
+    const value = { ...data, addedAt: new Date().toISOString() };
+    this._hdPendientes[String(ticketId)] = value;
+    this.putHdPendiente(ticketId, value);
   }
   /** Merge parcial sobre un pendiente (fecha/hora, pausa, lastAlerted). */
   updateHdPendiente(ticketId: string, patch: Record<string, any>) {
     const cur = this._hdPendientes[String(ticketId)];
     if (!cur) return;
-    this._hdPendientes[String(ticketId)] = { ...cur, ...patch };
-    this.persist('hdPendientes', this._hdPendientes);
+    const value = { ...cur, ...patch };
+    this._hdPendientes[String(ticketId)] = value;
+    this.putHdPendiente(ticketId, value);
   }
-  removeHdPendiente(ticketId: string) { delete this._hdPendientes[String(ticketId)]; this.persist('hdPendientes', this._hdPendientes); }
+  /** Borrado AWAITED de UN pendiente — mismo endpoint dedicado, mismo motivo (ver arriba). */
+  async removeHdPendiente(ticketId: string): Promise<void> {
+    const url = `${this.apiUrl('hdPendientes')}/${encodeURIComponent(ticketId)}`;
+    try {
+      await fetch(url, { method: 'DELETE', headers: this.actorHeaders() });
+    } finally {
+      delete this._hdPendientes[String(ticketId)];
+    }
+  }
+
+  // ── Guardados personales de tickets (100% del dueño, sin visibilidad de equipo) ──
+  getHdGuardados() { return this._hdGuardados; }
+  async loadHdGuardados(): Promise<void> {
+    if (!this.useQuarkus()) return;
+    try {
+      this._hdGuardados = (await this.fbGet('hdGuardados')) || {};
+    } catch {
+      /* silencioso: la ventana de Guardados igual funciona con lo que ya había en memoria */
+    }
+  }
+  /** Toggle AWAITED (no fire-and-forget, a diferencia de hdActions/hdPendientes): es un endpoint
+   *  propio de alternar, no un reemplazo del mapa completo. Devuelve el estado resultante. */
+  async toggleGuardado(ticketId: string): Promise<boolean> {
+    const url = `${this.apiUrl('hdGuardados')}/${encodeURIComponent(ticketId)}`;
+    const r = await fetch(url, { method: 'PUT', headers: this.actorHeaders() });
+    if (!r.ok) throw new Error(`toggle guardado error ${r.status}`);
+    const { guardado } = await r.json();
+    if (guardado) this._hdGuardados[String(ticketId)] = true; else delete this._hdGuardados[String(ticketId)];
+    return guardado;
+  }
   getSolNotes() { return this._solNotes; }
   setSolNote(ticketId: string, note: string) {
     if (note && note.trim()) this._solNotes[ticketId] = note.trim(); else delete this._solNotes[ticketId];
@@ -583,6 +629,60 @@ export class DataService {
     if (!tickets) return;
     tickets.splice(idx, 1);
     this.persistWeekly();
+  }
+
+  // ── Senior de Turno (2 roles por semana: Mesa de Ayuda + Emergentes) ──
+  // Mismo patrón que "Weekly support" de arriba (rotación por equipo, `?equipo=`), pero con 2
+  // roles en vez de 1 y asignación abierta a CUALQUIER empleado (no solo del equipo) — por eso no
+  // hay `teamMembers()` propio acá: el picker de la UI usa `HelpdeskService.hdUsers()` (catálogo
+  // completo). Solo Quarkus: es una función nueva, sin dato histórico en Firebase que migrar.
+  //
+  // ⚠️ Los endpoints `turnoSenior?equipo=` y `turnoSenior/hoy` son NUEVOS — no existen todavía en
+  // el backend (`fit-desk-api`, repo aparte). Ver `docs/contrato-api.md` para el contrato
+  // documentado y `docs/decisiones.md` para la nota de la dependencia pendiente.
+  private _turnoSeniorTeam = '';
+  async loadTurnoSenior(equipoCodigo: string): Promise<void> {
+    this._turnoSeniorTeam = equipoCodigo || '';
+    if (!this.useQuarkus()) { this._turnoSenior = { weeks: {} }; return; }
+    try {
+      const node = this._turnoSeniorTeam ? `turnoSenior?equipo=${encodeURIComponent(this._turnoSeniorTeam)}` : 'turnoSenior';
+      this._turnoSenior = (await this.fbGet(node)) || { weeks: {} };
+    } catch {
+      this._turnoSenior = { weeks: {} };
+    }
+  }
+  private persistTurnoSenior(): void {
+    if (!this.useQuarkus()) return;
+    const node = this._turnoSeniorTeam ? `turnoSenior?equipo=${encodeURIComponent(this._turnoSeniorTeam)}` : 'turnoSenior';
+    this.fbPut(node, this._turnoSenior);
+  }
+
+  getTurnoSenior() { return this._turnoSenior.weeks || {}; }
+  getTurnoSeniorAssignment(key: string) { return this._turnoSenior.weeks[key] || null; }
+  /** Guarda si al menos uno de los 2 roles viene lleno (se permite cubrir un solo rol primero). */
+  setTurnoSeniorAssignment(key: string, roles: { mesaAyuda: string; emergentes: string }, notes = '') {
+    const mesaAyuda = (roles.mesaAyuda || '').trim();
+    const emergentes = (roles.emergentes || '').trim();
+    if (!mesaAyuda && !emergentes) return this.clearTurnoSeniorAssignment(key);
+    this._turnoSenior.weeks[key] = { mesaAyuda, emergentes, notes: notes || '', updatedAt: new Date().toISOString() };
+    this.persistTurnoSenior();
+  }
+  clearTurnoSeniorAssignment(key: string) {
+    delete this._turnoSenior.weeks[key];
+    this.persistTurnoSenior();
+  }
+
+  /** Agregado sobre TODOS los equipos: ¿el actor logueado está de turno HOY? Para el punto rojo
+   *  del menú — la asignación es abierta, así que puede tocarle un equipo al que ni pertenece, y
+   *  el menú es visible sin importar qué pantalla se esté viendo (no alcanza con mirar solo el
+   *  equipo seleccionado en la propia pantalla de Senior de Turno). */
+  async checkTurnoSeniorHoy(): Promise<{ deTurno: boolean; rol?: 'mesaAyuda' | 'emergentes'; equipo?: string; equipoNombre?: string }> {
+    if (!this.useQuarkus()) return { deTurno: false };
+    try {
+      return (await this.fbGet('turnoSenior/hoy')) || { deTurno: false };
+    } catch {
+      return { deTurno: false };
+    }
   }
 
   // ── Real-time sync (SSE de Firebase + polling de respaldo) ──

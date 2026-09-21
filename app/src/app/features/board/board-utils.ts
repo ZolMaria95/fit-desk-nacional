@@ -38,6 +38,31 @@ export function statusFromTicketEstado(estado: string): { status: Status; waitin
   return { status: 'todo' };
 }
 
+/**
+ * Patch de una `Story` derivado del ESTADO del ticket (columna + badge de estatus + flags),
+ * comparando contra el estado ACTUAL de la tarea para incluir SOLO lo que cambia. Lo comparten
+ * el sync del board (`syncTicketStatuses`) y la reconciliación viva tras una mutación confirmada
+ * (`reconcileTicketLive`), para no duplicar el mapeo estado→columna. El check "Finalizado" lo
+ * define SIEMPRE el ticket (approved true/false), no el usuario.
+ */
+export function storyPatchFromEstado(story: Story, estado: string): Partial<Story> {
+  const patch: Partial<Story> = {};
+  const e = String(estado || '');
+  if (!e) return patch;
+  if (story.hdEstatus !== e) patch.hdEstatus = e;
+  const m = statusFromTicketEstado(e);
+  if (story.status !== m.status) patch.status = m.status;
+  if (m.approved !== undefined && !!story.approved !== m.approved) {
+    patch.approved = m.approved;
+    patch.approvedDate = m.approved ? new Date().toISOString().split('T')[0] : null;
+  }
+  if (m.waiting && !story.waitingClient) {
+    patch.waitingClient = true;
+    patch.waitingDate = new Date().toISOString().split('T')[0];
+  }
+  return patch;
+}
+
 export type Priority = 'alta' | 'media' | 'baja';
 /**
  * Etiqueta CUALITATIVA de la prioridad. La usan la tarjeta de una tarea SIN ticket
@@ -113,6 +138,11 @@ export function shortName(name: string): string {
 const POSTIT_INK = '#2b2b3a'; // tinta oscura para legibilidad sobre pastel
 const POSTIT_BASE = '#fffdf2'; // crema base del post-it
 const NEUTRAL_ACCENT = '#9aa0a6'; // tareas sin cliente
+// Tema oscuro: la misma idea (tinte del cliente sobre una base), pero la base es una
+// superficie oscura y la tinta clara. El peso de la mezcla es MENOR que en claro: sobre
+// negro, un 14% del acento ya satura demasiado y tapa el texto.
+const POSTIT_INK_DARK = '#e3e9ef';
+const POSTIT_BASE_DARK = '#151c24';
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
@@ -145,10 +175,13 @@ export interface ClientStyle {
  * uno estable generado por id (clientes del API que no traen color). Sin cliente
  * → crema neutro.
  */
-export function clientStyle(client: { id?: string; color?: string } | undefined): ClientStyle {
-  if (!client) return { bg: blend(NEUTRAL_ACCENT, POSTIT_BASE, 0.14), accent: NEUTRAL_ACCENT, ink: POSTIT_INK };
+export function clientStyle(client: { id?: string; color?: string } | undefined, oscuro = false): ClientStyle {
+  const base = oscuro ? POSTIT_BASE_DARK : POSTIT_BASE;
+  const ink = oscuro ? POSTIT_INK_DARK : POSTIT_INK;
+  const peso = oscuro ? 0.09 : 0.14;
+  if (!client) return { bg: blend(NEUTRAL_ACCENT, base, peso), accent: NEUTRAL_ACCENT, ink };
   const accent = client.color || colorFor(client.id || '');
-  return { bg: blend(accent, POSTIT_BASE, 0.14), accent, ink: POSTIT_INK };
+  return { bg: blend(accent, base, peso), accent, ink };
 }
 
 /** Rotación estable -2°..2° a partir del id (efecto post-it desordenado). */
@@ -173,18 +206,29 @@ export function resolveMember(
   id: string | null | undefined,
   team: TeamMember[],
   hdUsers: { id: string; name: string; role?: string }[] = [],
+  /** Color identificativo de la persona (`ColoresService.color`). Es la fuente ÚNICA: si se pasa,
+   *  manda sobre cualquier color del roster o derivado aquí. */
+  colorPara?: (hid: string) => string,
 ): ResolvedMember | null {
   if (!id) return null;
-  const t = team.find((m) => m.id === id);
+  // El roster viene de /api/legacy/users, donde `id` es el código LOCAL ("SC") mientras que las
+  // tareas y tickets se asignan por helpdesk_user_id ("MSC001"). Se compara contra los dos: con
+  // solo `id` esta búsqueda fallaba SIEMPRE y ni el nombre ni el color del roster llegaban a usarse.
+  const clave = String(id).trim().toUpperCase();
+  const t = team.find((m) => {
+    const hid = String((m as { hid?: string }).hid || '').trim().toUpperCase();
+    return hid === clave || String(m.id || '').trim().toUpperCase() === clave;
+  });
+  const color = colorPara ? colorPara(String(id)) : '';
   if (t) {
     const name = t.name || '—';
-    return { id: t.id, name, color: t.color || colorFor(t.id), label: initialsFromName(name), role: t.role || '' };
+    return { id: t.id, name, color: color || t.color || colorFor(t.id), label: initialsFromName(name), role: t.role || '' };
   }
   const u = hdUsers.find((x) => x.id === id);
-  if (u) return { id, name: u.name, color: colorFor(id), label: initialsFromName(u.name), role: u.role || '' };
+  if (u) return { id, name: u.name, color: color || colorFor(id), label: initialsFromName(u.name), role: u.role || '' };
   // Regla #8: nunca mostrar el código de empleado. Si el id no resuelve a un nombre
   // (usuario fuera del catálogo/equipo), usar un placeholder neutro, no el código.
-  return { id, name: '—', color: colorFor(id), label: '—', role: '' };
+  return { id, name: '—', color: color || colorFor(id), label: '—', role: '' };
 }
 
 // ── Progreso ─────────────────────────────────────────────────────────────

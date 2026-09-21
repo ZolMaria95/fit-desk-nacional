@@ -2,6 +2,10 @@
 
 Modelo de dominio para la versión nacional. **Todas las decisiones fueron validadas con el negocio**, no asumidas.
 
+> **Diseño relacionado (parqueado):** [14-medicion-productividad.md](14-medicion-productividad.md) — sistema
+> para medir la productividad del consultor por **complejidad** de ticket (rúbrica + subtareas + puntaje
+> ponderado). Diseño pendiente de análisis con el equipo; aún **no** implementado.
+
 ## Los 7 principios rectores (invariantes)
 
 1. **HelpDesk autentica, fitscrum autoriza.** Login/credenciales/nombres viven en el HelpDesk externo (federación de identidad). Rol/permiso/alcance/vigencia viven en fitscrum. Puente: `helpdesk_user_id`. Usuario autenticado sin `Asignacion` vigente → entra pero no ve nada (**default deny**).

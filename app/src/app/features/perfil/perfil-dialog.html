@@ -3,7 +3,7 @@
 <mat-dialog-content>
   @if (session(); as s) {
     <div class="pf-top">
-      <div class="pf-avatar" [class.clickable]="foto()" [style.background]="foto() ? null : s.color"
+      <div class="pf-avatar" [class.clickable]="foto()" [style.background]="foto() ? null : colorActual()" [style.color]="foto() ? null : tintaAvatar()"
            (click)="abrirFoto()" [title]="foto() ? 'Ver foto completa' : ''">
         @if (foto(); as f) {
           <img [src]="f" alt="Foto de perfil" />
@@ -31,6 +31,64 @@
         <span class="pf-label">Equipo</span>
         <span class="pf-val">{{ equiposTexto() || '—' }}</span>
       </div>
+      <div class="pf-row pf-row-toggle">
+        <span class="pf-label"><mat-icon class="pf-label-ic">dark_mode</mat-icon> Tema oscuro</span>
+        <mat-slide-toggle [checked]="theme.esOscuro()" (change)="theme.set($event.checked ? 'dark' : 'light')"
+                          aria-label="Tema oscuro"></mat-slide-toggle>
+      </div>
+      <!-- Color identificativo: el mismo en su tarea, su ticket, vacaciones y el semanal.
+           No es obligatorio; sin elegir, se le deriva uno estable a partir de su identidad. -->
+      <div class="pf-row pf-row-color">
+        <span class="pf-label"><mat-icon class="pf-label-ic">palette</mat-icon> Mi color</span>
+        <div class="pf-color-body">
+          <div class="swatches">
+            @for (c of paleta; track c) {
+              @let ocupadoPor = nombresQueUsan(c);
+              <button type="button" class="swatch" [style.background]="c"
+                      [class.sel]="esMiColor(c)" [class.ocupado]="ocupadoPor.length"
+                      (click)="elegir(c)"
+                      [matTooltip]="ocupadoPor.length ? 'Ya lo usa ' + ocupadoPor.join(', ') : c"
+                      [attr.aria-label]="'Color ' + c + (ocupadoPor.length ? ' (ya lo usa ' + ocupadoPor.join(', ') + ')' : '')">
+                @if (ocupadoPor.length) { <span class="swatch-dot"></span> }
+              </button>
+            }
+            <label class="swatch custom" [style.background]="colorActual()" matTooltip="Elegir otro color">
+              <mat-icon>colorize</mat-icon>
+              <input type="color" [value]="colorActual()" (change)="elegir($any($event.target).value)" />
+            </label>
+          </div>
+          <div class="pf-color-hex">
+            <input type="text" [value]="hexMostrado()" (input)="onHex($any($event.target).value)"
+                   maxlength="7" placeholder="#1ABC9C" spellcheck="false"
+                   aria-label="Color en hexadecimal" [class.invalido]="hexInvalido()" />
+            @if (perfil.colorGuardado()) {
+              <button mat-button class="pf-color-quitar" (click)="quitarColor()">Sin color</button>
+            }
+          </div>
+          @if (hexInvalido()) {
+            <p class="pf-hint pf-hint-error">Escribe un hexadecimal como <b>#1ABC9C</b>.</p>
+          } @else if (avisoOcupado()) {
+            <p class="pf-hint">{{ avisoOcupado() }}</p>
+          } @else {
+            <p class="pf-hint">Te identifica en el board, en los tickets, en vacaciones y en el semanal.</p>
+          }
+        </div>
+      </div>
+
+      <!-- Excepción para responsables: el PDF de una conversación oculta a los empleados como
+           "Soporte" por privacidad (puede acabar en manos del cliente). Esto lo desactiva SOLO
+           para esta sesión: no se guarda en ningún sitio y se apaga al cerrar sesión. -->
+      @if (puedeVerNombresEnPdf()) {
+        <div class="pf-row pf-row-check">
+          <mat-checkbox [checked]="sinAnonimizar()" (change)="onSinAnonimizar($event.checked)">
+            Descargar conversaciones con los nombres reales
+          </mat-checkbox>
+          <p class="pf-hint">
+            Por defecto el PDF muestra "Soporte" en lugar del nombre del consultor, por si el archivo
+            llega al cliente. Esta opción solo dura hasta que cierres sesión.
+          </p>
+        </div>
+      }
     </div>
 
     <div class="pf-actions">

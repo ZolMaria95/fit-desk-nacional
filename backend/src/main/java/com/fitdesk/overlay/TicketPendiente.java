@@ -28,6 +28,10 @@ public class TicketPendiente extends PanacheEntityBase {
     public Long id;
 
     // Unicidad por (ticket, usuario) — cada persona tiene su propio recordatorio (constraint en V6).
+    // Un recordatorio SIN ticket (creado a mano, ligado solo a un cliente) usa una clave sintética
+    // con prefijo "PR" (nunca un ticket real del HelpDesk) — mismo criterio que "TA-NNN" para
+    // tareas sin ticket en el Board: se guarda como si fuera el ticket, así toda la mecánica de
+    // unicidad/lookup por (ticket, usuario) sigue funcionando sin tocar el resto del modelo.
     @Column(name = "helpdesk_ticket_id", nullable = false)
     public String helpdeskTicketId;
 
@@ -63,6 +67,12 @@ public class TicketPendiente extends PanacheEntityBase {
 
     @Column(name = "last_alerted")
     public LocalDate lastAlerted;
+
+    /** Motivo/nota personalizada del recordatorio (300 chars, capturada por el diálogo). */
+    public String nota;
+
+    /** Pausado por la persona: no vuelve a alertar hasta reanudarlo. */
+    public boolean paused;
 
     @Column(name = "actualizado_en")
     public OffsetDateTime actualizadoEn = OffsetDateTime.now();

@@ -122,6 +122,17 @@
   <h2>Tickets Helpdesk</h2>
   <span class="hd-results">{{ pagedRows().length }} de {{ tabTotal() }}</span>
   <span class="grow"></span>
+  <!-- Mismo indicador que el del panel Filtros (`#filtersTpl` más abajo), pero SIEMPRE
+       visible: aquel vive dentro del `<details>` "Filtros" del drawer, plegado por
+       defecto — al cambiar de pestaña tras una búsqueda, la caja del buscador se vacía
+       (a propósito, para teclear la siguiente) y sin este chip no quedaba ninguna pista
+       visible de que la lista sigue filtrada por una búsqueda. -->
+  @if (filterTicket() || filterTexto()) {
+    <div class="filter-busqueda-activa">
+      <mat-icon>search</mat-icon>
+      <span>Buscando: <strong>{{ filterTicket() || filterTexto() }}</strong></span>
+    </div>
+  }
   <!-- Botón VISIBLE para volver a "todos los tickets": el "Limpiar filtros" que había
        vivía dentro del panel Filtros del drawer (plegado por defecto), así que tras una
        búsqueda global no había forma evidente de deshacerla (ni el ↻ la quita: query()
@@ -200,10 +211,12 @@
           [statusOptions]="statusOptions()"
           [nota]="noteOf(t)"
           [esAccion]="isAction(t)"
+          [puedeMarcarAccion]="puedeMarcarAccion()"
           [esPendiente]="isPending(t)"
+          [esGuardado]="isGuardado(t)"
           [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
           [puedeCambiarEstadoCerrado]="puedeTransferir()"
-          [puedeTransferirTicket]="puedeTransferirTicket()"
+          [puedeTransferirTicket]="puedeTransferirEste(t)"
           [puedeEscalarTicket]="puedeEscalarTicket()"
           (verConversacion)="openConversation(t)"
           (crearTarea)="openTicketTask(t)"
@@ -212,6 +225,7 @@
           (guardarNota)="onGuardarNota(t, $event)"
           (toggleAccion)="toggleAction(t)"
           (togglePendiente)="togglePending(t)"
+          (toggleGuardado)="toggleGuardado(t)"
           (irAlBoard)="irAlBoard(t)"
           (transferir)="transferirTicket(t)"
           (escalar)="escalarTicket(t)" />

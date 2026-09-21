@@ -1,16 +1,20 @@
+import { ColoresService } from '../../core/services/colores.service';
 import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../../core/services/auth.service';
 import { DataService, Story } from '../../core/services/data.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
+import { PerfilService } from '../../core/services/perfil.service';
 import { CardDetailDialog } from '../board/card-detail-dialog/card-detail-dialog';
-import { Ticket } from '../tickets/ticket-utils';
-import { CLIENTES_VALIDOS } from '../tickets/helpdesk.constants';
+import { Ticket, equipoClientIdsDe } from '../tickets/ticket-utils';
 import { TicketCard } from '../tickets/ticket-card/ticket-card';
 import { TicketMessagesDialog } from '../tickets/ticket-messages-dialog/ticket-messages-dialog';
 import { AssignTicketDialog } from '../tickets/assign-ticket-dialog/assign-ticket-dialog';
@@ -31,13 +35,16 @@ function diffDays(dueDate: string): number {
 /** Mi Panel (Scrum Master): seguimiento diario. Port de js/sol-panel.js. */
 @Component({
   selector: 'app-mi-panel',
-  imports: [MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, TicketCard],
+  imports: [MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, MatFormFieldModule, MatSelectModule, TicketCard],
   templateUrl: './mi-panel.html',
   styleUrl: './mi-panel.scss',
 })
 export class MiPanel {
   private readonly data = inject(DataService);
+  private readonly auth = inject(AuthService);
+  private readonly colores = inject(ColoresService);
   private readonly hd = inject(HelpdeskService);
+  private readonly perfil = inject(PerfilService);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
 
@@ -48,6 +55,9 @@ export class MiPanel {
   private readonly actions = signal(this.data.getHdActions());
   private readonly notes = signal(this.data.getHdNotes());
   private readonly pendientes = signal(this.data.getHdPendientes());
+  private readonly guardados = signal(this.data.getHdGuardados());
+  /** Bandera de acción: SOLO para RE (Responsable de Equipo) — "Guardar" lo ve cualquiera. */
+  readonly puedeMarcarAccion = this.auth.esResponsableEquipo;
 
   // Catálogo de estados para el menú de la card (sin ABIERTO), igual que en Tickets.
   readonly statusNames = this.hd.statusNames;
@@ -58,20 +68,55 @@ export class MiPanel {
   constructor() {
     // El dashboard necesita el panorama completo. Carga amplia siempre: la vista
     // Tickets pudo dejar una página filtrada (server-side) en el servicio compartido.
-    this.data.ensureInit();
+    // Los overlays (notas/acciones/pendientes) se cargan en `data.ensureInit()`; la señal local
+    // se inicializó vacía/vieja en el campo de arriba — hay que RE-leerla al resolver, si no un
+    // flag marcado en Tickets nunca aparece aquí (mismo criterio que `tickets.ts`).
+    Promise.all([this.data.ensureInit(), this.data.loadHdGuardados()]).then(() => this.syncOverlays());
     this.hd.getTicketStatuses();
     this.hd.loadAll();
   }
 
-  refresh(): void {
-    this.hd.loadAll();
+  async refresh(): Promise<void> {
+    await this.hd.loadAll();
+    this.syncOverlays(); // re-lee notas/acciones/pendientes/guardados ya cargados (puede haber cambiado en Tickets)
   }
 
-  // Solo tickets de los 14 clientes válidos (los que atiende el equipo): Mi Panel
-  // no debe mostrar pendientes de clientes ajenos.
-  private readonly ticketsValidos = computed<Ticket[]>(() =>
-    this.hd.tickets().filter((t) => CLIENTES_VALIDOS.has(t.clienteRaw)),
+  /** Re-sincroniza las señales de overlays con el estado ya cargado del DataService. */
+  private syncOverlays(): void {
+    this.notes.set({ ...this.data.getHdNotes() });
+    this.actions.set({ ...this.data.getHdActions() });
+    this.pendientes.set({ ...this.data.getHdPendientes() });
+    this.guardados.set({ ...this.data.getHdGuardados() });
+  }
+
+  // ── Alcance: los clientes del EQUIPO del usuario ──
+  /** Equipos que el usuario puede revisar (miembro ∪ responsable). El responsable REGIONAL trae
+   *  todos los de su región → por eso hay selector. */
+  readonly equiposRevisar = this.perfil.equiposRevisar;
+  /** ¿Puede revisar más de un equipo? → se muestra el selector. */
+  readonly multiEquipo = this.perfil.multiEquipo;
+  /** Equipo elegido en el selector; '' = todos los que puede revisar. */
+  readonly equipoSel = signal('');
+  onEquipoChange(codigo: string): void { this.equipoSel.set(codigo); }
+
+  /** client_id de los clientes del equipo (cruce por NOMBRE con el catálogo del HelpDesk).
+   *  Mismo helper que usan la pestaña Equipo de Tickets y el poller de novedades del shell. */
+  private readonly equipoClientIds = computed(
+    () => new Set(equipoClientIdsDe(this.perfil.equiposRevisar(), this.hd.clients(), this.equipoSel())),
   );
+
+  /**
+   * Tickets del alcance del usuario. Antes se filtraba por `CLIENTES_VALIDOS`, una lista de
+   * clientes **escrita a mano** (los de Cuenca): un responsable de otra regional habría visto
+   * los pendientes de Cuenca en vez de los suyos. Ahora sale de sus equipos.
+   * Si no hay ids (p. ej. un ADMIN sin equipo asignado, o el catálogo aún cargando) no se filtra:
+   * mejor el panorama completo que una pantalla vacía.
+   */
+  private readonly ticketsValidos = computed<Ticket[]>(() => {
+    const ids = this.equipoClientIds();
+    const tickets = this.hd.tickets();
+    return ids.size ? tickets.filter((t) => ids.has(t.clientId)) : tickets;
+  });
 
   // ── Bloque 1: Acciones pendientes (tickets marcados con Acción) ──
   readonly acciones = computed<Ticket[]>(() => {
@@ -121,7 +166,7 @@ export class MiPanel {
   noteOf(t: Ticket): string { return this.notes()[t.ticket] || ''; }
 
   openConversation(t: Ticket): void {
-    this.dialog.open(TicketMessagesDialog, { data: { ticket: t }, width: '720px', maxWidth: '96vw' });
+    this.dialog.open(TicketMessagesDialog, { data: { ticket: t }, width: '920px', maxWidth: '92vw' });
   }
   openTicketTask(t: Ticket): void {
     this.dialog.open(CardDetailDialog, {
@@ -156,6 +201,11 @@ export class MiPanel {
   toggleAction(t: Ticket): void {
     this.data.setHdAction(t.ticket, !this.isAction(t));
     this.actions.set({ ...this.data.getHdActions() });
+  }
+  isGuardado(t: Ticket): boolean { return !!this.guardados()[t.ticket]; }
+  async toggleGuardado(t: Ticket): Promise<void> {
+    await this.data.toggleGuardado(t.ticket);
+    this.guardados.set({ ...this.data.getHdGuardados() });
   }
   async togglePending(t: Ticket): Promise<void> {
     if (this.isPending(t)) {
@@ -197,6 +247,10 @@ export class MiPanel {
 
   // ── Helpers de stories ──
   memberOf(id: string | null) { return id ? this.data.getMember(id) : undefined; }
+
+  /** Avatar de una persona: fondo con SU color y tinta calculada. El .scss fijaba `color:#fff`
+   *  sobre el color crudo, así que con un color claro las iniciales desaparecían. */
+  avatarDe(id: string | null | undefined) { return this.colores.avatar(String(id || '')); }
 
   /** Iniciales del nombre (avatar sin foto). El código del API ya no se muestra. */
   iniciales(nombre: string | null | undefined): string {

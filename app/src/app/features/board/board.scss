@@ -12,8 +12,8 @@
   background-size: 24px 24px;
 }
 
-// ── Barra de sprint ────────────────────────────────────────────────
-.sprint-bar {
+// ── Barra del tablero (selector de Equipo + acciones) ──────────────
+.board-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -25,42 +25,20 @@
   border-radius: 12px;
   backdrop-filter: blur(2px);
 
-  .sprint-select {
-    width: 180px;
+  .board-select {
+    width: 220px;
+  }
+
+  // Título de la vista consolidada (consultores/especialistas): "Mis tareas · todos los equipos".
+  .board-title {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin: 0; font-size: 16px; font-weight: 700; color: var(--mat-sys-on-surface);
+    mat-icon { color: var(--brand, #048abf); }
   }
 
   // Acciones (Tarea / Borrar Board) empujadas a la derecha.
   .spacer { flex: 1 1 auto; }
   .danger { color: var(--mat-sys-error); }
-}
-
-.sprint-banner {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: 8px;
-  font-size: 13px;
-  color: #2b2b3a;
-
-  .sb-name { font-weight: 700; }
-  .sb-goal { color: var(--mat-sys-on-surface-variant); }
-  .sb-sep { color: var(--mat-sys-outline); }
-  .sb-dates,
-  .sb-cap { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
-
-  .sb-status {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    padding: 1px 8px;
-    border-radius: 9px;
-    color: #fff;
-
-    &.st-active { background: #27ae60; }
-    &.st-completed { background: #8a8a9a; }
-    &.st-planned { background: var(--brand); }
-  }
 }
 
 // ── Panel de filtros (se publica al drawer del shell; layout vertical) ──
@@ -524,12 +502,6 @@
   color: #2b2b3a;
 }
 
-// El texto va fuera del mat-checkbox: clickear "Certificado" NO marca el check
-// (solo el cuadro), para evitar certificaciones accidentales.
-.check-text {
-  cursor: default;
-}
-
 .card-bottom {
   display: flex;
   align-items: center;
@@ -571,6 +543,10 @@
     height: 10px;
     border-radius: 50%;
     background: #9aa0a6;
+    // Aro finísimo del color del texto: un punto claro (p. ej. el lavanda #DCBEFF) sobre fondo
+    // blanco tiene contraste 1.63 y desaparece. Con el aro, CUALQUIER color elegido se distingue,
+    // en los dos temas, sin alterar el color en sí.
+    box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 35%, transparent);
   }
   .ca-name {
     min-width: 0;
@@ -659,4 +635,77 @@
   .client-select {
     width: 100%;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMA OSCURO. Va con `:host-context()` porque dentro del .scss de un componente
+// un selector `html[data-theme=…]` recibe el atributo _ngcontent y nunca casa.
+// El tinte del post-it NO se toca aquí: es estilo inline y lo resuelve `clientStyle`
+// (board.ts le pasa la señal del tema).
+// ─────────────────────────────────────────────────────────────────────────────
+:host-context(html[data-theme='dark']) {
+  // Pizarra: papel cuadriculado oscuro en vez de crema.
+  background-color: #0d1319;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+
+  .board-bar {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .kanban-col {
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  .col-header {
+    .col-title { color: #e3e9ef; }
+    .col-count {
+      color: #e3e9ef;
+      background: #1a222b;
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+  }
+
+  // Texto DENTRO del post-it: en claro es tinta oscura sobre pastel; en oscuro el
+  // post-it es oscuro, así que la tinta se aclara (coincide con `clientStyle.ink`).
+  .card-ticket, .card-title, .client-name, .hd-estatus { color: #e3e9ef; }
+  .card-due { color: rgba(227, 233, 239, 0.65); }
+  // El morado de la reunión no se lee sobre oscuro.
+  .reunion-horario { color: #b9a4f0; }
+  // Checkbox "Finalizado" deshabilitado: Material lo baja al 38% y desaparece.
+  .mdc-checkbox--disabled + .mdc-label,
+  .mat-mdc-checkbox-disabled .mdc-label { color: rgba(227, 233, 239, 0.55) !important; }
+  .card-copy {
+    color: #aab6c2;
+    &:hover { background: rgba(255, 255, 255, 0.1); color: #e3e9ef; }
+  }
+  .del-btn { color: rgba(227, 233, 239, 0.6); }
+  .hd-estatus { background: rgba(0, 0, 0, 0.3); }
+  .soon-badge { color: #f0a868; }
+  .achip {
+    color: #e3e9ef;
+    button[matChipRemove] { color: #e3e9ef; }
+  }
+  .prio-badge.prio-baja { background: rgba(227, 233, 239, 0.28); }
+
+  input {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.35);
+    color: #e3e9ef;
+  }
+  .wait-btn {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e3e9ef;
+  }
+}
+
+// El label del checkbox "Finalizado" deshabilitado lo baja Material al 38% y en
+// oscuro desaparece del todo (contraste 1.13).
+:host-context(html[data-theme='dark']) .mdc-checkbox--disabled ~ .mdc-label,
+:host-context(html[data-theme='dark']) .mat-mdc-checkbox-disabled label {
+  color: rgba(227, 233, 239, 0.6) !important;
 }

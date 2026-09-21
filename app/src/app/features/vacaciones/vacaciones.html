@@ -27,6 +27,8 @@
     <button mat-stroked-button (click)="goToday()">Hoy</button>
   </div>
 
+  <button mat-stroked-button (click)="abrirReporte()"><mat-icon>summarize</mat-icon> Reporte</button>
+
   @if (puedeAgregar()) {
     <button mat-flat-button color="primary" (click)="abrirNuevo()"><mat-icon>add</mat-icon> Agregar vacaciones</button>
   }
@@ -40,6 +42,7 @@
       <span class="vac-legend-mini">
         <span class="leg"><span class="dot dot-vac"></span>Vacaciones</span>
         <span class="leg"><span class="dot dot-perm"></span>Permiso</span>
+        <span class="leg"><span class="dot dot-perm-horas"></span>Permiso x horas</span>
       </span>
     </div>
 
@@ -63,7 +66,11 @@
           }
           <span class="vac-cell-chips">
             @for (it of c.items; track it.hid) {
-              <span class="vac-chip" [style.background]="it.color.bg" [style.color]="it.color.fg" [title]="it.full">{{ it.short }}</span>
+              <span class="vac-chip" [class.horas]="it.tipo === 'PERMISO_HORAS'"
+                    [style.background]="it.color.bg" [style.color]="it.color.fg" [title]="it.full">
+                @if (it.tipo === 'PERMISO_HORAS') { <mat-icon class="vac-chip-ic">schedule</mat-icon> }
+                {{ it.short }}
+              </span>
             }
             @if (c.overflow > 0) { <span class="vac-chip more">+{{ c.overflow }}</span> }
           </span>
@@ -82,16 +89,27 @@
       </div>
       <div class="vac-daylist">
         @for (row of diaSeleccionado(); track row.v.id) {
-          <div class="vac-dayrow" [style.borderLeftColor]="row.color.fg">
-            <span class="vac-dot" [style.background]="row.color.fg"></span>
-            <span class="vac-dayrow-txt">
-              <span class="vac-emp">{{ row.v.empleado }}</span>
-              <span class="vac-meta">{{ row.v.tipo === 'PERMISO' ? 'Permiso' : 'Vacaciones' }} · {{ row.rango }} · {{ row.v.diasVacacion }} días</span>
-            </span>
-            @if (puedeEditar(row.v)) {
-              <button class="vac-edit" (click)="editar(row.v)" matTooltip="Editar" aria-label="Editar"><mat-icon>edit</mat-icon></button>
-            }
-          </div>
+          @if (puedeEditar(row.v)) {
+            <!-- Toda la fila es clickeable para editar/eliminar (más visible que un lápiz suelto). -->
+            <button type="button" class="vac-dayrow vac-dayrow-edit" [style.borderLeftColor]="row.color.fg"
+                    (click)="editar(row.v)" matTooltip="Editar o eliminar"
+                    [attr.aria-label]="'Editar vacaciones de ' + row.v.empleado">
+              <span class="vac-dot" [style.background]="row.color.fg"></span>
+              <span class="vac-dayrow-txt">
+                <span class="vac-emp">{{ row.v.empleado }}</span>
+                <span class="vac-meta">{{ metaLinea(row.v, row.rango) }}</span>
+              </span>
+              <mat-icon class="vac-edit-ic">edit</mat-icon>
+            </button>
+          } @else {
+            <div class="vac-dayrow" [style.borderLeftColor]="row.color.fg">
+              <span class="vac-dot" [style.background]="row.color.fg"></span>
+              <span class="vac-dayrow-txt">
+                <span class="vac-emp">{{ row.v.empleado }}</span>
+                <span class="vac-meta">{{ metaLinea(row.v, row.rango) }}</span>
+              </span>
+            </div>
+          }
         } @empty {
           <div class="vac-empty">Nadie de vacaciones este día.</div>
         }

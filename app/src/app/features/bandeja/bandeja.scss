@@ -1,3 +1,7 @@
+:host {
+  --mix-base: #fff;
+}
+
 .bandeja {
   max-width: 1120px;
   margin: 0 auto;
@@ -46,7 +50,7 @@
 
   mat-icon { font-size: 20px; width: 20px; height: 20px; }
 
-  &:hover:not(:disabled) { background: color-mix(in srgb, var(--brand, #048abf) 8%, #fff); }
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--brand, #048abf) 8%, var(--mix-base, #fff)); }
   &:disabled { opacity: 0.55; cursor: default; }
 }
 
@@ -59,7 +63,7 @@
   gap: 18px;
   padding: 20px 22px;
   border-radius: 18px;
-  background: color-mix(in srgb, var(--brand, #048abf) 7%, #fff);
+  background: color-mix(in srgb, var(--brand, #048abf) 7%, var(--mix-base, #fff));
   border: 1px solid color-mix(in srgb, var(--brand, #048abf) 16%, transparent);
   margin-bottom: 18px;
 
@@ -137,7 +141,7 @@
   cursor: default;
 
   &.is-clickable { cursor: pointer; }
-  &.is-clickable:hover { background: color-mix(in srgb, var(--cat) 4%, #fff); }
+  &.is-clickable:hover { background: color-mix(in srgb, var(--cat) 4%, var(--mix-base, #fff)); }
   &:focus-visible { outline: 2px solid var(--cat); outline-offset: -2px; }
 }
 
@@ -158,7 +162,7 @@
   width: 46px;
   height: 46px;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--cat) 14%, #fff);
+  background: color-mix(in srgb, var(--cat) 14%, var(--mix-base, #fff));
   color: var(--cat);
   mat-icon { font-size: 26px; width: 26px; height: 26px; }
 }
@@ -226,7 +230,7 @@
     width: 46px;
     height: 46px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--cat) 10%, #fff);
+    background: color-mix(in srgb, var(--cat) 10%, var(--mix-base, #fff));
     color: color-mix(in srgb, var(--cat) 80%, #7a828c);
     font-size: 24px;
   }
@@ -268,7 +272,7 @@
   margin-top: 14px;
   padding: 16px 18px;
   border-radius: 16px;
-  background: color-mix(in srgb, var(--accent, #f29e38) 8%, #fff);
+  background: color-mix(in srgb, var(--accent, #f29e38) 8%, var(--mix-base, #fff));
   border: 1px solid color-mix(in srgb, var(--accent, #f29e38) 24%, transparent);
 }
 .bj-recos-title {
@@ -369,7 +373,7 @@
     font-weight: 600;
     cursor: pointer;
     mat-icon { font-size: 20px; width: 20px; height: 20px; }
-    &:hover { background: color-mix(in srgb, var(--brand, #048abf) 8%, #fff); }
+    &:hover { background: color-mix(in srgb, var(--brand, #048abf) 8%, var(--mix-base, #fff)); }
   }
 
   @media (max-width: 560px) {
@@ -420,7 +424,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px;
-  background: color-mix(in srgb, var(--accent) 8%, #fff);
+  background: color-mix(in srgb, var(--accent) 8%, var(--mix-base, #fff));
 }
 
 .b-head-top {
@@ -534,4 +538,19 @@
   color: #2b2b3a;
 
   mat-icon { font-size: 15px; height: 15px; width: 15px; }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+  .bj-refresh, .bj-cat, .bj-reco { background: #131a21; }
+  .bj-help-main {
+    .bj-help-icon, .bj-help-btn { background: #1a222b; }
+  }
+  .bj-recos-title { color: #f0c070; }
+}
+
+:host-context(html[data-theme='dark']) {
+  // El badge con 0/pocos elementos usa un gris claro que desaparece.
+  .bj-badge { color: #0f151b; }
 }

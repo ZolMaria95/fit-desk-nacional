@@ -2,6 +2,8 @@ import { Component, ElementRef, OnDestroy, afterNextRender, computed, inject, si
 import { firstValueFrom } from 'rxjs';
 import { wireDialogEsc } from '../../../core/dialog-esc';
 import { clearDraft, loadDraft, saveDraft } from '../../../core/draft-store';
+import { copyText } from '../../../core/clipboard';
+import { descargarUrl } from '../../../core/descargar';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -12,14 +14,16 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AuthService } from '../../../core/services/auth.service';
+import { ColoresService } from '../../../core/services/colores.service';
 import { HelpdeskService } from '../../../core/services/helpdesk.service';
 import { ComposeDialog } from '../compose-dialog/compose-dialog';
 import { EMPLEADOS } from '../helpdesk.constants';
-import { Ticket, clipboardToHtml, editorToMessageHtml, extFromMime, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
+import { Ticket, clipboardToHtml, editorToMessageHtml, extFromBytes, extFromMime, htmlToText, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
 import { estadoStyle, fmtIngreso, fmtMod } from '../tickets-card-utils';
 import { prioBadgeClase } from '../../board/board-utils';
 import { esSoloLectura } from '../../../core/helpdesk-estados';
 import { AssignTicketDialog } from '../assign-ticket-dialog/assign-ticket-dialog';
+import { TicketTitleDialog } from '../ticket-title-dialog/ticket-title-dialog';
 
 interface ConvMsg {
   /** id del mensaje (ObjectId del API); vacío si el API no lo trajo. */
@@ -33,6 +37,10 @@ interface ConvMsg {
   /** `can_edit` del API: el servidor ya resolvió ventana de 10 min + "solo el autor". */
   canEdit: boolean;
   adjuntos: { id: string; nombre: string }[];
+  /** `entry_user_id` del autor — solo para EMPLEADOS (`undefined` en cliente/Sistema). Habilita el
+   *  color identificativo del avatar (`ColoresService`, el mismo que usan Board/Vacaciones/Semanal);
+   *  sin `hid` el avatar es gris neutro. */
+  hid?: string;
 }
 
 export interface TicketMessagesData {
@@ -48,11 +56,21 @@ export interface TicketMessagesData {
   imports: [MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatProgressBarModule, MatTooltipModule],
   templateUrl: './ticket-messages-dialog.html',
   styleUrl: './ticket-messages-dialog.scss',
-  host: { '[class.reader-expanded]': 'readerExpanded()' },
+  host: {
+    '[class.reader-expanded]': 'readerExpanded()',
+    // En celular, el panel de badges/metadatos expandido es mucho más alto que la franja
+    // compacta de escritorio (apilado en filas, no una sola línea) — esta clase en `:host`
+    // (no en `.conv-header`, que es hermano de `.composer`: una custom property de CSS solo
+    // desciende, no cruza hermanos) habilita, vía media query, un tope de alto MAYOR para
+    // `.conv-header` y recalcula en conjunto el de `.composer`, así ninguno de los dos usa
+    // un presupuesto de alto que ya no corresponde a lo que se ve en pantalla.
+    '[class.panel-open]': 'resumenExpandido()',
+  },
 })
 export class TicketMessagesDialog implements OnDestroy {
   private readonly hd = inject(HelpdeskService);
   private readonly auth = inject(AuthService);
+  private readonly colores = inject(ColoresService);
   private readonly router = inject(Router);
   private readonly dialogRef = inject(MatDialogRef<TicketMessagesDialog>);
   private readonly dialog = inject(MatDialog);
@@ -63,6 +81,18 @@ export class TicketMessagesDialog implements OnDestroy {
   readonly ticketId = this.data.ticketId || this.data.ticket?.ticket || '';
   readonly estadoStyle = estadoStyle;
   readonly prioClase = prioBadgeClase;
+
+  /** `{bg, fg}` del avatar de un mensaje: color identificativo real si es empleado (mismo que
+   *  Board/Vacaciones/Semanal), gris neutro si es cliente/Sistema (`avatar('')` ya cae ahí solo). */
+  avatarDe(m: { hid?: string }): { bg: string; fg: string } {
+    return this.colores.avatar(m.hid || '');
+  }
+  /** Iniciales (hasta 2) de un nombre completo, para el avatar del mensaje. */
+  iniciales(nombre: string): string {
+    const partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    return (partes[0][0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+  }
   private ticketObj: Ticket | null = this.data.ticket ?? null;
   readonly header = signal(this.headerFrom(this.data.ticket ?? null));
 
@@ -98,6 +128,16 @@ export class TicketMessagesDialog implements OnDestroy {
   readonly messages = signal<ConvMsg[]>([]);
   readonly ticketAttachments = signal<string[]>([]);
   readonly lightbox = signal<string | null>(null);
+  /** Exportando la conversación a PDF (evita doble click mientras se genera). */
+  readonly descargandoPdf = signal(false);
+
+  /** Info resuelta de cada adjunto (por id): si es imagen + su blob URL (reutilizado para el
+   *  thumbnail, el lightbox y la descarga). El endpoint `/attachments/{id}` solo devuelve el blob,
+   *  así que el tipo se conoce al bajarlo → se resuelve PROGRESIVAMENTE al cargar los mensajes
+   *  (mismo patrón que la hidratación de imágenes embebidas), sin bloquear el render. */
+  readonly attachInfo = signal<Record<string, { isImage: boolean; url: string; filename: string; type: string }>>({});
+  /** ids de adjunto ya pedidos (evita bajar dos veces el mismo blob). */
+  private adjPedidos = new Set<string>();
 
   // Paginación de mensajes: se procesa/hidrata solo el bloque más reciente y los
   // anteriores se cargan bajo demanda (no todo junto). `cursor` = índice del más
@@ -124,6 +164,14 @@ export class TicketMessagesDialog implements OnDestroy {
    *  para ver más mensajes. El botón de "volver" del encabezado la desactiva. El composer
    *  se oculta por CSS (no se quita del DOM) → no se pierde el borrador ni la edición. */
   readonly readerExpanded = signal(false);
+  /** Resumen del ticket colapsado (solo aplica en celular, por CSS — ver `.conv-summary` en el
+   *  scss): arranca colapsado, mostrando solo N° de ticket + asunto + cliente, para darle más
+   *  espacio a la conversación. El botón "ver más" lo despliega. */
+  readonly resumenExpandido = signal(false);
+  /** Fila de formato del compositor (negrita/cursiva/subrayado/código/limpiar formato + ampliar
+   *  lectura + abrir editor ampliado): colapsada por defecto para que el compositor sea una sola
+   *  fila (pastilla) — el botón "Aa" la despliega/repliega. */
+  readonly formatBarExpanded = signal(false);
 
   // ── Borrador automático del mensaje en curso (solo mensaje NUEVO, no ediciones) ──
   /** Clave del borrador por ticket. */
@@ -160,6 +208,7 @@ export class TicketMessagesDialog implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.draftTimer) clearTimeout(this.draftTimer);
+    this.revokeAttachBlobs(); // libera los blob URLs de los adjuntos
     // Cierre sin envío: conserva el borrador 90 s DESDE el cierre (re-estampa la marca).
     // Solo texto: los adjuntos (File) no se pueden serializar. Tras un envío exitoso
     // `lastComposerHtml` quedó en '' → no se re-guarda nada.
@@ -230,12 +279,16 @@ export class TicketMessagesDialog implements OnDestroy {
       }
     }
     this.cursor = this.sortedRaw.length;
+    this.revokeAttachBlobs(); // recarga: libera blobs de adjuntos anteriores antes de reconstruir
     this.messages.set([]);
     this.loading.set(false);
     // Muestra el bloque más reciente; los anteriores se cargan bajo demanda.
     await this.loadOlder();
-    // Adjunto a nivel ticket (no de un mensaje) → botón de descarga.
-    if (this.ticketObj) this.hd.ticketAttachmentIds(this.ticketObj).then((ids) => this.ticketAttachments.set(ids));
+    // Adjunto a nivel ticket (no de un mensaje) → thumbnail si es imagen, si no botón de descarga.
+    if (this.ticketObj) this.hd.ticketAttachmentIds(this.ticketObj).then((ids) => {
+      this.ticketAttachments.set(ids);
+      for (const id of ids) void this.resolverAdjunto(id);
+    });
   }
 
   /** Procesa (e hidrata imágenes de) el bloque inmediatamente anterior y lo antepone. */
@@ -251,6 +304,9 @@ export class TicketMessagesDialog implements OnDestroy {
     this.cursor = start;
     this.hasOlder.set(this.cursor > 0);
     this.loadingOlder.set(false);
+    // Resuelve (progresivo) los adjuntos del bloque recién cargado → los que sean imagen se pintan
+    // como thumbnail; los demás siguen como chip. No bloquea el render.
+    for (const msg of procesados) for (const a of msg.adjuntos) void this.resolverAdjunto(a.id);
   }
 
   /** Cierra la conversación y va al login (sesión expirada). */
@@ -294,6 +350,12 @@ export class TicketMessagesDialog implements OnDestroy {
       this.ticketObj = mapTicket(raw);
       this.header.set(this.headerFrom(this.ticketObj));
     }
+  }
+
+  /** Popup de solo lectura con el asunto completo — el título del header lo trunca (1-2 líneas)
+   *  y el `matTooltip` no sirve en celular (no hay hover). */
+  verAsuntoCompleto(): void {
+    this.dialog.open(TicketTitleDialog, { data: { asunto: this.header().asunto }, width: '480px', maxWidth: '90vw', autoFocus: false });
   }
 
   private esEmpleado(m: any): boolean {
@@ -341,17 +403,21 @@ export class TicketMessagesDialog implements OnDestroy {
     const adjuntos = this.attachsDeMensaje(m);
     if (!texto && !html.includes('<img') && !adjuntos.length) return null;
     if (html.includes('<img')) html = await this.hidratarImgs(html);
+    const esEmp = this.esEmpleado(m);
     return {
       id: String(m.id || ''),
       // Nombre completo para identificar fácil; el código (entry_user_id) es el fallback.
       autor: esSys ? 'Sistema' : m.entry_user_name || m.entry_user_id || '—',
-      tipo: esSys ? 'sys' : this.esEmpleado(m) ? 'emp' : 'cli',
+      tipo: esSys ? 'sys' : esEmp ? 'emp' : 'cli',
       fecha: m.entry_date ? String(m.entry_date).replace('T', ' ').slice(0, 16) : '',
       html: texto || html.includes('<img') ? this.sanitizer.bypassSecurityTrustHtml(html) : null,
       rawHtml,
       // El servidor decide (ventana de 10 min + solo el autor); no se recalcula en el cliente.
       canEdit: m.can_edit === true,
       adjuntos,
+      // Solo empleados tienen un hid interno resoluble por `ColoresService` — cliente/Sistema
+      // quedan `undefined` (avatar gris neutro, ver `avatarDe()`).
+      hid: esEmp && m.entry_user_id ? String(m.entry_user_id).trim().toUpperCase() : undefined,
     };
   }
 
@@ -369,23 +435,271 @@ export class TicketMessagesDialog implements OnDestroy {
       this.snack.open('No se pudo abrir el adjunto.', 'OK', { duration: 3000 });
       return;
     }
-    const a = document.createElement('a');
-    a.href = res.url;
-    // Extensión: primero del nombre real (Content-Disposition); si ese header no llegó
-    // (cross-origin sin exponer) y el nombre viene sin extensión, se deduce del tipo MIME
-    // —que SÍ es legible— para que el archivo (p. ej. .xls) baje con su extensión y abra bien.
-    const ext = (res.filename.match(/\.[^.\s]+$/) || [''])[0] || extFromMime(res.type);
-    a.download = nombre
-      ? `${nombre}${ext && !nombre.endsWith(ext) ? ext : ''}`
-      : res.filename || `adjunto_${this.ticketId}${ext}`;
-    a.click();
+    const ext = this.extSync(res) || (await this.extPorBytes(res.url));
+    descargarUrl(
+      res.url,
+      nombre ? `${nombre}${ext && !nombre.endsWith(ext) ? ext : ''}` : res.filename || `adjunto_${this.ticketId}${ext}`,
+    );
     setTimeout(() => URL.revokeObjectURL(res.url), 10000);
+  }
+
+  /**
+   * Extensión del adjunto, en cascada de más fiable a más defensiva:
+   *   1. el **nombre real** del `Content-Disposition` (cuando el proxy lo reenvía);
+   *   2. el **MIME** de la respuesta (inútil si es `application/octet-stream`);
+   *   3. la **firma binaria** del propio archivo — no depende de ninguna cabecera.
+   * Sin el paso 3, basta un proxy que no reenvíe `Content-Disposition` para que el archivo baje
+   * sin extensión y el sistema operativo lo dé por dañado.
+   */
+  private extSync(info: { filename: string; type: string }): string {
+    return (info.filename.match(/\.[^.\s]+$/) || [''])[0] || extFromMime(info.type);
+  }
+
+  /** Paso 3 (lento): leer los bytes. Solo cuando los dos rápidos fallaron. */
+  private async extPorBytes(url: string): Promise<string> {
+    try {
+      // El blob ya está en memoria (blob: URL), así que releerlo no cuesta red.
+      return await extFromBytes(await (await fetch(url)).blob());
+    } catch {
+      return '';
+    }
+  }
+
+  /** Baja el blob de un adjunto UNA vez y guarda si es imagen + su blob URL (progresivo). */
+  private async resolverAdjunto(id: string): Promise<void> {
+    const s = String(id || '');
+    if (!s || this.adjPedidos.has(s)) return;
+    this.adjPedidos.add(s);
+    const res = await this.hd.fetchAttachment(s);
+    if (!res) { this.adjPedidos.delete(s); return; } // falló → permite reintento en otra carga
+    this.attachInfo.update((m) => ({
+      ...m,
+      [s]: { isImage: (res.type || '').startsWith('image/'), url: res.url, filename: res.filename, type: res.type },
+    }));
+  }
+
+  /** Abre el adjunto imagen en el lightbox (reusa el blob ya resuelto). */
+  abrirImagenAdjunto(id: string): void {
+    const u = this.attachInfo()[String(id)]?.url;
+    if (u) this.lightbox.set(u);
+  }
+
+  /**
+   * Descarga un adjunto. Si ya está resuelto reutiliza su blob (sin re-bajar); si no, cae a
+   * `openAttachment` (que lo baja). Mantiene el nombre `adjunto_<ticket>-N` + la extensión real.
+   *
+   * ⚠️ **SÍNCRONO a propósito en el camino normal.** Chrome bloquea EN SILENCIO las descargas que
+   * no salen de un gesto del usuario, y la ventana **standalone de una PWA** es mucho más estricta
+   * que una pestaña. Poner un `await` entre el clic y `descargarUrl()` rompe esa cadena y el
+   * archivo no baja: ni descarga, ni petición de red, ni error en consola — "no pasa nada".
+   * Por eso la extensión se resuelve primero por las vías que NO esperan (nombre real y MIME) y
+   * solo se cae al paso lento (leer los bytes) cuando ambas fallan, que es lo raro.
+   */
+  descargar(a: { id: string; nombre: string }): void {
+    const info = this.attachInfo()[String(a.id)];
+    if (!info) { void this.openAttachment(a.id, a.nombre); return; }
+    const nombreCon = (ext: string) =>
+      a.nombre ? `${a.nombre}${ext && !a.nombre.endsWith(ext) ? ext : ''}` : info.filename || `adjunto_${this.ticketId}${ext}`;
+
+    const ext = this.extSync(info);
+    if (ext) { descargarUrl(info.url, nombreCon(ext)); return; } // gesto intacto → baja seguro
+    // Sin extensión deducible sin esperar: se lee la firma binaria. Aquí sí se pierde el gesto,
+    // pero es preferible a bajar el archivo sin extensión (el SO lo daría por dañado).
+    void this.extPorBytes(info.url).then((e) => descargarUrl(info.url, nombreCon(e)));
+    // No se revoca info.url: se sigue usando para el thumbnail/lightbox; se libera al cerrar.
+  }
+
+  /** Copia el texto de un mensaje al portapapeles (texto plano, conservando saltos de línea).
+   *  Funciona en Pages (HTTPS, API moderna) y en on-prem (HTTP, fallback execCommand). */
+  async copiarMensaje(m: ConvMsg): Promise<void> {
+    const texto = htmlToText(m.rawHtml);
+    if (!texto) {
+      this.snack.open('Este mensaje no tiene texto para copiar.', 'OK', { duration: 2000 });
+      return;
+    }
+    const ok = await copyText(texto);
+    this.snack.open(ok ? 'Mensaje copiado' : 'No se pudo copiar el mensaje.', 'OK', { duration: 1500 });
+  }
+
+  /**
+   * Construye el reemplazador de nombres de EMPLEADO para el PDF. Devuelve `texto => texto` si no
+   * hay a quién ocultar.
+   *
+   * Los nombres salen de dos fuentes que **solo contienen gente de Soft Warehouse**: el catálogo del
+   * Helpdesk (`getHdUsers` filtra por rol interno SOPORTE/ADMINISTRADOR/SUPERVISOR) y los autores de
+   * esta misma conversación marcados como empleado (cubre a quien ya no esté en el catálogo).
+   * **El cliente NUNCA está en ninguna de las dos → su nombre no se toca por construcción.**
+   *
+   * Se generan también las parejas de palabras del nombre ("MARIA SOL", "SOL CONTRERAS") porque en el
+   * cuerpo del mensaje la gente rara vez escribe el nombre completo. NO se baja a nombres de pila
+   * sueltos: destrozaría el texto del cliente (hay muchos "Juan").
+   */
+  private async construirAnonimizador(): Promise<(t: string) => string> {
+    const nombres = new Set<string>();
+    const agregar = (n: string) => {
+      const limpio = String(n || '').trim().replace(/\s+/g, ' ');
+      if (limpio.length < 5) return; // ni iniciales ni basura
+      nombres.add(limpio);
+      const partes = limpio.split(' ').filter((p) => p.length >= 3);
+      for (let i = 0; i + 1 < partes.length; i++) nombres.add(`${partes[i]} ${partes[i + 1]}`);
+      if (partes.length > 2) nombres.add(`${partes[0]} ${partes[partes.length - 1]}`);
+    };
+    try {
+      for (const u of await this.hd.getHdUsers()) agregar(u.name);
+    } catch { /* sin catálogo: quedan los autores de la conversación */ }
+    for (const m of this.sortedRaw) if (this.esEmpleado(m)) agregar(m.entry_user_name);
+    if (!nombres.size) return (t) => t;
+
+    // Patrón tolerante a tildes y mayúsculas: se compara sobre el nombre SIN tildes y cada vocal
+    // admite su variante acentuada, así "MARIA" casa con "María" y al revés.
+    const sinTildes = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const FLEX: Record<string, string> = {
+      a: '[aáà]', e: '[eéè]', i: '[iíì]', o: '[oóò]', u: '[uúùü]', n: '[nñ]',
+    };
+    const patron = [...nombres]
+      .sort((a, b) => b.length - a.length) // el más largo primero: gana el nombre completo
+      .map((n) =>
+        sinTildes(n)
+          .split('')
+          .map((c) => (/[a-z]/i.test(c) ? FLEX[c.toLowerCase()] || c : c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+          .join(''),
+      )
+      .join('|');
+    // Sin lookbehind (no lo soporta todo navegador): los delimitadores se capturan y se reponen.
+    const re = new RegExp(`(^|[^\\p{L}])(?:${patron})(?=[^\\p{L}]|$)`, 'giu');
+    return (t: string) => String(t || '').replace(re, '$1Soporte');
+  }
+
+  /** Exporta TODA la conversación (no solo el bloque cargado: recorre `sortedRaw`) a un PDF.
+   *  Documento de texto plano: encabezado del ticket + cada mensaje (fecha · autor + cuerpo) y
+   *  los nombres de sus adjuntos. Regla #8: autor por NOMBRE, nunca el código.
+   *
+   *  ⭐ PRIVACIDAD: este PDF puede acabar en manos del cliente, así que **los empleados salen como
+   *  "Soporte"** — tanto en la etiqueta del autor como DENTRO del texto (los mensajes automáticos
+   *  dicen "El usuario ‹NOMBRE› cambió el estado", así que anonimizar solo el autor no serviría de
+   *  nada). El cliente y su texto se ven tal cual. En pantalla NO se anonimiza: dentro de FitDesk el
+   *  equipo tiene que seguir viendo quién dijo qué. */
+  async descargarConversacion(): Promise<void> {
+    if (this.descargandoPdf() || this.loading()) return;
+    if (!this.sortedRaw.length) {
+      this.snack.open('No hay mensajes para descargar.', 'OK', { duration: 2000 });
+      return;
+    }
+    this.descargandoPdf.set(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const M = 40;
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const usable = pageW - 2 * M;
+      let y = M;
+      // Salta de página si no cabe un bloque de alto `h`.
+      const ensure = (h: number) => { if (y + h > pageH - M) { doc.addPage(); y = M; } };
+      // Escribe líneas envueltas con un estilo dado; parte de página línea a línea.
+      const writeLines = (text: string, size: number, style: 'normal' | 'bold', color: number, lh: number) => {
+        doc.setFont('helvetica', style); doc.setFontSize(size); doc.setTextColor(color);
+        for (const raw of String(text).split('\n')) {
+          const wrapped: string[] = doc.splitTextToSize(raw || ' ', usable);
+          for (const ln of wrapped) { ensure(lh); doc.text(ln, M, y); y += lh; }
+        }
+      };
+
+      // ── Encabezado ──
+      const h = this.header();
+      writeLines(`Ticket ${this.ticketId}`, 20, 'bold', 20, 24);
+      if (h.asunto) { y += 2; writeLines(h.asunto, 12, 'bold', 40, 16); }
+      const meta = [h.cliente, h.estatus].filter(Boolean).join('  ·  ');
+      const now = new Date();
+      const p = (n: number) => String(n).padStart(2, '0');
+      const gen = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
+      y += 4; writeLines(`${meta ? meta + '  ·  ' : ''}Generado: ${gen}`, 9, 'normal', 120, 13);
+      y += 8; ensure(2); doc.setDrawColor(210); doc.line(M, y, pageW - M, y); y += 16;
+
+      // ── Mensajes (todos, orden cronológico) ──
+      // Por defecto se anonimiza. Un responsable puede pedir los nombres reales desde su perfil,
+      // solo para su sesión; el rol se RE-VERIFICA aquí y no se confía solo en la casilla.
+      const conNombres = this.auth.pdfSinAnonimizar() && this.auth.puedeVerNombresEnPdf();
+      // `anonimizar` oculta a los EMPLEADOS (nunca al cliente). Ver `construirAnonimizador`.
+      const anonimizar = conNombres ? (t: string) => t : await this.construirAnonimizador();
+      for (const m of this.sortedRaw) {
+        const esSys = m.system_message === true;
+        // Empleado → "Soporte". El cliente conserva su nombre: sin él, el PDF no sirve de nada.
+        const autor = esSys
+          ? 'Sistema'
+          : !conNombres && this.esEmpleado(m)
+            ? 'Soporte'
+            : m.entry_user_name || m.entry_user_id || '—';
+        const fecha = m.entry_date ? String(m.entry_date).replace('T', ' ').slice(0, 16) : '';
+        const safe = safeHtml(m.detail || '');
+        // El cuerpo SIEMPRE pasa por el filtro, venga de quien venga: los mensajes automáticos
+        // ("El usuario ‹NOMBRE› cambió el estado") y las menciones dentro del texto del cliente
+        // también nombran al consultor.
+        const texto = anonimizar(htmlToText(safe));
+        const adjuntos = this.attachsDeMensaje(m);
+        if (!texto && !safe.includes('<img') && !adjuntos.length) continue; // vacío → se omite (como en la vista)
+        writeLines(`${fecha ? fecha + '  ·  ' : ''}${autor}`, 10, 'bold', 30, 14);
+        if (texto) writeLines(texto, 10, 'normal', 45, 14);
+        else if (safe.includes('<img')) writeLines('[imagen]', 10, 'normal', 120, 14);
+        for (const a of adjuntos) writeLines(`• Adjunto: ${a.nombre}`, 9, 'normal', 120, 12);
+        y += 12; // separación entre mensajes
+      }
+
+      doc.save(`conversacion_${this.ticketId}.pdf`);
+    } catch {
+      this.snack.open('No se pudo generar el PDF. Intenta de nuevo.', 'OK', { duration: 3000 });
+    } finally {
+      this.descargandoPdf.set(false);
+    }
+  }
+
+  /** Libera los blob URLs de los adjuntos (al cerrar o antes de recargar) para no fugar memoria. */
+  private revokeAttachBlobs(): void {
+    const m = this.attachInfo();
+    for (const k in m) { try { URL.revokeObjectURL(m[k].url); } catch { /* noop */ } }
+    this.attachInfo.set({});
+    this.adjPedidos.clear();
+  }
+
+  /**
+   * Tope de un adjunto: **lo impone el API del Helpdesk**, no nosotros. Sin este control el archivo
+   * grande se aceptaba sin rechistar y reventaba al ENVIAR, con un "Error al enviar." que no decía
+   * cuál era el archivo ni por qué, y perdiendo el mensaje escrito.
+   */
+  private static readonly MAX_ADJUNTO = 5 * 1024 * 1024;
+
+  /** "8,4 MB" — tamaño legible para el aviso. */
+  private pesoLegible(bytes: number): string {
+    return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+  }
+
+  /**
+   * Filtra por tamaño los archivos que llegan por CUALQUIERA de las tres vías (selector, arrastrar,
+   * pegar) y avisa nombrando los que no entran. Devuelve solo los aceptados; el rechazo ocurre al
+   * ADJUNTAR, así que el texto ya escrito nunca se pierde.
+   */
+  private aceptarArchivos(entrantes: File[]): File[] {
+    const ok: File[] = [];
+    const grandes: File[] = [];
+    for (const f of entrantes) (f.size > TicketMessagesDialog.MAX_ADJUNTO ? grandes : ok).push(f);
+    if (grandes.length) {
+      const detalle = grandes.map((f) => `${f.name} (${this.pesoLegible(f.size)})`).join(', ');
+      const consejo = grandes.every((f) => f.type.startsWith('image/'))
+        ? ' Prueba a guardarla como JPG o reducir su tamaño.'
+        : '';
+      this.snack.open(
+        `${detalle} ${grandes.length > 1 ? 'superan' : 'supera'} el límite de 5 MB del Helpdesk.${consejo}`,
+        'OK',
+        { duration: 6000 },
+      );
+    }
+    return ok;
   }
 
   onFiles(e: Event): void {
     const input = e.target as HTMLInputElement;
     this.revokeAllPreviews(); // el input reemplaza la lista → libera previews viejos
-    this.composerFiles = input.files ? [...input.files] : [];
+    this.composerFiles = this.aceptarArchivos(input.files ? [...input.files] : []);
   }
 
   /** Abre el lightbox con un adjunto imagen del compositor (antes de enviar), para
@@ -455,7 +769,7 @@ export class TicketMessagesDialog implements OnDestroy {
     e.preventDefault();
     this.dragOver.set(false);
     if (this.sending()) return;
-    const dropped = e.dataTransfer?.files ? [...e.dataTransfer.files] : [];
+    const dropped = this.aceptarArchivos(e.dataTransfer?.files ? [...e.dataTransfer.files] : []);
     if (dropped.length) this.composerFiles = [...this.composerFiles, ...dropped];
   }
 
@@ -485,8 +799,31 @@ export class TicketMessagesDialog implements OnDestroy {
     const data = e.clipboardData;
     if (!data) return;
     e.preventDefault();
+    // Imágenes del portapapeles (captura de pantalla, copiar-imagen del navegador): van como ADJUNTO,
+    // igual que si se arrastraran. Se hace ANTES del pegado de HTML a propósito: al copiar desde una
+    // web el portapapeles trae la imagen Y un <img> en el text/html, y si se pegaran las dos, la
+    // imagen viajaría duplicada (incrustada en el texto y como archivo).
+    const imagenes = [...(data.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (imagenes.length) {
+      const nuevos = this.aceptarArchivos(imagenes.map((f) => this.conNombreDeCaptura(f)));
+      if (nuevos.length) this.composerFiles = [...this.composerFiles, ...nuevos];
+      return;
+    }
     const limpio = clipboardToHtml(data.getData('text/html'), data.getData('text/plain'));
     document.execCommand('insertHTML', false, limpio);
+  }
+
+  /**
+   * Una imagen pegada llega sin nombre útil ('image.png' o vacío) y así la recibiría el cliente.
+   * Se renombra a `captura_<ticket>_<hh-mm-ss>.<ext>`, con la extensión deducida del MIME.
+   */
+  private conNombreDeCaptura(f: File): File {
+    if (f.name && f.name !== 'image.png' && !f.name.startsWith('image.')) return f;
+    const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg').split('+')[0];
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    const nombre = `captura_${this.ticketId}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}.${ext}`;
+    return new File([f], nombre, { type: f.type });
   }
 
   /** Abre el editor en un pop-up amplio con el contenido actual y lo devuelve al cerrar. */

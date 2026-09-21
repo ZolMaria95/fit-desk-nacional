@@ -1,32 +1,91 @@
-<div class="conv-head" mat-dialog-title>
-  <span class="conv-head-label">TICKET</span>
-  <span class="spacer"></span>
-  @if (readerExpanded()) {
-    <button mat-icon-button class="reader-restore" (click)="readerExpanded.set(false)"
-            matTooltip="Volver al modal" aria-label="Volver al modal">
-      <mat-icon>fullscreen_exit</mat-icon>
-    </button>
-  }
-  <button mat-icon-button mat-dialog-close aria-label="Cerrar"><mat-icon>close</mat-icon></button>
-</div>
+<div class="conv-header" mat-dialog-title>
+  <div class="conv-header-row1">
+    <div class="conv-header-label">
+      <mat-icon class="conv-header-label-ic">confirmation_number</mat-icon>
+      <span class="conv-ticket-no">TICKET #{{ ticketId }}</span>
+    </div>
+    <!-- Íconos de la fila 1: SIEMPRE visibles, incluso en lectura ampliada (ver
+         `:host(.reader-expanded)` en el .scss) — es la única fila que NUNCA se oculta, así
+         "Volver al modal" (cuando corresponde) siempre tiene dónde vivir. -->
+    <div class="conv-header-icons">
+      <button type="button" mat-icon-button class="summary-toggle" (click)="resumenExpandido.set(!resumenExpandido())"
+              [matTooltip]="resumenExpandido() ? 'Ver menos' : 'Ver más del ticket'"
+              [attr.aria-label]="resumenExpandido() ? 'Ver menos' : 'Ver más del ticket'">
+        <mat-icon>{{ resumenExpandido() ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+      @if (readerExpanded()) {
+        <button mat-icon-button class="reader-restore" (click)="readerExpanded.set(false)"
+                matTooltip="Volver al modal" aria-label="Volver al modal">
+          <mat-icon>fullscreen_exit</mat-icon>
+        </button>
+      }
+      <button mat-icon-button (click)="descargarConversacion()" [disabled]="descargandoPdf() || loading()"
+              matTooltip="Descargar conversación (PDF)" aria-label="Descargar conversación en PDF">
+        <mat-icon>download</mat-icon>
+      </button>
+      <button mat-icon-button mat-dialog-close aria-label="Cerrar"><mat-icon>close</mat-icon></button>
+    </div>
+  </div>
 
-<div class="conv-summary">
-  <div class="conv-ticket-no">{{ ticketId }}</div>
-  <h2 class="conv-title">{{ header().asunto }}</h2>
+  <h2 class="conv-title" [matTooltip]="header().asunto" role="button" tabindex="0"
+      (click)="verAsuntoCompleto()" (keydown.enter)="verAsuntoCompleto()">{{ header().asunto }}</h2>
 
-  <div class="conv-chips">
-    @if (header().cliente) { <span class="chip chip-cliente">{{ header().cliente }}</span> }
-    @if (header().tipo) { <span class="chip chip-tipo">{{ header().tipo }}</span> }
-    <button class="chip chip-estatus chip-btn"
-            [style.background]="header().estatus ? estadoStyle(header().estatus).badgeBg : null"
-            [style.color]="header().estatus ? estadoStyle(header().estatus).badgeText : null"
-            [matMenuTriggerFor]="estadoMenu" [disabled]="changingStatus() || sessionExpired() || (soloLectura() && !puedeEstadoTerminal())"
-            [matTooltip]="soloLectura() && !puedeEstadoTerminal() ? 'Ticket cerrado — solo el responsable de equipo puede cambiar el estado' : 'Cambiar estado del ticket'">
-      {{ header().estatus || 'Sin estado' }}<mat-icon class="chip-caret">arrow_drop_down</mat-icon>
-    </button>
-    @if (header().orden && header().orden !== 999) {
-      <span class="chip chip-prio" [class]="prioClase(header().orden)" matTooltip="Prioridad del ticket">#{{ header().orden }}</span>
-    }
+  <!-- Badges + franja de metadatos: en escritorio/tablet siempre visibles; en celular arrancan
+       colapsados (ver media query al pie del .scss) y se despliegan con el toggle de arriba. -->
+  <div class="conv-header-panel" [class.collapsed]="!resumenExpandido()">
+    <div class="conv-badges">
+      @if (header().cliente) { <span class="chip chip-cliente">{{ header().cliente }}</span> }
+      @if (header().tipo) { <span class="chip chip-tipo">{{ header().tipo }}</span> }
+      <button class="chip chip-estatus chip-btn"
+              [style.background]="header().estatus ? estadoStyle(header().estatus).badgeBg : null"
+              [style.color]="header().estatus ? estadoStyle(header().estatus).badgeText : null"
+              [matMenuTriggerFor]="estadoMenu" [disabled]="changingStatus() || sessionExpired() || (soloLectura() && !puedeEstadoTerminal())"
+              [matTooltip]="soloLectura() && !puedeEstadoTerminal() ? 'Ticket cerrado — solo el responsable de equipo puede cambiar el estado' : 'Cambiar estado del ticket'">
+        {{ header().estatus || 'Sin estado' }}<mat-icon class="chip-caret">arrow_drop_down</mat-icon>
+      </button>
+      @if (header().orden && header().orden !== 999) {
+        <span class="chip chip-prio" [class]="prioClase(header().orden)" matTooltip="Prioridad del ticket">#{{ header().orden }}</span>
+      }
+    </div>
+
+    <div class="conv-header-meta">
+      @if (header().fecha) { <span class="bl-item" matTooltip="Fecha de ingreso"><mat-icon>event</mat-icon>{{ header().fecha }}</span> }
+      @if (header().fechaMod) { <span class="bl-item" matTooltip="Última modificación"><mat-icon>update</mat-icon>{{ header().fechaMod }}</span> }
+      @if (header().creador) { <span class="bl-item" matTooltip="Creador"><mat-icon>person</mat-icon>{{ header().creador }}</span> }
+      <span class="bl-item conv-assignee-item" matTooltip="Asignado"><mat-icon>assignment_ind</mat-icon>{{ header().asignado || 'Sin asignar' }}</span>
+      <button mat-icon-button class="assignee-edit" (click)="cambiarAsignado()"
+              [disabled]="soloLectura() || asignando() || sessionExpired()"
+              matTooltip="Cambiar asignado" aria-label="Cambiar asignado">
+        <mat-icon>person_add</mat-icon>
+      </button>
+
+      <span class="spacer"></span>
+
+      @if (ticketAttachments().length) {
+        <div class="ticket-attach">
+          <mat-icon class="ticket-attach-ic" matTooltip="Adjunto del ticket">attach_file</mat-icon>
+          @for (id of ticketAttachments(); track id; let i = $index) {
+            @if (attachInfo()[id]?.isImage) {
+              <figure class="conv-thumb">
+                <button type="button" class="conv-thumb-btn" (click)="abrirImagenAdjunto(id)"
+                        matTooltip="Ver imagen" aria-label="Ver imagen">
+                  <img class="conv-thumb-img" [src]="attachInfo()[id]?.url" loading="lazy" alt="" />
+                </button>
+                <button type="button" class="conv-thumb-dl"
+                        (click)="descargar({ id: id, nombre: 'adjunto-general_' + ticketId + (ticketAttachments().length > 1 ? '_' + (i + 1) : '') })"
+                        matTooltip="Descargar imagen" aria-label="Descargar imagen">
+                  <mat-icon>download</mat-icon>
+                </button>
+              </figure>
+            } @else {
+              <button mat-stroked-button (click)="descargar({ id: id, nombre: 'adjunto-general_' + ticketId + (ticketAttachments().length > 1 ? '_' + (i + 1) : '') })">
+                <mat-icon>attach_file</mat-icon> Descargar{{ ticketAttachments().length > 1 ? ' ' + (i + 1) : '' }}
+              </button>
+            }
+          }
+        </div>
+      }
+    </div>
   </div>
 
   <mat-menu #estadoMenu="matMenu">
@@ -36,34 +95,6 @@
       <button mat-menu-item disabled>Catálogo no disponible</button>
     }
   </mat-menu>
-
-  @if (header().fecha || header().fechaMod || header().creador) {
-    <div class="conv-byline">
-      @if (header().fecha) { <span class="bl-item" matTooltip="Fecha de ingreso"><mat-icon>event</mat-icon>{{ header().fecha }}</span> }
-      @if (header().fechaMod) { <span class="bl-item" matTooltip="Última modificación"><mat-icon>update</mat-icon>{{ header().fechaMod }}</span> }
-      @if (header().creador) { <span class="bl-item" matTooltip="Creador"><mat-icon>person</mat-icon>{{ header().creador }}</span> }
-    </div>
-  }
-
-  <div class="conv-assignee">
-    <span class="bl-item" matTooltip="Asignado"><mat-icon>assignment_ind</mat-icon>{{ header().asignado || 'Sin asignar' }}</span>
-    <button mat-icon-button class="assignee-edit" (click)="cambiarAsignado()"
-            [disabled]="soloLectura() || asignando() || sessionExpired()"
-            matTooltip="Cambiar asignado" aria-label="Cambiar asignado">
-      <mat-icon>person_add</mat-icon>
-    </button>
-  </div>
-
-  @if (ticketAttachments().length) {
-    <div class="ticket-attach">
-      <span class="ticket-attach-label">Adjunto del ticket:</span>
-      @for (id of ticketAttachments(); track id; let i = $index) {
-        <button mat-stroked-button (click)="openAttachment(id, 'adjunto-general_' + ticketId + (ticketAttachments().length > 1 ? '_' + (i + 1) : ''))">
-          <mat-icon>attach_file</mat-icon> Descargar{{ ticketAttachments().length > 1 ? ' ' + (i + 1) : '' }}
-        </button>
-      }
-    </div>
-  }
 </div>
 
 <mat-dialog-content class="conv-body" (click)="onConvClick($event)">
@@ -89,6 +120,7 @@
     @for (m of messages(); track $index) {
       <div class="conv-msg" [class]="'conv-' + m.tipo">
         <div class="conv-meta">
+          <span class="conv-avatar" [style.background]="avatarDe(m).bg" [style.color]="avatarDe(m).fg">{{ iniciales(m.autor) }}</span>
           <span class="conv-user">{{ m.autor }}</span>
           <span class="conv-date">{{ m.fecha }}</span>
           @if (m.canEdit && m.id) {
@@ -97,6 +129,10 @@
               <mat-icon>edit</mat-icon>
             </button>
           }
+          <button class="conv-copy" type="button" matTooltip="Copiar mensaje" aria-label="Copiar mensaje"
+                  (click)="copiarMensaje(m)">
+            <mat-icon>content_copy</mat-icon>
+          </button>
         </div>
         @if (m.html) {
           <div class="conv-text" [innerHTML]="m.html"></div>
@@ -104,9 +140,22 @@
         @if (m.adjuntos.length) {
           <div class="conv-attach-row">
             @for (a of m.adjuntos; track a.id) {
-              <button class="conv-attach" (click)="openAttachment(a.id, a.nombre)">
-                <mat-icon>attach_file</mat-icon> {{ a.nombre }}
-              </button>
+              @if (attachInfo()[a.id]?.isImage) {
+                <figure class="conv-thumb">
+                  <button type="button" class="conv-thumb-btn" (click)="abrirImagenAdjunto(a.id)"
+                          matTooltip="Ver imagen" aria-label="Ver imagen">
+                    <img class="conv-thumb-img" [src]="attachInfo()[a.id]?.url" loading="lazy" alt="" />
+                  </button>
+                  <button type="button" class="conv-thumb-dl" (click)="descargar(a)"
+                          matTooltip="Descargar imagen" aria-label="Descargar imagen">
+                    <mat-icon>download</mat-icon>
+                  </button>
+                </figure>
+              } @else {
+                <button class="conv-attach" (click)="descargar(a)">
+                  <mat-icon>attach_file</mat-icon> {{ a.nombre }}
+                </button>
+              }
             }
           </div>
         }
@@ -141,65 +190,80 @@
       <button mat-button (click)="cancelEdit()" [disabled]="sending()">Cancelar</button>
     </div>
   }
-  <div class="composer-toolbar">
-    <button mat-icon-button matTooltip="Negrita" (mousedown)="$event.preventDefault()" (click)="format('bold')" [disabled]="sending()">
-      <mat-icon>format_bold</mat-icon>
-    </button>
-    <button mat-icon-button matTooltip="Cursiva" (mousedown)="$event.preventDefault()" (click)="format('italic')" [disabled]="sending()">
-      <mat-icon>format_italic</mat-icon>
-    </button>
-    <button mat-icon-button matTooltip="Subrayado" (mousedown)="$event.preventDefault()" (click)="format('underline')" [disabled]="sending()">
-      <mat-icon>format_underlined</mat-icon>
-    </button>
-    <button mat-icon-button matTooltip="Bloque de código" (mousedown)="$event.preventDefault()" (click)="codeBlock()" [disabled]="sending()">
-      <mat-icon>code</mat-icon>
-    </button>
-    <button mat-icon-button matTooltip="Quitar formato" (mousedown)="$event.preventDefault()" (click)="removeFormat()" [disabled]="sending()">
-      <mat-icon>format_clear</mat-icon>
-    </button>
-    <span class="spacer"></span>
-    <button mat-icon-button matTooltip="Ampliar lectura de mensajes" aria-label="Ampliar lectura de mensajes"
-            (click)="readerExpanded.set(true)" [disabled]="sending()">
-      <mat-icon>fullscreen</mat-icon>
-    </button>
-    <button mat-icon-button matTooltip="Abrir editor ampliado" (click)="openComposer()" [disabled]="sending()">
-      <mat-icon>open_in_full</mat-icon>
-    </button>
-  </div>
-  <div #composerInput class="composer-input" contenteditable="true" role="textbox" aria-multiline="true"
-       aria-label="Escribir mensaje" data-placeholder="Escribir mensaje…" (paste)="onPaste($event)"
-       (input)="onComposerInput()" [attr.contenteditable]="sending() ? 'false' : 'true'"></div>
-  <div class="composer-actions">
+
+  <!-- Fila de formato: colapsada por defecto (el compositor es una sola fila/pastilla), se
+       despliega con el botón "Aa" de la fila principal. Incluye negrita/cursiva/subrayado/
+       código/limpiar formato (ya existían en la barra) + "Ampliar lectura"/"Abrir editor
+       ampliado" (reubicados aquí desde la barra vieja). -->
+  @if (formatBarExpanded()) {
+    <div class="composer-format-row">
+      <button mat-icon-button matTooltip="Negrita" (mousedown)="$event.preventDefault()" (click)="format('bold')" [disabled]="sending()">
+        <mat-icon>format_bold</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Cursiva" (mousedown)="$event.preventDefault()" (click)="format('italic')" [disabled]="sending()">
+        <mat-icon>format_italic</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Subrayado" (mousedown)="$event.preventDefault()" (click)="format('underline')" [disabled]="sending()">
+        <mat-icon>format_underlined</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Bloque de código" (mousedown)="$event.preventDefault()" (click)="codeBlock()" [disabled]="sending()">
+        <mat-icon>code</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Quitar formato" (mousedown)="$event.preventDefault()" (click)="removeFormat()" [disabled]="sending()">
+        <mat-icon>format_clear</mat-icon>
+      </button>
+      <span class="spacer"></span>
+      <button mat-icon-button matTooltip="Ampliar lectura de mensajes" aria-label="Ampliar lectura de mensajes"
+              (click)="readerExpanded.set(true)" [disabled]="sending()">
+        <mat-icon>fullscreen</mat-icon>
+      </button>
+      <button mat-icon-button matTooltip="Abrir editor ampliado" (click)="openComposer()" [disabled]="sending()">
+        <mat-icon>open_in_full</mat-icon>
+      </button>
+    </div>
+  }
+
+  @if (!editingId() && composerFiles.length) {
+    <div class="files composer-files-row">
+      @for (f of composerFiles; track $index) {
+        <span class="file-chip" [class.has-thumb]="previewUrl(f)">
+          @if (previewUrl(f); as u) {
+            <button type="button" class="file-open" (click)="openFilePreview(f)"
+                    matTooltip="Ver adjunto" aria-label="Ver adjunto">
+              <img class="file-thumb" [src]="u" alt="" />
+              <span class="file-name">{{ f.name }}</span>
+            </button>
+          } @else {
+            <mat-icon>insert_drive_file</mat-icon>
+            <span class="file-name">{{ f.name }}</span>
+          }
+          <button type="button" class="file-remove" aria-label="Quitar adjunto"
+                  (click)="removeFile(f)" [disabled]="sending()">✕</button>
+        </span>
+      }
+    </div>
+  }
+
+  <!-- Fila principal: adjuntar (clip) + pastilla de texto + "Aa" (formato) + Enviar. Enviar es
+       circular con ícono; SIEMPRE visible en esta fila (ver requisito no negociable del plan). -->
+  <div class="composer-main">
     @if (!editingId()) {
       <label class="attach-label" matTooltip="Adjuntar archivo">
         <mat-icon>attach_file</mat-icon>
         <input type="file" multiple hidden (change)="onFiles($event)" />
       </label>
-      @if (composerFiles.length) {
-        <div class="files">
-          @for (f of composerFiles; track $index) {
-            <span class="file-chip" [class.has-thumb]="previewUrl(f)">
-              @if (previewUrl(f); as u) {
-                <button type="button" class="file-open" (click)="openFilePreview(f)"
-                        matTooltip="Ver adjunto" aria-label="Ver adjunto">
-                  <img class="file-thumb" [src]="u" alt="" />
-                  <span class="file-name">{{ f.name }}</span>
-                </button>
-              } @else {
-                <mat-icon>insert_drive_file</mat-icon>
-                <span class="file-name">{{ f.name }}</span>
-              }
-              <button type="button" class="file-remove" aria-label="Quitar adjunto"
-                      (click)="removeFile(f)" [disabled]="sending()">✕</button>
-            </span>
-          }
-        </div>
-      }
     }
-    <span class="spacer"></span>
+    <div #composerInput class="composer-input" contenteditable="true" role="textbox" aria-multiline="true"
+         aria-label="Escribir mensaje" data-placeholder="Escribir mensaje…" (paste)="onPaste($event)"
+         (input)="onComposerInput()" [attr.contenteditable]="sending() ? 'false' : 'true'"></div>
+    <button type="button" class="format-toggle" [class.active]="formatBarExpanded()"
+            (click)="formatBarExpanded.set(!formatBarExpanded())"
+            matTooltip="Formato de texto" aria-label="Formato de texto">Aa</button>
     <span class="send-status">{{ sendStatus() }}</span>
-    <button mat-flat-button color="primary" (click)="send()" [disabled]="sending()">
-      {{ editingId() ? 'Guardar cambios' : 'Enviar' }}
+    <button type="button" class="send-btn" (click)="send()" [disabled]="sending()"
+            [matTooltip]="editingId() ? 'Guardar cambios' : 'Enviar'"
+            [attr.aria-label]="editingId() ? 'Guardar cambios' : 'Enviar'">
+      <mat-icon>{{ editingId() ? 'check' : 'send' }}</mat-icon>
     </button>
   </div>
 </div>

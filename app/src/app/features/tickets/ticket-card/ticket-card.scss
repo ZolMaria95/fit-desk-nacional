@@ -336,6 +336,10 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
+    // Aro finísimo del color del texto: un punto claro (p. ej. el lavanda #DCBEFF) sobre fondo
+    // blanco tiene contraste 1.63 y desaparece. Con el aro, CUALQUIER color elegido se distingue,
+    // en los dos temas, sin alterar el color en sí.
+    box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 35%, transparent);
   }
 
   .tc-assignee-name {
@@ -374,6 +378,7 @@
   &:hover { background: #00000010; }
   &.on { color: #c0392b; }
   &.pend.on { color: #9c27b0; }
+  &.save.on { color: var(--brand, #048abf); }
 }
 
 .tc-ver {
@@ -424,5 +429,78 @@
     flex: none;
     width: 32px;
     padding: 4px;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMA OSCURO. Aquí solo van los colores RAW (los `var(--mat-sys-*)` se adaptan
+// solos). Los estilos INLINE del encabezado y de los badges NO se tocan desde
+// aquí: los resuelve el TS (`clientStyle`/`estadoStyle`/`tipoStyle` con la señal
+// del tema), porque una hoja de estilos no puede pisar un atributo `style`.
+// ─────────────────────────────────────────────────────────────────────────────
+:host-context(html[data-theme='dark']) {
+  .ticket-card {
+    background: #131a21;
+
+    &:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); }
+
+    // CERRADO: apagado, pero sin `grayscale` (en oscuro apaga tanto que se pierde
+    // el texto). Se baja el brillo y se neutraliza con una superficie más plana.
+    &.is-cerrado {
+      background: #171b1f;
+      filter: saturate(0.35) brightness(0.92);
+    }
+  }
+
+  .tc-subject { color: #e3e9ef; }
+
+  // El N° de ticket y el botón de copiar viven sobre el ENCABEZADO tintado: sus
+  // grises oscuros de modo claro quedaban en contraste 1.12 (invisibles).
+  .tc-id { color: #e3e9ef; }
+  .tc-copy {
+    color: #aab6c2;
+    &:hover { background: rgba(255, 255, 255, 0.1); color: #e3e9ef; }
+  }
+
+  // "en board" / días: el verde oscuro no se lee sobre fondo oscuro.
+  .tc-dias, .tc-en-board {
+    color: #7fd9a0;
+    &:hover {
+      background: color-mix(in srgb, #7fd9a0 14%, transparent);
+      border-color: color-mix(in srgb, #7fd9a0 38%, transparent);
+    }
+  }
+
+  .tc-crear {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.06);
+    color: #e3e9ef;
+    // El texto interno lleva su propio color en claro; sin esto queda en 1.22.
+    .tc-crear-txt { color: #e3e9ef; }
+  }
+
+  // Antigüedad (chip de días): ámbar/rojo tintados sobre oscuro.
+  .tc-edad {
+    background: #33280f;
+    color: #f0c070;
+    &.alto { background: #3a1e20; color: #f09a9a; }
+  }
+
+  // Nota del ticket: el ámbar claro se vuelve ámbar oscuro con texto vivo.
+  // OJO: la clase real es `.tc-nota-area` (un `.tc-nota` a secas no casa con nada).
+  .tc-nota-area {
+    color: #e8d9a0;
+    background: #2a2412;
+    border-color: #5c4f22;
+    &.empty { color: #9a8f66; background: transparent; }
+    &:hover { border-color: #8a7530; }
+  }
+
+  .tc-flag {
+    color: #8b949e;
+    &:hover { background: #ffffff14; }
+    &.on { color: #f08a7a; }
+    &.pend.on { color: #d08ae0; }
+    &.save.on { color: #4fb8e0; }
   }
 }

@@ -31,6 +31,9 @@
     <button type="button" class="td-tab" [class.active]="tab() === 'pendientes'" (click)="setTab('pendientes')">
       <mat-icon>pending_actions</mat-icon> Pendientes <span class="td-tab-count">{{ conteos().pendientes }}</span>
     </button>
+    <button type="button" class="td-tab" [class.active]="tab() === 'enviadas'" (click)="setTab('enviadas')">
+      <mat-icon>send</mat-icon> Enviadas <span class="td-tab-count">{{ conteos().enviadas }}</span>
+    </button>
     <button type="button" class="td-tab" [class.active]="tab() === 'aprobadas'" (click)="setTab('aprobadas')">
       <mat-icon>check_circle</mat-icon> Aprobadas <span class="td-tab-count">{{ conteos().aprobadas }}</span>
     </button>
@@ -101,9 +104,19 @@
                       (keydown.enter)="seleccionar(s)" (keydown.space)="seleccionar(s); $event.preventDefault()">
                     <td class="c-tarea">
                       <div class="c-tarea-in">
-                        <span class="c-tarea-icon"><mat-icon>assignment_ind</mat-icon></span>
+                        <span class="c-tarea-icon"><mat-icon>{{ s.ticket ? 'confirmation_number' : 'assignment_ind' }}</mat-icon></span>
                         <span class="c-tarea-text">
-                          <span class="c-code">{{ s.tareaCodigo }}</span>
+                          <span class="c-code">
+                            {{ s.tareaCodigo }}
+                            @if (s.ticket) {
+                              <!-- La fila también es clicable (selecciona): el handler corta la propagación. -->
+                              <button type="button" class="c-ticket"
+                                      (click)="abrirTicket(s.ticket, $event)"
+                                      (keydown)="$event.stopPropagation()"
+                                      [attr.aria-label]="'Abrir conversación del ticket número ' + s.ticket"
+                                      title="Abrir conversación del ticket">#{{ s.ticket }}</button>
+                            }
+                          </span>
                           <span class="c-title" [title]="s.tareaTitulo">{{ s.tareaTitulo || '(sin título)' }}</span>
                           @if (s.equipoTarea) { <span class="c-cli"><mat-icon>groups</mat-icon> {{ s.equipoTarea }}</span> }
                         </span>
@@ -134,9 +147,16 @@
           <div class="td-detail">
             <h3 class="td-panel-h">Detalle de la solicitud</h3>
             <div class="td-detail-id">
-              <span class="c-tarea-icon"><mat-icon>assignment_ind</mat-icon></span>
+              <span class="c-tarea-icon"><mat-icon>{{ s.ticket ? 'confirmation_number' : 'assignment_ind' }}</mat-icon></span>
               <div class="td-detail-id-text">
-                <span class="c-code">{{ s.tareaCodigo }}</span>
+                <span class="c-code">
+                  {{ s.tareaCodigo }}
+                  @if (s.ticket) {
+                    <button type="button" class="c-ticket" (click)="abrirTicket(s.ticket)"
+                            [attr.aria-label]="'Abrir conversación del ticket número ' + s.ticket"
+                            title="Abrir conversación del ticket">#{{ s.ticket }}</button>
+                  }
+                </span>
                 <span class="td-detail-title">{{ s.tareaTitulo || '(sin título)' }}</span>
               </div>
             </div>
@@ -165,14 +185,39 @@
               </div>
             }
 
-            <div class="td-detail-actions">
-              <button mat-stroked-button type="button" [disabled]="busy() === s.id" (click)="rechazar(s)">
-                <mat-icon>close</mat-icon> Rechazar
-              </button>
-              <button mat-flat-button color="primary" type="button" class="sd-aprobar" [disabled]="busy() === s.id" (click)="aprobar(s)">
-                <mat-icon>check</mat-icon> Aprobar
-              </button>
-            </div>
+            @if (esEnviadas()) {
+              <!-- La pedí yo: no puedo aprobarme/rechazarme a mí misma. -->
+              <div class="td-sent-note" [class]="'est-' + s.estado.toLowerCase()">
+                <mat-icon>{{
+                  s.estado === 'PENDIENTE' ? 'schedule_send'
+                  : s.estado === 'RECHAZADA' ? 'undo'
+                  : s.estado === 'CANCELADA' ? 'cancel'
+                  : 'check_circle'
+                }}</mat-icon>
+                <span>{{
+                  s.estado === 'PENDIENTE' ? 'Esperando que tu Responsable de equipo decida.'
+                  : s.estado === 'RECHAZADA' ? 'Tu Responsable de equipo rechazó la solicitud.'
+                  : s.estado === 'CANCELADA' ? 'Cancelaste la solicitud.'
+                  : 'Tu Responsable de equipo aprobó la solicitud.'
+                }}</span>
+              </div>
+              @if (s.estado === 'PENDIENTE') {
+                <div class="td-detail-actions">
+                  <button mat-stroked-button type="button" [disabled]="busy() === s.id" (click)="cancelar(s)">
+                    <mat-icon>cancel</mat-icon> Cancelar solicitud
+                  </button>
+                </div>
+              }
+            } @else {
+              <div class="td-detail-actions">
+                <button mat-stroked-button type="button" [disabled]="busy() === s.id" (click)="rechazar(s)">
+                  <mat-icon>close</mat-icon> Rechazar
+                </button>
+                <button mat-flat-button color="primary" type="button" class="sd-aprobar" [disabled]="busy() === s.id" (click)="aprobar(s)">
+                  <mat-icon>check</mat-icon> Aprobar
+                </button>
+              </div>
+            }
           </div>
         } @else {
           <div class="td-detail td-detail-empty">

@@ -1,0 +1,141 @@
+:host {
+  --mix-base: #fff; display: block; }
+
+.rp {
+  display: flex;
+  flex-direction: column;
+  max-height: 82dvh;           // cap: la tabla scrollea, las acciones quedan siempre visibles
+  gap: 12px;
+  padding: 20px 24px;          // margen interno (el contenedor del diálogo no trae padding propio)
+}
+@media (max-width: 560px) { .rp { padding: 16px 16px; } }
+
+.rp-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.rp-title {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0; font-size: 18px; color: var(--mat-sys-on-surface);
+  mat-icon { color: var(--brand, #048abf); }
+}
+
+/* Segmentado Tabla / Calendario (mismo look que la vista de Vacaciones) */
+.rp-seg {
+  display: inline-flex; border: 1px solid var(--mat-sys-outline, #bdbdbd); border-radius: 9px; overflow: hidden;
+  button {
+    display: inline-flex; align-items: center; gap: 5px; border: none; background: #fff; padding: 6px 12px;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--mat-sys-on-surface-variant);
+    mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    & + button { border-left: 1px solid var(--mat-sys-outline-variant, #e0e0e0); }
+    &.on { background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff)); color: var(--brand-dark, #0390bc); }
+  }
+}
+.rp-note-inline { justify-content: center;
+  em { font-size: 14px; font-style: normal; color: var(--mat-sys-on-surface); padding: 8px 0; }
+}
+
+.rp-controls {
+  display: flex; flex-wrap: wrap; gap: 12px;
+}
+.rp-f {
+  display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; min-width: 140px;
+  span { font-size: 12px; font-weight: 600; color: var(--mat-sys-on-surface-variant); }
+  input, select {
+    font: inherit; font-size: 14px; padding: 8px 10px;
+    border: 1px solid var(--mat-sys-outline, #bdbdbd); border-radius: 8px; background: #fff;
+    color: var(--mat-sys-on-surface);
+    &:focus { outline: none; border-color: var(--brand, #048abf); }
+  }
+}
+
+.rp-warn {
+  display: flex; align-items: center; gap: 6px; margin: 0;
+  font-size: 13px; color: var(--mat-sys-error, #b3261e);
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+.rp-summary {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  .chip {
+    font-size: 12.5px; padding: 4px 10px; border-radius: 999px;
+    background: var(--mat-sys-surface-container-high, #eef3f6); color: var(--mat-sys-on-surface);
+    b { font-weight: 800; }
+    &.vac { background: #DBEAFE; color: #1E40AF; }
+    &.perm { background: #FEF3C7; color: #92400E; }
+    &.perm-horas { background: #F3E8FF; color: #6B21A8; }
+  }
+}
+
+.rp-tablewrap {
+  flex: 1 1 auto; min-height: 120px; overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0); border-radius: 10px;
+}
+.rp-table {
+  border-collapse: collapse; width: 100%; font-size: 13px;
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--mat-sys-outline-variant, #eceff1); white-space: nowrap; }
+  thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--mat-sys-surface-container-low, #f0f4f9);
+    font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--mat-sys-on-surface-variant); font-weight: 700;
+  }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--mat-sys-surface-container-low, #f0f4f9) 45%, transparent); }
+  .tp {
+    font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px;
+    background: #DBEAFE; color: #1E40AF;
+    &.perm { background: #FEF3C7; color: #92400E; }
+    &.perm-horas { background: #F3E8FF; color: #6B21A8; }
+  }
+}
+
+.rp-empty {
+  padding: 24px; text-align: center; font-size: 13px; color: var(--mat-sys-on-surface-variant);
+}
+
+.rp-actions {
+  display: flex; align-items: center; gap: 8px;
+  padding-top: 4px; border-top: 1px solid var(--mat-sys-outline-variant, #eceff1);
+  .grow { flex: 1 1 auto; }
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+
+/* ── Hoja Calendario ── */
+.rp-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 2px 0;
+}
+.rp-leg {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mat-sys-on-surface);
+}
+.rp-legdot { width: 11px; height: 11px; border-radius: 4px; border: 1.5px solid; flex: none; }
+
+.rp-calwrap { flex: 1 1 auto; min-height: 140px; overflow: auto; }
+.rp-months {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px;
+}
+.rp-month {
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0); border-radius: 12px; padding: 10px 12px;
+  background: var(--mat-sys-surface-container-low, #f7fafb);
+  h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; text-transform: capitalize; color: var(--mat-sys-on-surface); }
+}
+.rp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.rp-dow { text-align: center; font-size: 9.5px; font-weight: 700; color: var(--mat-sys-on-surface-variant); padding-bottom: 2px; }
+.rp-cell {
+  position: relative; aspect-ratio: 1 / 1; min-height: 24px;
+  border-radius: 6px; background: #fff; border: 1px solid var(--mat-sys-outline-variant, #eceff1);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  &.other { opacity: 0.32; }
+  &.today { border-color: var(--brand, #048abf); box-shadow: inset 0 0 0 1px var(--brand, #048abf); }
+  &.has { background: color-mix(in srgb, var(--brand, #048abf) 7%, var(--mix-base, #fff)); }
+  .rp-num { font-size: 10px; font-weight: 600; color: var(--mat-sys-on-surface); line-height: 1; }
+  .rp-dots { display: flex; align-items: center; gap: 2px; height: 6px; }
+  .rp-dot { width: 5px; height: 5px; border-radius: 50%; }
+  .rp-dotmore { font-size: 8px; font-weight: 700; color: var(--mat-sys-on-surface-variant); }
+}
+
+// Base de las mezclas `color-mix(... , var(--mix-base))`: en claro se aclara sobre BLANCO; en
+// oscuro, sobre una superficie oscura. Sin esto, el hover y la fila seleccionada se calculaban
+// contra #fff y en tema oscuro la fila salía casi blanca con el texto claro encima: ilegible.
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+}

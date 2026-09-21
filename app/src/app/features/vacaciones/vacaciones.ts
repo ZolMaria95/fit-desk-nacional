@@ -1,3 +1,4 @@
+import { ColoresService } from '../../core/services/colores.service';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +14,7 @@ import { Feriado, Vacacion, VacacionesService } from '../../core/services/vacaci
 import { errorMsg } from '../board/transferir/enviar-equipo-dialog';
 import { VacacionDialog, VacacionDialogData, VacacionDialogResult } from './vacacion-dialog/vacacion-dialog';
 import { FeriadoDialog, FeriadoDialogResult } from './feriado-dialog/feriado-dialog';
+import { ReporteDialog, ReporteDialogData } from './reporte-dialog/reporte-dialog';
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -56,6 +58,7 @@ interface VacCell { dayNum: number; isOther: boolean; isToday: boolean; dateKey:
 })
 export class Vacaciones {
   private readonly svc = inject(VacacionesService);
+  private readonly colores = inject(ColoresService);
   private readonly auth = inject(AuthService);
   private readonly hd = inject(HelpdeskService);
   private readonly transfer = inject(TransferenciasService);
@@ -150,17 +153,26 @@ export class Vacaciones {
     return eq == null ? this.todas() : this.todas().filter((v) => v.equipoId === eq);
   });
 
-  /** Color estable por empleado (por hid) dentro de la vista. */
-  readonly colorMap = computed<Record<string, Color>>(() => {
-    const map: Record<string, Color> = {};
-    let i = 0;
-    for (const v of this.lista()) {
-      const k = v.usuarioHid || v.empleado || '';
-      if (k && !(k in map)) map[k] = PALETTE[i++ % PALETTE.length];
-    }
-    return map;
-  });
-  private colorOf(v: Vacacion): Color { return this.colorMap()[v.usuarioHid || v.empleado || ''] || NEUTRAL; }
+  /** Color de la persona. Se resuelve POR PERSONA (no contra una lista precalculada): así nadie
+   *  se queda sin color por no estar en el listado que toque en ese momento. */
+  private colorOf(v: Vacacion): Color {
+    const hid = v.usuarioHid || v.empleado || '';
+    return hid ? this.colores.chip(hid) : NEUTRAL;
+  }
+
+  /** Etiqueta legible del tipo — evita repetir la misma ternaria de 2 ramas (ahora 3) en varios
+   *  lugares del template. PERMISO_HORAS muestra las horas en vez de "0 días" (no aplica). */
+  etiquetaTipo(v: Vacacion): string {
+    if (v.tipo === 'PERMISO_HORAS') return `Permiso (${v.horas}h)`;
+    return v.tipo === 'PERMISO' ? 'Permiso' : 'Vacaciones';
+  }
+
+  /** Línea de detalle del panel del día (tipo · rango · días) — PERMISO_HORAS no muestra "0
+   *  días" (no aplica) ni el rango con inicio=fin repetido, solo el tipo (ya con horas) + fecha. */
+  metaLinea(v: Vacacion, rango: string): string {
+    if (v.tipo === 'PERMISO_HORAS') return `${this.etiquetaTipo(v)} · ${fmtDay(v.fechaInicio)}`;
+    return `${this.etiquetaTipo(v)} · ${rango} · ${v.diasVacacion} días`;
+  }
 
   readonly periodLabel = computed(() => `${MONTHS_ES[this.viewMonth().getMonth()]} ${this.viewMonth().getFullYear()}`);
 
@@ -183,7 +195,7 @@ export class Vacaciones {
       const items: DiaEmp[] = activos.slice(0, 3).map((v) => ({
         hid: v.usuarioHid || '',
         short: shortName(v.empleado),
-        full: `${v.empleado} · ${v.tipo === 'PERMISO' ? 'Permiso' : 'Vacaciones'}`,
+        full: `${v.empleado} · ${this.etiquetaTipo(v)}`,
         color: this.colorOf(v),
         tipo: v.tipo,
       }));
@@ -291,6 +303,16 @@ export class Vacaciones {
   setVista(v: 'equipo' | 'nacional'): void {
     this.vista.set(v);
     if (v === 'equipo' && this.equipoSel() == null && this.equipos().length) this.equipoSel.set(this.equipos()[0].id);
+  }
+
+  /** Abre el reporte de vacaciones por rango de fechas (arranca con el alcance de la vista actual). */
+  abrirReporte(): void {
+    const data: ReporteDialogData = {
+      vacaciones: this.todas(),
+      equipos: this.equipos(),
+      alcanceInicial: this.vista() === 'equipo' ? this.equipoSel() : null,
+    };
+    this.dialog.open(ReporteDialog, { data, width: '860px', maxWidth: '96vw' });
   }
   onCellClick(c: VacCell): void { this.selectedDay.set(c.dateKey); }
 

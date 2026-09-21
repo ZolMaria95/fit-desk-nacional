@@ -36,6 +36,11 @@ export interface EnviarEquipoData {
           La tarea <strong>{{ data.tareaCodigo }}</strong> sigue en su tablero; el equipo destino la
           recibe en su bandeja y decide a quién asignarla.
         </p>
+        <!-- El equipo de ORIGEN no aparece en la lista de destinos (no se envía a sí mismo).
+             Decirlo evita que parezca que "falta" un equipo. -->
+        @if (origen(); as o) {
+          <p class="origen"><strong>Desde:</strong> {{ o }} <span>— el equipo de origen no aparece en la lista</span></p>
+        }
       } @else {
         <p class="hint">
           El ticket <strong>#{{ data.ticket }}</strong> se enviará como tarea a otro equipo. La tarea
@@ -62,7 +67,8 @@ export interface EnviarEquipoData {
       <button mat-flat-button color="primary" [disabled]="!destinoId || busy()" (click)="enviar()">Enviar</button>
     </mat-dialog-actions>
   `,
-  styles: [`.full{width:100%}.hint{margin:0 0 12px;color:var(--mat-sys-on-surface-variant,#666);font-size:.9rem}`],
+  styles: [`.full{width:100%}.hint{margin:0 0 12px;color:var(--mat-sys-on-surface-variant,#666);font-size:.9rem}
+    .origen{margin:0 0 12px;font-size:.88rem}.origen span{color:var(--mat-sys-on-surface-variant,#666)}`],
 })
 export class EnviarEquipoDialog {
   private readonly adminApi = inject(AdminApiService);
@@ -74,6 +80,10 @@ export class EnviarEquipoDialog {
   private readonly equipos = signal<Equipo[]>([]);
   /** Todos los equipos activos EXCEPTO el de origen (board codigo = equipo codigo). */
   readonly destinos = computed(() => this.equipos().filter((e) => e.activo && e.codigo !== this.data.boardCodigo));
+  /** Nombre del equipo ORIGEN (el dueño del board de la tarea), para decirlo en claro. */
+  readonly origen = computed(
+    () => this.equipos().find((e) => e.codigo === this.data.boardCodigo)?.nombre ?? this.data.boardCodigo ?? '',
+  );
   destinoId: number | null = null;
   motivo = '';
   readonly busy = signal(false);

@@ -65,6 +65,73 @@ body {
   background: rgba(0, 0, 0, 0.5);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMA OSCURO — se activa con `data-theme="dark"` en <html> (ThemeService).
+// Mismo enfoque que en claro: valores SÓLIDOS explícitos (no `light-dark()`, que
+// Safari no resuelve bien). Los componentes que usan `var(--mat-sys-*, …)` adaptan
+// solos; el resto (colores RAW) se ajusta en cada .scss.
+// ─────────────────────────────────────────────────────────────────────────────
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  // Superficies / fondo.
+  --mat-sys-background: #0f151b;
+  --mat-sys-surface: #131a21;
+  --mat-sys-surface-dim: #0e141a;
+  --mat-sys-surface-bright: #2b333d;
+  --mat-sys-surface-container-lowest: #0b1015;
+  --mat-sys-surface-container-low: #161d25;
+  --mat-sys-surface-container: #1a222b;
+  --mat-sys-surface-container-high: #232c36;
+  --mat-sys-surface-container-highest: #2c3742;
+
+  // Texto / contornos.
+  --mat-sys-on-surface: #e3e9ef;
+  --mat-sys-on-surface-variant: #aab6c2;
+  --mat-sys-outline: #737f8c;
+  --mat-sys-outline-variant: #39434d;
+
+  // Marca un poco más clara para contraste sobre oscuro + texto sobre marca/estados.
+  --mat-sys-primary: #4fb8e0;
+  --mat-sys-on-primary: #00293a;
+  --mat-sys-secondary: #8fd3e8;
+  --mat-sys-error: #ffb4ab;
+
+  // Variables propias.
+  --bg: #0f151b;
+}
+
+html[data-theme='dark'] body {
+  color-scheme: dark;
+  background-color: var(--bg);
+  color: var(--mat-sys-on-surface);
+}
+
+// Superficies flotantes: en claro se fuerzan a #fff; en oscuro, a una superficie oscura.
+html[data-theme='dark'] .mat-mdc-dialog-surface,
+html[data-theme='dark'] .mat-mdc-menu-panel,
+html[data-theme='dark'] .mat-mdc-select-panel,
+html[data-theme='dark'] .mat-mdc-autocomplete-panel,
+html[data-theme='dark'] .cdk-overlay-pane .mat-mdc-card {
+  background-color: #1a222b !important;
+  color: var(--mat-sys-on-surface);
+}
+
+// Buscador/encabezado sticky dentro de los mat-select (tienen blancos/grises RAW).
+html[data-theme='dark'] .sel-search,
+html[data-theme='dark'] .sel-head {
+  background: #1a222b;
+}
+html[data-theme='dark'] .sel-search input,
+html[data-theme='dark'] .sel-head-search input {
+  background: #0f151b;
+  color: var(--mat-sys-on-surface);
+  border-color: var(--mat-sys-outline-variant);
+  &:focus { background: #0b1015; }
+  &::placeholder { color: var(--mat-sys-on-surface-variant); }
+}
+html[data-theme='dark'] .sel-head-all:hover { background: #232c36; }
+
 // Buscador sticky dentro de los mat-select de filtros (el panel vive en el overlay).
 .sel-search {
   position: sticky;

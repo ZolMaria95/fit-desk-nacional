@@ -3,7 +3,7 @@
   <mat-icon class="rf-head-icon">groups</mat-icon>
   <div class="rf-head-text">
     <h2 class="rf-title">{{ isNew ? 'Nueva reunión' : 'Editar reunión' }}</h2>
-    <p class="rf-sub">Crea y agenda una capacitación o presentación.</p>
+    <p class="rf-sub">Crea y agenda una capacitación, presentación o reunión de trabajo.</p>
   </div>
   <button mat-icon-button type="button" class="rf-close" (click)="cerrar()" aria-label="Cerrar">
     <mat-icon>close</mat-icon>
@@ -22,6 +22,10 @@
     <button type="button" role="radio" class="rf-seg-btn" [class.on]="subtipo() === 'PRESENTACION'"
             [attr.aria-checked]="subtipo() === 'PRESENTACION'" (click)="subtipo.set('PRESENTACION')">
       <mat-icon>co_present</mat-icon> Presentación
+    </button>
+    <button type="button" role="radio" class="rf-seg-btn" [class.on]="subtipo() === 'TRABAJO'"
+            [attr.aria-checked]="subtipo() === 'TRABAJO'" (click)="subtipo.set('TRABAJO')">
+      <mat-icon>work</mat-icon> Reunión de trabajo
     </button>
   </div>
 
@@ -87,6 +91,24 @@
     </div>
   </div>
 
+  <!-- Recordatorio: alerta N minutos antes del inicio (0 = sin recordatorio). -->
+  <div class="rf-field">
+    <label class="rf-label">Recordatorio <mat-icon class="rf-label-icon">notifications_active</mat-icon></label>
+    <div class="rf-remind">
+      @for (m of recordatorioPresets; track m) {
+        <button type="button" class="rf-remind-chip" [class.on]="recordatorioMin() === m" (click)="recordatorioMin.set(m)">
+          {{ m === 0 ? 'Sin' : m + ' min' }}
+        </button>
+      }
+      <div class="rf-remind-custom">
+        <input type="number" min="0" max="1440" class="rf-input rf-remind-input"
+               [ngModel]="recordatorioMin()" (ngModelChange)="recordatorioMin.set(+$event || 0)" aria-label="Minutos antes" />
+        <span class="rf-remind-unit">min antes</span>
+      </div>
+    </div>
+    <p class="rf-remind-hint">Salta una alerta (con FitDesk abierto) al dueño y al responsable del equipo.</p>
+  </div>
+
   <!-- Responsable: menú con búsqueda (solo RE/ADMIN pueden asignar a otros). -->
   @if (puedeAsignarAOtros()) {
     <div class="rf-field">
@@ -149,7 +171,7 @@
 
 <!-- PIE FIJO (regla de oro: acciones siempre visibles). -->
 <mat-dialog-actions class="rf-actions">
-  @if (!isNew) {
+  @if (!isNew && auth.puedeEliminarTarea()) {
     <button mat-button type="button" class="rf-danger" (click)="eliminar()" matTooltip="Eliminar reunión" aria-label="Eliminar reunión">
       <mat-icon>delete</mat-icon> <span class="rf-btn-txt">Eliminar</span>
     </button>

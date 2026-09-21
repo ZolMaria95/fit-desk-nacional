@@ -1,6 +1,10 @@
 <div class="pend-header">
   <h2>Recordatorio</h2>
   <span class="pend-count">{{ items().length }}</span>
+  <span class="pend-header-spacer"></span>
+  <button mat-flat-button color="primary" (click)="crear()">
+    <mat-icon>add_alert</mat-icon> Crear recordatorio
+  </button>
 </div>
 
 @if (items().length) {
@@ -21,7 +25,13 @@
           @for (it of g.items; track it.ticket + '·' + (it.owner || '')) {
           <tr [class.due]="isDue(it)" [class.resaltado]="esResaltado(it.ticket)" [class.ajena]="!it.mine">
             <td>
-              <button class="pend-ticket" (click)="openConversation(it.ticket)" matTooltip="Ver información del ticket">#{{ it.ticket }}</button>
+              @if (esSinTicket(it)) {
+                <span class="pend-ticket pend-ticket-sin" matTooltip="Recordatorio personal, sin ticket">
+                  <mat-icon>sticky_note_2</mat-icon> Nota
+                </span>
+              } @else {
+                <button class="pend-ticket" (click)="openConversation(it.ticket)" matTooltip="Ver información del ticket">#{{ it.ticket }}</button>
+              }
             </td>
             <td class="asunto-cell">
               <div class="asunto" [matTooltip]="it.asunto || ''">{{ trunc(it.asunto, 60) }}</div>

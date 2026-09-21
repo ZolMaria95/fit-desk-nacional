@@ -1,0 +1,29 @@
+<div class="g-header">
+  <h2>Guardados</h2>
+  <span class="g-count">{{ tickets().length }}</span>
+</div>
+
+@if (loading()) {
+  <div class="g-empty">Cargando…</div>
+} @else if (tickets().length) {
+  <div class="g-grid">
+    @for (t of tickets(); track t.ticket) {
+      <app-ticket-card
+        [ticket]="t"
+        [nota]="noteOf(t)"
+        [esAccion]="isAction(t)"
+        [puedeMarcarAccion]="puedeMarcarAccion()"
+        [esPendiente]="isPending(t)"
+        [esGuardado]="true"
+        (verConversacion)="openConversation(t)"
+        (guardarNota)="onGuardarNota(t, $event)"
+        (toggleAccion)="toggleAction(t)"
+        (toggleGuardado)="quitar(t)" />
+    }
+  </div>
+} @else {
+  <div class="g-empty">
+    <mat-icon>bookmark_border</mat-icon>
+    <p>Sin tickets guardados. Guardá uno desde Tickets o Mi Panel con el ícono de marcador.</p>
+  </div>
+}

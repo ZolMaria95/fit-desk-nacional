@@ -41,7 +41,7 @@ function fmt(k: string): string {
   selector: 'app-vacacion-dialog',
   imports: [FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatIconModule],
   template: `
-    <h2 mat-dialog-title>{{ data.registro ? 'Editar' : 'Registrar' }} {{ tipo() === 'PERMISO' ? 'permiso' : 'vacaciones' }}</h2>
+    <h2 mat-dialog-title>{{ data.registro ? 'Editar' : 'Registrar' }} {{ tituloTipo() }}</h2>
     <mat-dialog-content class="vd">
       <!-- Empleado -->
       @if (data.fijoHid) {
@@ -65,17 +65,23 @@ function fmt(k: string): string {
       <div class="vd-seg" role="radiogroup" aria-label="Tipo">
         <button type="button" role="radio" [attr.aria-checked]="tipo() === 'VACACIONES'" [class.on]="tipo() === 'VACACIONES'" (click)="tipo.set('VACACIONES')">Vacaciones</button>
         <button type="button" role="radio" [attr.aria-checked]="tipo() === 'PERMISO'" [class.on]="tipo() === 'PERMISO'" (click)="tipo.set('PERMISO')">Permiso c/cargo</button>
+        <button type="button" role="radio" [attr.aria-checked]="tipo() === 'PERMISO_HORAS'" [class.on]="tipo() === 'PERMISO_HORAS'" (click)="tipo.set('PERMISO_HORAS')">Permiso x horas</button>
       </div>
 
       <div class="vd-grid">
         <label class="vd-field">
-          <span class="vd-lbl">Fecha de inicio</span>
+          <span class="vd-lbl">Fecha{{ esPermisoHoras() ? '' : ' de inicio' }}</span>
           <input type="date" [ngModel]="fechaInicio()" (ngModelChange)="fechaInicio.set($event)" />
         </label>
         @if (esPermiso()) {
           <label class="vd-field">
             <span class="vd-lbl">Días laborables</span>
             <input type="number" min="1" max="60" [ngModel]="diasLaborables()" (ngModelChange)="diasLaborables.set(+$event || 0)" />
+          </label>
+        } @else if (esPermisoHoras()) {
+          <label class="vd-field">
+            <span class="vd-lbl">Horas</span>
+            <input type="number" step="0.5" min="0.5" max="8" [ngModel]="horas()" (ngModelChange)="horas.set(+$event || 0)" />
           </label>
         } @else {
           <label class="vd-field">
@@ -85,14 +91,20 @@ function fmt(k: string): string {
         }
       </div>
 
-      <!-- Resultado: en PERMISO aplica el factor 1,36; en VACACIONES es el rango de calendario. -->
+      <!-- Resultado: en PERMISO aplica el factor 1,36; en VACACIONES es el rango de calendario;
+           en PERMISO_HORAS no descuenta nada, solo se registran las horas. -->
       <div class="vd-calc">
-        <div><span class="k">Días de vacaciones</span><span class="v">{{ diasVac() }}</span></div>
-        @if (esPermiso()) {
-          <div><span class="k">Termina</span><span class="v">{{ fechaFinEfectiva() ? fmt(fechaFinEfectiva()) : '—' }}</span></div>
-          <p class="vd-formula">{{ diasLaborables() }} laborables × 1,36 = {{ diasVac() }} días (permiso con cargo).</p>
+        @if (esPermisoHoras()) {
+          <div><span class="k">Horas</span><span class="v">{{ horas() }}</span></div>
+          <p class="vd-formula">Permiso corto — no descuenta vacaciones.</p>
         } @else {
-          <p class="vd-formula">Rango de calendario: {{ diasVac() }} {{ diasVac() === 1 ? 'día' : 'días' }} (incluye laborables y no laborables).</p>
+          <div><span class="k">Días de vacaciones</span><span class="v">{{ diasVac() }}</span></div>
+          @if (esPermiso()) {
+            <div><span class="k">Termina</span><span class="v">{{ fechaFinEfectiva() ? fmt(fechaFinEfectiva()) : '—' }}</span></div>
+            <p class="vd-formula">{{ diasLaborables() }} laborables × 1,36 = {{ diasVac() }} días (permiso con cargo).</p>
+          } @else {
+            <p class="vd-formula">Rango de calendario: {{ diasVac() }} {{ diasVac() === 1 ? 'día' : 'días' }} (incluye laborables y no laborables).</p>
+          }
         }
       </div>
 
@@ -121,8 +133,20 @@ function fmt(k: string): string {
     .vd-fixed mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .vd-seg { display: flex; gap: 6px; }
     .vd-seg button { flex: 1; border: 1px solid var(--mat-sys-outline, #bdbdbd); background: #fff; border-radius: 8px; padding: 8px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--mat-sys-on-surface-variant); }
-    .vd-seg button.on { border-color: var(--brand, #048abf); background: color-mix(in srgb, var(--brand,#048abf) 12%, #fff); color: var(--brand-dark, #0390bc); }
+    .vd-seg button.on { border-color: var(--brand, #048abf); background: color-mix(in srgb, var(--brand,#048abf) 12%, var(--mix-base, #fff)); color: var(--brand-dark, #0390bc); }
     .vd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* TEMA OSCURO. Este diálogo se quedó fuera del paso a oscuro: sus superficies eran
+       blancas fijas y el segmento activo se mezclaba con #fff, así que en oscuro salía
+       casi blanco con texto claro encima. */
+    :host-context(html[data-theme='dark']) {
+      --mix-base: #1a222b;
+      .vd-seg button { background: #131a21; }
+      .vd-fixed { background: #16202e; }
+      .vd-warn { background: #33280f; color: #f0c070; }
+      .vd-sel-search { background: #1a222b; }
+      .vd-field input { background: #0f151b; color: #e3e9ef; }
+    }
     .vd-field { display: flex; flex-direction: column; gap: 4px; }
     .vd-lbl { font-size: 12px; color: var(--mat-sys-on-surface-variant); }
     .vd-field input { font: inherit; padding: 8px; border: 1px solid var(--mat-sys-outline, #bdbdbd); border-radius: 8px; outline: none; }
@@ -152,12 +176,14 @@ export class VacacionDialog {
     const q = this.buscarEmp().toLowerCase().trim();
     return q ? this.data.empleados.filter((e) => e.name.toLowerCase().includes(q)) : this.data.empleados;
   });
-  readonly tipo = signal<'VACACIONES' | 'PERMISO'>(this.data.registro?.tipo ?? 'VACACIONES');
+  readonly tipo = signal<'VACACIONES' | 'PERMISO' | 'PERMISO_HORAS'>(this.data.registro?.tipo ?? 'VACACIONES');
   readonly fechaInicio = signal(this.data.registro?.fechaInicio ?? this.data.fechaInicio);
-  /** Fecha fin: la elige el usuario en VACACIONES; en PERMISO se calcula (ver fechaFinEfectiva). */
+  /** Fecha fin: la elige el usuario en VACACIONES; en PERMISO/PERMISO_HORAS se calcula (ver fechaFinEfectiva). */
   readonly fechaFin = signal(this.data.registro?.fechaFin ?? this.data.registro?.fechaInicio ?? this.data.fechaInicio);
   /** Días laborables: solo se ingresan en PERMISO (base del factor 1,36). */
   readonly diasLaborables = signal(this.data.registro?.diasLaborables || 5);
+  /** Horas: solo se ingresan en PERMISO_HORAS. */
+  readonly horas = signal(this.data.registro?.horas || 1);
   readonly nota = signal(this.data.registro?.nota ?? '');
 
   readonly fmt = fmt;
@@ -174,35 +200,48 @@ export class VacacionDialog {
   }
 
   readonly esPermiso = computed(() => this.tipo() === 'PERMISO');
+  readonly esPermisoHoras = computed(() => this.tipo() === 'PERMISO_HORAS');
 
-  /** Días de vacaciones: PERMISO = días laborables × 1,36; VACACIONES = días de calendario del rango. */
+  tituloTipo(): string {
+    const t = this.tipo();
+    return t === 'PERMISO' ? 'permiso' : t === 'PERMISO_HORAS' ? 'permiso por horas' : 'vacaciones';
+  }
+
+  /** Días de vacaciones: PERMISO = días laborables × 1,36; VACACIONES = días de calendario del
+   *  rango; PERMISO_HORAS = 0 (no aplica el factor, es un permiso corto sin cargo). */
   readonly diasVac = computed(() => {
     if (this.esPermiso()) return Math.round(Math.max(0, this.diasLaborables() || 0) * 1.36);
+    if (this.esPermisoHoras()) return 0;
     const ini = this.fechaInicio(); const fin = this.fechaFin();
     if (!ini || !fin || fin < ini) return 0;
     return Math.round((parseISO(fin).getTime() - parseISO(ini).getTime()) / 86400000) + 1;
   });
-  /** Fecha fin efectiva: en VACACIONES es la elegida; en PERMISO se deriva de los días. */
+  /** Fecha fin efectiva: en VACACIONES es la elegida; en PERMISO se deriva de los días; en
+   *  PERMISO_HORAS es la misma fecha de inicio (es un permiso de un solo día). */
   readonly fechaFinEfectiva = computed(() => {
+    if (this.esPermisoHoras()) return this.fechaInicio();
     if (!this.esPermiso()) return this.fechaFin();
     const ini = this.fechaInicio(); const n = this.diasVac();
     return ini && n > 0 ? addDays(ini, n - 1) : '';
   });
 
-  /** Aviso: el período no incluye sábado ni domingo (lineamiento 4). */
+  /** Aviso: el período no incluye sábado ni domingo (lineamiento 4). Solo aplica a VACACIONES
+   *  (períodos largos) — no tiene sentido para un permiso corto ni uno de un solo día. */
   readonly avisoFinde = computed(() => {
+    if (this.tipo() !== 'VACACIONES') return false;
     const ini = this.fechaInicio(); const fin = this.fechaFinEfectiva();
     if (!ini || !fin) return false;
     let d = parseISO(ini); const end = parseISO(fin);
     while (d <= end) { const g = d.getDay(); if (g === 0 || g === 6) return false; d = new Date(d.getTime() + 86400000); }
     return true;
   });
-  /** Aviso: menos de 15 días (regla general de período completo, solo vacaciones). */
-  readonly avisoQuince = computed(() => !this.esPermiso() && this.diasVac() > 0 && this.diasVac() < 15);
+  /** Aviso: menos de 15 días (regla general de período completo, solo VACACIONES). */
+  readonly avisoQuince = computed(() => this.tipo() === 'VACACIONES' && this.diasVac() > 0 && this.diasVac() < 15);
 
   valido(): boolean {
     if (!this.empleadoHid() || !this.fechaInicio()) return false;
     if (this.esPermiso()) return this.diasLaborables() >= 1;
+    if (this.esPermisoHoras()) return this.horas() > 0;
     const fin = this.fechaFin();
     return !!fin && fin >= this.fechaInicio(); // comparación ISO (aaaa-mm-dd) directa
   }
@@ -213,10 +252,12 @@ export class VacacionDialog {
       usuarioHid: this.empleadoHid(),
       fechaInicio: this.fechaInicio(),
       fechaFin: this.fechaFinEfectiva(),
-      // Días laborables solo tiene sentido en PERMISO; en VACACIONES el backend cuenta los del rango.
+      // Días laborables solo tiene sentido en PERMISO; en VACACIONES/PERMISO_HORAS el backend
+      // cuenta los del rango o directamente no aplica.
       diasLaborables: this.esPermiso() ? this.diasLaborables() : 0,
       tipo: this.tipo(),
       nota: (this.nota() || '').trim() || undefined,
+      horas: this.esPermisoHoras() ? this.horas() : undefined,
     };
     this.ref.close({ input });
   }

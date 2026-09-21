@@ -1,4 +1,6 @@
-import { Component, computed, input, output, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { SIN_ASIGNAR } from '../../../core/colores';
+import { ColoresService } from '../../../core/services/colores.service';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,6 +10,7 @@ import { clientStyle, colorFor, prioBadgeClase, shortName } from '../../board/bo
 import { Ticket } from '../ticket-utils';
 import { estadoStyle, fmtIngreso, fmtMod, tipoStyle } from '../tickets-card-utils';
 import { esEstadoCerrado, esSoloLectura } from '../../../core/helpdesk-estados';
+import { ThemeService } from '../../../core/services/theme.service';
 
 /**
  * Card presentacional de un ticket (grid responsive). No inyecta servicios:
@@ -24,7 +27,11 @@ export class TicketCard {
   readonly statusOptions = input<string[]>([]);
   readonly nota = input('');
   readonly esAccion = input(false);
+  /** Bandera de acción: solo la ve/usa un RE (Responsable de Equipo) — lo decide el contenedor. */
+  readonly puedeMarcarAccion = input(false);
   readonly esPendiente = input(false);
+  /** Guardado personal (ventana de Guardados): lo ve cualquiera, incluido el RE. */
+  readonly esGuardado = input(false);
   /** El ticket ya tiene tarea en el board → se oculta "Crear tarea". */
   readonly yaEnBoard = input(false);
   /** Muestra el badge de "días sin movimiento" (lo usa Mi Panel). */
@@ -45,6 +52,7 @@ export class TicketCard {
   readonly guardarNota = output<string>();
   readonly toggleAccion = output<void>();
   readonly togglePendiente = output<void>();
+  readonly toggleGuardado = output<void>();
   /** "en board" → ir a la tarea del board (lo resuelve el contenedor). */
   readonly irAlBoard = output<void>();
   /** Enviar el ticket a otro equipo (transferencia); lo resuelve el contenedor. */
@@ -57,13 +65,18 @@ export class TicketCard {
   /** Grupo CERRADO (cerrado / NO APLICA) → la card se sombrea en gris (apagada). */
   readonly esCerrado = computed(() => esEstadoCerrado(this.ticket().estatus));
 
-  readonly estado = computed(() => estadoStyle(this.ticket().estatus));
-  readonly tipo = computed(() => tipoStyle(this.ticket().tipo));
+  private readonly theme = inject(ThemeService);
+  private readonly colores = inject(ColoresService);
+  /** Estos 3 estilos viajan como estilo INLINE, que ninguna hoja de estilos puede pisar →
+   *  el tema se resuelve aquí. Al ser `computed` sobre la señal del tema, la tarjeta se
+   *  repinta sola al conmutar claro/oscuro, sin recargar. */
+  readonly estado = computed(() => estadoStyle(this.ticket().estatus, this.theme.esOscuro()));
+  readonly tipo = computed(() => tipoStyle(this.ticket().tipo, this.theme.esOscuro()));
   // Prioridad del ticket: orden del HelpDesk (1=urgente…). 999 = sin prioridad → no se muestra.
   readonly tienePrioridad = computed(() => { const o = this.ticket().orden; return !!o && o !== 999; });
   readonly prioClase = computed(() => prioBadgeClase(this.ticket().orden));
   // Color por cliente (mismo criterio que el board: tinte claro + acento).
-  readonly cliente = computed(() => clientStyle({ id: this.ticket().clientId || this.ticket().clienteRaw }));
+  readonly cliente = computed(() => clientStyle({ id: this.ticket().clientId || this.ticket().clienteRaw }, this.theme.esOscuro()));
   readonly fIngreso = computed(() => fmtIngreso(this.ticket().fechaIngreso));
   readonly fMod = computed(() => fmtMod(this.ticket().fechaMod));
   readonly avatar = computed(() => {
@@ -71,9 +84,10 @@ export class TicketCard {
     const asignado = !!(t.usuarioAsignado || t.nombreAsignado);
     // Regla #8: solo el NOMBRE, nunca el código. Si está asignado pero no hay nombre → '—'.
     const nombre = t.nombreAsignado ? shortName(t.nombreAsignado) : asignado ? '—' : 'Sin asignar';
-    // Color estable por el código (uso interno, no se muestra).
+    // El color sale de ColoresService: la MISMA persona tiene que verse igual aquí que en el
+    // board, en vacaciones y en el semanal. Antes se derivaba de un hash local y no coincidía.
     const ref = t.usuarioAsignado || t.nombreAsignado || '';
-    return { nombre, color: asignado ? colorFor(ref) : '#9aa0a6', asignado };
+    return { nombre, color: asignado ? this.colores.color(ref) : SIN_ASIGNAR, asignado };
   });
   readonly asignadoLabel = computed(() => {
     const t = this.ticket();

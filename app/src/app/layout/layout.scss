@@ -93,6 +93,18 @@
       line-height: 1;
       border: 2px solid var(--mat-sys-surface-container-low, #f0f4f9);
       box-sizing: content-box;
+
+      // Variante "punto" (sin texto dentro, p. ej. "de turno hoy" en Senior de Turno): el
+      // padding/min-width de arriba está pensado para un NÚMERO adentro (Bandeja/Tickets) — sin
+      // contenido, esas mismas reglas dan un óvalo ancho en vez de un punto. `:empty` lo detecta
+      // (no hay texto, solo el `aria-label` para lectores de pantalla) y lo compacta a un círculo.
+      &:empty {
+        min-width: 10px;
+        width: 10px;
+        padding: 0;
+        height: 10px;
+        border-radius: 50%;
+      }
     }
 
     &:hover { background: rgba(0, 0, 0, 0.05); }
@@ -270,16 +282,50 @@ mat-sidenav-content.shell-content {
 .topbar {
   flex: 0 0 auto; // fijo arriba; el contenido de abajo scrollea, la barra no
   z-index: 10;
-  gap: 4px;
+  gap: 10px;
+  padding: 0 16px;
 
   .brand {
     font-weight: 700;
     letter-spacing: -0.5px;
     margin-left: 4px;
+    white-space: nowrap;
   }
 
   .spacer {
     flex: 1 1 auto;
+  }
+
+  // Buscador de la rama de ESCRITORIO: `.tool-search` es 100% de ancho por defecto (pensado para
+  // la columna angosta del drawer) — acá el topbar tiene todo el ancho de la pantalla, así que se
+  // le pone un tope para que no se estire de punta a punta como una barra de dirección.
+  .topbar-search {
+    flex: 0 1 auto;
+    width: min(420px, 32vw);
+  }
+  @media (max-width: 1100px) {
+    .topbar-search { width: min(260px, 30vw); }
+  }
+
+  // Buscador de la rama MÓVIL: a diferencia del de escritorio, ocupa todo el ancho disponible
+  // (reemplaza temporalmente ☰+marca+campanita+perfil mientras está desplegado, así que no compite
+  // por espacio con ellos).
+  .mobile-search {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  // Nombre del usuario en el topbar: `.user-name` (con `flex:1`+ellipsis) está anidado bajo
+  // `.drawer-user` en SCSS, así que fuera de ahí (acá) no aplica nada — se repiten las propiedades
+  // de recorte con un tope de ancho fijo, para que un nombre largo no empuje "Cerrar sesión" fuera
+  // de la pantalla (en el drawer el `flex:1` podía usar toda la columna libremente; acá al lado hay
+  // varios íconos más, no conviene que crezca).
+  .topbar-user-name {
+    max-width: 160px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -293,4 +339,260 @@ mat-sidenav-content.shell-content {
   padding: 20px;
   width: 100%;
   box-sizing: border-box;
+}
+
+// ─── Campanita: panel de notificaciones ───
+// El contenido de `mat-menu` se proyecta al overlay del CDK (fuera del árbol de este
+// componente), así que solo `::ng-deep` llega a esas clases.
+// El `.mat-mdc-menu-panel` (el contenedor REAL del overlay, generado por Material) trae por
+// defecto `max-width: 280px` — sin este override, el `.notif-panel` de abajo (340/680px) queda
+// embutido en esa caja angosta y Material agrega scroll LATERAL para "alcanzarlo" en vez de
+// mostrarlo completo. Se anula aquí para que el ancho real lo decida solo `.notif-panel`.
+::ng-deep .notif-menu.mat-mdc-menu-panel {
+  max-width: none;
+  overflow-x: hidden;
+}
+::ng-deep .notif-menu .mat-mdc-menu-content {
+  padding: 0;
+  overflow-x: hidden;
+}
+::ng-deep .notif-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(340px, 92vw);
+  max-height: 70vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+// En escritorio sobra espacio horizontal y vertical: el ancho de móvil truncaba título y cuerpo
+// sin necesidad ("tapaba información"). Mismo breakpoint que usa el shell para "escritorio"
+// (`BreakpointObserver` en layout.ts, `min-width: 900px`).
+@media (min-width: 900px) {
+  ::ng-deep .notif-panel { width: min(680px, 92vw); max-height: 80vh; }
+  ::ng-deep .notif-item-cuerpo { -webkit-line-clamp: 3; }
+}
+::ng-deep .notif-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+}
+::ng-deep .notif-marcar-todas {
+  border: none;
+  background: transparent;
+  color: var(--brand-dark, #0390bc);
+  font: inherit;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover { text-decoration: underline; }
+}
+::ng-deep .notif-empty {
+  margin: 0;
+  padding: 28px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant, #6b7280);
+}
+
+// Pestañas Todas/Tareas/Tickets — mismo patrón que `.hd-tabs`/`.hd-tab` de Tickets, con
+// tipografía más compacta por el ancho angosto del panel.
+::ng-deep .notif-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 0 14px;
+  border-bottom: 2px solid var(--mat-sys-outline-variant, #e0e0e0);
+}
+::ng-deep .notif-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  padding: 6px 10px;
+  margin-bottom: -2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface-variant, #6b7280);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &.active { color: var(--mat-sys-primary, #048abf); border-bottom-color: var(--mat-sys-primary, #048abf); }
+}
+::ng-deep .notif-tab-count {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--mat-sys-surface-container-high, #eef1f4);
+  border-radius: 9px;
+  padding: 0 6px;
+}
+::ng-deep .notif-group-title {
+  margin: 0;
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mat-sys-on-surface-variant, #6b7280);
+}
+
+// Fila de un ítem: YA NO es un botón (el clic de toda la fila no hace nada, a propósito, igual
+// que en el popup de recordatorio). El único control interactivo es `.notif-item-link`.
+::ng-deep .notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  // `width:100%` + `padding` sin `border-box` sumaba 28px extra (14px×2) por fuera del ancho del
+  // panel — era la causa real del scroll lateral: el panel medía bien, pero cada fila se salía de él.
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--mat-sys-outline-variant, #ececec);
+  padding: 10px 14px;
+
+  &:last-child { border-bottom: none; }
+  &:hover { background: color-mix(in srgb, var(--brand, #048abf) 5%, transparent); }
+
+  &.no-leida { background: color-mix(in srgb, var(--brand, #048abf) 5%, transparent); }
+}
+::ng-deep .notif-item-icon-wrap {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+
+  mat-icon { font-size: 18px; width: 18px; height: 18px; }
+}
+::ng-deep .notif-item.no-leida .notif-item-icon-wrap::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand, #048abf);
+  border: 2px solid #fff;
+}
+::ng-deep .notif-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+::ng-deep .notif-item-row1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+::ng-deep .notif-item-time {
+  flex: none;
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant, #6b7280);
+  white-space: nowrap;
+}
+::ng-deep .notif-item-titulo {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--mat-sys-on-surface, #1c1c1c);
+}
+::ng-deep .notif-item.no-leida .notif-item-titulo {
+  font-weight: 700;
+}
+::ng-deep .notif-item-cuerpo {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--mat-sys-on-surface-variant, #6b7280);
+}
+// Botón-link (número de tarea/ticket, o "Ver en Bandeja") — copiado de `.ra-tk-btn` del popup de
+// recordatorio: SIEMPRE azul y subrayado (no solo al pasar el mouse), para que en táctil también
+// se note que es pulsable. `.notif-item-row2` NO es flex a propósito: `.notif-item-cuerpo` ya es
+// block (`display:-webkit-box`), así que el link cae solo a su propia línea debajo — meterlos en
+// una fila flex forzaba al cuerpo a no encogerse y el link terminaba cortado en pantallas angostas.
+::ng-deep .notif-item-link {
+  display: inline-block;
+  margin-top: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--mat-sys-primary, #048abf);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover { text-decoration-thickness: 2px; }
+  &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 2px; }
+}
+// "Unirse" (solo REUNION con link) — copiado tal cual de `.ra-join` del popup de recordatorio:
+// píldora rellena, distinta del botón-link de arriba para no confundir "abrir tarjeta" con
+// "entrar a la videollamada".
+::ng-deep .notif-item-join {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  color: #fff;
+  background: var(--brand, #048abf);
+  border-radius: 6px;
+  padding: 2px 8px;
+
+  mat-icon { font-size: 13px; width: 13px; height: 13px; }
+  &:hover { background: var(--brand-dark, #0390bc); }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  .tool-search, .tool-panel { background: #1a222b; }
+  .tool-search .tool-search-input {
+    color: #e3e9ef;
+    &::placeholder { color: #8b949e; }
+    &:hover { background: rgba(255, 255, 255, 0.06); }
+  }
+}
+
+// El panel de la campanita vive en el overlay del CDK (portal a <body>, fuera del árbol de
+// `<app-layout>`), así que `:host-context` no lo alcanza (exige que sea DESCENDIENTE del host).
+// Selector global vía `::ng-deep` con el ancestro `html[data-theme]` escrito a mano.
+::ng-deep html[data-theme='dark'] {
+  .notif-panel { background: #1a222b; }
+  .notif-panel-head { color: #e3e9ef; border-color: rgba(255, 255, 255, 0.12); }
+  .notif-tabs { border-color: rgba(255, 255, 255, 0.12); }
+  .notif-tab-count { background: rgba(255, 255, 255, 0.1); }
+  .notif-group-title { color: #8b949e; }
+  .notif-item { border-color: rgba(255, 255, 255, 0.08); }
+  .notif-item.no-leida .notif-item-icon-wrap::after { border-color: #1a222b; }
+  .notif-item-titulo { color: #e3e9ef; }
+  .notif-item-time { color: #8b949e; }
+  .notif-item-cuerpo { color: #8b949e; }
+  .notif-item-link { color: #4fb8e0; }
+  .notif-empty { color: #8b949e; }
 }

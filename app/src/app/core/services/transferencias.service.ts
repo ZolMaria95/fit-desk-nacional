@@ -20,7 +20,7 @@ export interface Transferencia {
   despachadorDestino: string | null;
   asignadoDestinoHid: string | null;
   asignadoDestino: string | null;
-  estado: 'PENDIENTE' | 'ACEPTADA' | 'RECHAZADA' | 'COMPLETADA';
+  estado: 'PENDIENTE' | 'ACEPTADA' | 'RECHAZADA' | 'COMPLETADA' | 'CANCELADA';
   motivo: string | null;
   creadoEn: string | null;
   resueltoEn: string | null;
@@ -31,12 +31,18 @@ export interface Solicitud {
   id: number;
   tareaCodigo: string;
   tareaTitulo: string | null;
+  /**
+   * N° de ticket del HelpDesk asociado a la tarea; null si es una tarea local.
+   * OPCIONAL a propósito: un backend anterior a este cambio no emite la clave (`undefined`), así que
+   * frontend y backend se pueden desplegar en cualquier orden (sin el campo, no se pinta el chip).
+   */
+  ticket?: string | null;
   equipoTarea: string | null;
   solicitanteHid: string | null;
   solicitante: string | null;
   tipo: 'REASIGNACION' | 'TRANSFERENCIA';
   motivo: string | null;
-  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA';
+  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'CANCELADA';
   equipoDestinoId: number | null;
   equipoDestino: string | null;
   asignadoSugeridoHid: string | null;
@@ -107,6 +113,10 @@ export class TransferenciasService {
   rechazarTransferencia(id: number, motivo?: string) {
     return firstValueFrom(this.http.post<Transferencia>(`${this.base}/api/transferencias/${id}/rechazar`, { motivo }, this.actorOpts()));
   }
+  /** Cancela un envío PROPIO mientras sigue PENDIENTE (lo autoriza quien gobierna el equipo origen). */
+  cancelarTransferencia(id: number, motivo?: string) {
+    return firstValueFrom(this.http.post<Transferencia>(`${this.base}/api/transferencias/${id}/cancelar`, { motivo }, this.actorOpts()));
+  }
   miembrosEquipo(equipoId: number) {
     return firstValueFrom(this.http.get<MiembroEquipo[]>(`${this.base}/api/transferencias/equipo/${equipoId}/miembros`));
   }
@@ -146,6 +156,10 @@ export class TransferenciasService {
   }
   rechazarSolicitud(id: number, motivo?: string) {
     return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/rechazar`, { motivo }, this.actorOpts()));
+  }
+  /** Cancela una solicitud PROPIA mientras sigue PENDIENTE (solo quien la creó). */
+  cancelarSolicitud(id: number, motivo?: string) {
+    return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/cancelar`, { motivo }, this.actorOpts()));
   }
 
   /** Total de pendientes de la Bandeja (transferencias + solicitudes + mensajes entrantes),

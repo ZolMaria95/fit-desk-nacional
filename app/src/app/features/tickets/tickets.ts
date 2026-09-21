@@ -1,4 +1,4 @@
-import { Component, OnDestroy, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, OnDestroy, TemplateRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -28,8 +28,9 @@ import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-d
 import { AssignTicketDialog } from './assign-ticket-dialog/assign-ticket-dialog';
 import { PendienteDateDialog, PendienteDateResult } from '../pendientes/pendiente-date-dialog/pendiente-date-dialog';
 import { TicketCard } from './ticket-card/ticket-card';
-import { CLIENTES_VALIDOS, TIPO_NOMBRE } from './helpdesk.constants';
-import { Ticket } from './ticket-utils';
+import { TIPO_NOMBRE } from './helpdesk.constants';
+import { Ticket, equipoClientIdsDe } from './ticket-utils';
+import { NuevosTicketsService } from '../../core/services/nuevos-tickets.service';
 import { esEstadoFinalizado } from '../../core/helpdesk-estados';
 
 // Orden de tabs: Equipo (default), Sin asignar, Asignados a mí, Todos los clientes.
@@ -64,6 +65,7 @@ export class Tickets implements OnDestroy {
   private readonly perfil = inject(PerfilService);
   private readonly router = inject(Router);
   private readonly search = inject(SearchService);
+  private readonly nuevosTickets = inject(NuevosTicketsService);
 
   /** Panel de filtros que se publica al drawer del shell. */
   readonly filtersTpl = viewChild<TemplateRef<unknown>>('filtersTpl');
@@ -80,7 +82,8 @@ export class Tickets implements OnDestroy {
   readonly statusOptions = computed(() => this.statusNames().filter((s) => s.trim().toUpperCase() !== 'ABIERTO'));
   /** ¿Puede cambiar el estado de tickets cerrados? (Responsable de Equipo/Admin). */
   readonly puedeTransferir = this.auth.puedeTransferir;
-  /** ¿Puede enviar un ticket a otro equipo? (Responsable/Admin, solo en modo Quarkus). */
+  /** ¿Puede enviar tickets a otro equipo? (Responsable/Admin, solo en modo Quarkus). Es el permiso
+   *  BASE; por ticket hace falta además dirigir el equipo de origen → `puedeTransferirEste()`. */
   readonly puedeTransferirTicket = computed(() => this.data.usesQuarkus() && this.auth.puedeTransferir());
   /** ¿Puede escalar un ticket al Responsable? (Especialista, solo en modo Quarkus). */
   readonly puedeEscalarTicket = computed(() => this.data.usesQuarkus() && this.auth.esEspecialista());
@@ -90,6 +93,8 @@ export class Tickets implements OnDestroy {
   /** Equipo elegido en la pestaña "Equipo" ('' = todos los que puedo revisar). Solo
    *  aplica cuando el usuario puede revisar más de un equipo (responsable regional). */
   readonly equipoSel = signal('');
+  /** Firma (tab + clientes del equipo) de la ÚLTIMA consulta → el auto-requery no duplica. */
+  private ultimoEquipoKey = '';
   readonly filterClientes = signal<string[]>([]); // client_ids (server-side, multi); [] = todos
   readonly filterEstatus = signal<string[]>([]); // nombres de estado (server-side, multi); [] = todos
   readonly filterAsignado = signal(''); // assigned_user_id (server-side); '' = todos
@@ -119,12 +124,15 @@ export class Tickets implements OnDestroy {
 
   // Paginación server-side: cada página = una consulta con su offset; `total` del API.
   readonly pageIndex = signal(0);
-  readonly pageSize = signal(12);
+  readonly pageSize = signal(15);
 
-  // Notas / acciones / pendientes (se leen reactivamente del DataService).
+  // Notas / acciones / pendientes / guardados (se leen reactivamente del DataService).
   readonly notes = signal(this.data.getHdNotes());
   readonly actions = signal(this.data.getHdActions());
   readonly pendientes = signal(this.data.getHdPendientes());
+  readonly guardados = signal(this.data.getHdGuardados());
+  /** Bandera de acción: SOLO para RE (Responsable de Equipo) — "Guardar" lo ve cualquiera. */
+  readonly puedeMarcarAccion = this.auth.esResponsableEquipo;
 
   constructor() {
     // Catálogo de estados (menú de cambio de estado de cada card) y de empleados (filtro por asignado).
@@ -153,7 +161,27 @@ export class Tickets implements OnDestroy {
     // Los overlays (notas/acciones/pendientes) se cargan en `data.ensureInit()` (lo
     // dispara el layout). La señal se inicializó vacía en el constructor; al resolver
     // la carga hay que RE-leerla, si no las notas nunca se pintan aunque existan.
-    this.data.ensureInit().then(() => this.syncOverlays());
+    // Guardados NO se carga en `ensureInit()` (es un fetch propio, no un mapa legacy más) — se pide
+    // aparte y se sincroniza junto con el resto.
+    Promise.all([this.data.ensureInit(), this.data.loadHdGuardados()]).then(() => this.syncOverlays());
+    // Auto-corrige la carrera de la 1ª carga: si el catálogo del HelpDesk (o los equipos) llega DESPUÉS
+    // de la consulta inicial (backend frío tras el login), la pestaña Equipo/Sin asignar salió sin filtro
+    // (todos los clientes). En cuanto `equipoClientIds` está disponible → re-consulta sola (sin refrescar).
+    effect(() => {
+      const ids = this.equipoClientIds();
+      const tab = this.tab();
+      untracked(() => this.autoRequeryEquipo(ids, tab));
+    });
+  }
+
+  /** Re-consulta cuando los clientes del equipo llegan tarde (1ª carga con backend frío). No pisa un
+   *  filtro explícito del usuario ni duplica una consulta ya hecha con ese mismo set (`ultimoEquipoKey`). */
+  private autoRequeryEquipo(ids: string[], tab: Tab): void {
+    if (tab !== 'equipo' && tab !== 'sinasignar') return;         // solo las tabs que usan el filtro de equipo
+    if (this.filterClientes().length || this.filterTicket() || this.filterTexto()) return; // filtro explícito
+    if (!ids.length) return;                                       // aún cargando (o equipo sin clientes)
+    if (`${tab}:${ids.join(',')}` === this.ultimoEquipoKey) return; // ya se consultó con este set
+    void this.query();
   }
 
   /** Re-sincroniza las señales de overlays con el estado ya cargado del DataService. */
@@ -161,6 +189,7 @@ export class Tickets implements OnDestroy {
     this.notes.set({ ...this.data.getHdNotes() });
     this.actions.set({ ...this.data.getHdActions() });
     this.pendientes.set({ ...this.data.getHdPendientes() });
+    this.guardados.set({ ...this.data.getHdGuardados() });
   }
 
   /** Aplica una búsqueda global lanzada desde el shell (reusa la búsqueda de la vista). */
@@ -183,12 +212,6 @@ export class Tickets implements OnDestroy {
     return String(this.auth.session()?.id || '').trim().toUpperCase();
   }
 
-
-  /** client_id de los clientes válidos (CLIENTES_VALIDOS → id vía catálogo del API).
-   *  Permite filtrar Pendientes por esos clientes EN la consulta (páginas llenas). */
-  private readonly validClientIds = computed(() =>
-    this.clients().filter((c) => CLIENTES_VALIDOS.has(c.name.trim().toUpperCase())).map((c) => c.id),
-  );
 
   /** ticket_status_id de los estados NO finalizados (los finalizados los define
    *  `esEstadoFinalizado`). Permite que Pendientes excluya los finalizados EN la consulta,
@@ -214,20 +237,12 @@ export class Tickets implements OnDestroy {
   readonly equiposRevisar = this.perfil.equiposRevisar;
   readonly multiEquipo = this.perfil.multiEquipo;
 
-  /** Nombres (uppercase) de los clientes del/los equipo(s) a revisar (según el selector). */
-  private readonly equipoClientNames = computed(() => {
-    const sel = this.equipoSel();
-    const eqs = this.perfil.equiposRevisar().filter((e) => !sel || e.codigo === sel);
-    const set = new Set<string>();
-    for (const e of eqs) for (const c of e.clientes) set.add((c.nombre || '').trim().toUpperCase());
-    return set;
-  });
-
-  /** client_id (catálogo del API) de los clientes del equipo → filtro server-side de "Equipo". */
-  private readonly equipoClientIds = computed(() => {
-    const names = this.equipoClientNames();
-    return this.clients().filter((c) => names.has(c.name.trim().toUpperCase())).map((c) => c.id);
-  });
+  /** client_id (catálogo del API) de los clientes del/los equipo(s) a revisar → filtro server-side de
+   *  "Equipo/Sin asignar". Cruza por NOMBRE con el catálogo HD (`equipoClientIdsDe`, reusado por el poller
+   *  de novedades del equipo en el Layout). `equipoSel()` opcional filtra a un solo equipo. */
+  private readonly equipoClientIds = computed(() =>
+    equipoClientIdsDe(this.perfil.equiposRevisar(), this.clients(), this.equipoSel()),
+  );
 
   /** Cambia el equipo elegido en la pestaña "Equipo" y recarga. */
   async onEquipoChange(codigo: string): Promise<void> {
@@ -267,6 +282,10 @@ export class Tickets implements OnDestroy {
 
   /** Nº de tickets que ya tienen una tarea creada en el board (ocultan "Crear tarea"). */
   readonly ticketsEnBoard = computed(() => new Set(this.data.stories().map((s) => String(s.ticket)).filter(Boolean)));
+  /** N° de ticket → codigo del board donde vive su tarea (para saber de qué equipo es el origen). */
+  private readonly boardPorTicket = computed(
+    () => new Map(this.data.stories().filter((s) => s.ticket).map((s) => [String(s.ticket), String(s.board ?? '')])),
+  );
 
   // Opciones de los filtros server-side, desde los CATÁLOGOS del API (no de la página
   // cargada): así se puede elegir cualquier cliente/estatus, no solo los visibles.
@@ -380,7 +399,9 @@ export class Tickets implements OnDestroy {
         .map((n) => this.hd.statusIdOf(n))
         .filter((id): id is string => !!id);
       if (ids.length) f.statusIds = ids;
-    } else if (this.tab() === 'equipo') {
+    } else if (this.tab() === 'equipo' || this.tab() === 'asignados' || this.tab() === 'generales') {
+      // Mismo criterio en las 4 tabs salvo "Sin asignar" (que tiene su propia exclusión extra):
+      // sin filtro explícito de Estatus, oculta APROBADO/CERRADO/NO APLICA por defecto.
       const ids = this.pendingStatusIds();
       if (ids.length) f.statusIds = ids;
     } else if (this.tab() === 'sinasignar') {
@@ -403,6 +424,11 @@ export class Tickets implements OnDestroy {
 
   /** Consulta la página actual: búsqueda por palabra, filtrada server-side, o carga amplia. */
   private async query(): Promise<void> {
+    // Firma del filtro de equipo que se está consultando → el effect de auto-requery no re-consulta
+    // por este mismo set (evita duplicados en setTab/onEquipoChange/refresh).
+    this.ultimoEquipoKey = this.tab() + ':' + this.equipoClientIds().join(',');
+    // El responsable "vio" los tickets del equipo → limpia el badge de novedades y avanza la marca de agua.
+    if (this.tab() === 'equipo' && this.auth.esResponsableEquipo()) this.nuevosTickets.marcarVistos();
     // Búsqueda por palabra: global (ignora los filtros de tab), paginada server-side.
     if (this.filterTexto()) {
       await this.hd.searchTickets(this.filterTexto(), this.pageIndex(), this.pageSize(), {
@@ -610,14 +636,27 @@ export class Tickets implements OnDestroy {
   }
 
   openConversation(t: Ticket): void {
-    this.dialog.open(TicketMessagesDialog, { data: { ticket: t }, width: '720px', maxWidth: '96vw' });
+    this.dialog.open(TicketMessagesDialog, { data: { ticket: t }, width: '920px', maxWidth: '92vw' });
   }
 
   /** Va a la tarea del board que corresponde a este ticket (si existe) y la resalta. */
   irAlBoard(t: Ticket): void {
     const st = this.data.stories().find((s) => String(s.ticket) === String(t.ticket));
     if (!st) return;
-    this.router.navigate(['/board'], { queryParams: { board: st.board || '', sprint: st.sprint || '', card: st.id } });
+    this.router.navigate(['/board'], { queryParams: { board: st.board || '', card: st.id } });
+  }
+
+  /**
+   * ¿Puede enviar ESTE ticket a otro equipo? Además del permiso base, si el ticket ya tiene tarea
+   * en un board hay que **dirigir el equipo dueño de ese board**: el backend autoriza la
+   * transferencia contra el equipo ORIGEN, que no tiene por qué ser el del actor (un Responsable
+   * de Prueba veía la opción en una tarea del board de Cuenca y solo se enteraba con un 403).
+   * Sin tarea previa no hay origen ajeno: se crea en el board del propio actor.
+   */
+  puedeTransferirEste(t: Ticket): boolean {
+    if (!this.puedeTransferirTicket()) return false;
+    const board = this.boardPorTicket().get(String(t.ticket));
+    return board === undefined || this.perfil.gobiernaBoard(board);
   }
 
   /** Envía el ticket a otro equipo. Si ya tiene tarea en el board, transfiere esa tarea;
@@ -670,6 +709,13 @@ export class Tickets implements OnDestroy {
   toggleAction(t: Ticket): void {
     this.data.setHdAction(t.ticket, !this.isAction(t));
     this.actions.set({ ...this.data.getHdActions() });
+  }
+  isGuardado(t: Ticket): boolean {
+    return !!this.guardados()[t.ticket];
+  }
+  async toggleGuardado(t: Ticket): Promise<void> {
+    await this.data.toggleGuardado(t.ticket);
+    this.guardados.set({ ...this.data.getHdGuardados() });
   }
   async togglePending(t: Ticket): Promise<void> {
     if (this.isPending(t)) {

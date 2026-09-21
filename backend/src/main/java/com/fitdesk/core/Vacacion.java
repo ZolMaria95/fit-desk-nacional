@@ -16,11 +16,14 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 /**
- * Período de VACACIONES o PERMISO (con cargo a vacaciones) de un empleado. Es el registro de
- * PLANIFICACIÓN que alimenta el calendario de la sección Vacaciones (vista por equipo y nacional).
- * La solicitud/aprobación FORMAL sigue siendo por el formato descargable (firmado por el empleado
- * y el jefe inmediato); aquí NO se lleva "saldo" de días (eso lo llena la unidad administrativa en
- * el formato). `diasVacacion = round(diasLaborables * 1.36)` según los lineamientos de la empresa.
+ * Período de VACACIONES, PERMISO (con cargo a vacaciones) o PERMISO_HORAS (permiso corto,
+ * independiente, SIN cargo a vacaciones — trámite personal, cita médica) de un empleado. Es el
+ * registro de PLANIFICACIÓN que alimenta el calendario de la sección Vacaciones (vista por equipo y
+ * nacional). La solicitud/aprobación FORMAL sigue siendo por el formato descargable (firmado por el
+ * empleado y el jefe inmediato); aquí NO se lleva "saldo" de días (eso lo llena la unidad
+ * administrativa en el formato). `diasVacacion = round(diasLaborables * 1.36)` según los
+ * lineamientos de la empresa; PERMISO_HORAS no aplica el factor (`diasVacacion = 0`, no descuenta
+ * nada) y usa `horas` en su lugar.
  */
 @Entity
 @Table(name = "vacacion")
@@ -50,9 +53,12 @@ public class Vacacion extends PanacheEntityBase {
     @Column(name = "dias_vacacion")
     public int diasVacacion;
 
-    /** VACACIONES | PERMISO (permiso con cargo a vacaciones). */
+    /** VACACIONES | PERMISO (con cargo a vacaciones) | PERMISO_HORAS (corto, sin cargo). */
     @Column(nullable = false)
     public String tipo = "VACACIONES";
+
+    /** Horas del permiso corto. Solo se usa cuando tipo = PERMISO_HORAS; null en los otros dos. */
+    public Double horas;
 
     /** PLANIFICADA | APROBADA (informativo por ahora; la aprobación formal es por el formato). */
     @Column(nullable = false)

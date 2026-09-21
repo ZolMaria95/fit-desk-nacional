@@ -7,6 +7,11 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
+  // `flex-wrap`: en pantallas angostas (celular) el título + resultados + chip de búsqueda +
+  // "Limpiar" + ↻ no caben en una sola fila — sin esto, el chip nuevo (punto 6) empujaba todo
+  // por fuera del ancho de pantalla (scroll horizontal). Con wrap, lo que no cabe cae a una
+  // segunda línea en vez de desbordar.
+  flex-wrap: wrap;
 
   h2 {
     margin: 0;
@@ -33,6 +38,27 @@
     --mdc-outlined-button-label-text-color: #c0392b;
     --mdc-outlined-button-outline-color: rgba(192, 57, 43, 0.4);
     mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 2px; }
+  }
+
+  // El mismo chip `.filter-busqueda-activa` de abajo, pero acá SIEMPRE visible (no dentro
+  // del panel Filtros plegado) — sin el margen inferior (es un ítem más de esta fila) y con
+  // tope de ancho para no empujar el botón "Limpiar"/↻ en búsquedas de texto largas.
+  .filter-busqueda-activa {
+    margin-bottom: 0;
+    max-width: 260px;
+    flex: 1 1 auto;
+    // Los ítems flex no encogen por debajo de su contenido por defecto (`min-width: auto`) —
+    // sin esto, el texto largo de una búsqueda forzaba el ancho de la fila entera aunque
+    // hubiera `flex-wrap`. Con `min-width: 0` puede encoger y el `text-overflow: ellipsis`
+    // interno (`.filter-busqueda-activa span`) trunca en vez de desbordar.
+    min-width: 0;
+  }
+
+  // Menos de 480px (celular angosto): el chip de búsqueda ocupa toda su propia línea (queda
+  // más legible que compartir fila con lo que quede de espacio) y el título no compite con él.
+  @media (max-width: 479px) {
+    .filter-busqueda-activa { flex-basis: 100%; order: 3; max-width: none; }
+    .hd-clear, .hd-refresh { order: 4; }
   }
 }
 
@@ -292,48 +318,6 @@ mat-paginator {
   background: transparent;
 }
 
-// ── Estadísticas ──
-.hd-stats-header {
-  font-size: 14px;
-  padding: 10px 12px;
-  background: #1f3864;
-  color: #fff;
-  border-radius: 8px;
-  margin-bottom: 14px;
-}
-
-.hd-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-  gap: 16px;
-}
-
-.hd-stats-title {
-  font-weight: 700;
-  font-size: 13px;
-  margin-bottom: 6px;
-  color: var(--mat-sys-on-surface);
-}
-
-.hd-stats-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-
-  th {
-    background: #1f3864;
-    color: #fff;
-    padding: 6px 10px;
-    text-align: left;
-    font-size: 11px;
-  }
-  td { padding: 6px 10px; border-bottom: 1px solid #e3edf7; }
-  td.num { text-align: center; font-weight: 600; }
-  tbody tr:nth-child(even) { background: #ebf3fb; }
-  tfoot td { background: #1f3864; color: #fff; font-weight: 700; text-align: center; }
-  tfoot td:first-child { text-align: left; }
-}
-
 // Indicador de búsqueda activa en el panel de filtros. La búsqueda ya no vive aquí
 // (la hace el buscador único del drawer), pero el usuario necesita ver QUÉ está
 // buscando para entender por qué la lista está recortada.
@@ -399,4 +383,22 @@ mat-paginator {
 .tool-sort-menu .activo {
   color: var(--brand-dark, #0390bc);
   font-weight: 600;
+}
+
+// ─── TEMA OSCURO ───
+// `.tool-sort` NO puede ir en el `:host-context` de abajo: su plantilla se proyecta al drawer del
+// shell vía `*ngTemplateOutlet` (ver comentario más arriba), así que en el DOM real queda fuera del
+// subárbol de `<app-tickets>` — `:host-context` nunca encuentra el host y la regla no se aplicaba
+// nunca (se quedaba blanco, con el texto heredado claro del tema oscuro encima → invisible). Mismo
+// bug que ya se dio con el panel de la campanita (`layout.scss`): selector global escrito a mano.
+::ng-deep html[data-theme='dark'] .tool-sort {
+  background: #1a222b;
+}
+:host-context(html[data-theme='dark']) {
+  .hd-status {
+    &.st-loading { background: #16202e; color: #8fc4f5; }
+    &.st-ok { background: #16241a; color: #8fd98f; }
+    &.st-error { background: #2a1618; color: #f09a9a; }
+  }
+  .hd-tab-count.alert { background: #2a1618; color: #f09a9a; }
 }

@@ -54,10 +54,11 @@ export class AuthService {
   readonly esMSC001       = computed(() => (this._session()?.id || '').trim().toUpperCase() === 'MSC001');
   readonly esSupervisor   = computed(() => (this._session()?.apiRole || '').trim().toUpperCase().includes('SUPERVISOR'));
   readonly esScrumMaster  = computed(() => this._session()?.role === 'Scrum Master');
-  // Mi Panel (Sol): Scrum Master o MSC001 (≡ isHelpdesk del legacy)
-  readonly puedeVerMiPanel = computed(() => this.esScrumMaster() || this.esMSC001());
-  // Borrar board completo: solo MSC001
-  readonly puedeBorrarBoard = computed(() => this.esMSC001());
+  // Borrar board completo: RETIRADO — el botón no se muestra a NADIE (decisión de la dueña,
+  // 2026-09-08). Es una acción masiva e irreversible y no tiene por qué estar a un clic en el
+  // tablero. Se deja el flag (en vez de borrar el botón y `clearBoard()`) para poder revivirlo
+  // con una sola línea: volver a `this.esMSC001()`.
+  readonly puedeBorrarBoard = computed(() => false);
   // Borrar / mover cualquier card: MSC001 o Supervisor
   readonly puedeGestionarTodo = computed(() => this.esMSC001() || this.esSupervisor());
 
@@ -72,12 +73,41 @@ export class AuthService {
   readonly esEspecialista = computed(() => this._rolesPlataforma().includes('ESPECIALISTA'));
   // Administración: disponible para ADMIN y RESPONSABLE_EQUIPO.
   readonly puedeAdministrar = computed(() => this.esAdminPlataforma() || this.esResponsableEquipo());
+  /**
+   * Mi Panel: ADMIN y RESPONSABLE_EQUIPO, o sea quien supervisa trabajo de otros (la pantalla
+   * es seguimiento de equipo: acciones pendientes, esperando cliente, por vencer, sin asignar).
+   *
+   * Antes era `esScrumMaster() || esMSC001()` — herencia del legacy: un rol del **HelpDesk** más
+   * un usuario **en duro**. Efecto: NINGÚN responsable de equipo veía la pantalla salvo MSC001.
+   * Mismo error que ya se corrigió en `puedeEliminarTarea`/`veTableroCompleto`: los permisos salen
+   * de los roles de PLATAFORMA, nunca del `role_description` del HelpDesk.
+   */
+  readonly puedeVerMiPanel = computed(() => this.esAdminPlataforma() || this.esResponsableEquipo());
   // Enviar a otro equipo (transferir): RE o ADMIN. Bandeja de transferencias/solicitudes: idem.
   readonly puedeTransferir = computed(() => this.esAdminPlataforma() || this.esResponsableEquipo());
+  /**
+   * Eliminar una tarea (sin ticket) del board: SOLO Responsable de Equipo o ADMIN.
+   * Usa el ROL DE PLATAFORMA, no `puedeGestionarTodo()`/`esSupervisor()` (que derivan del rol
+   * del HelpDesk): un "SUPERVISOR" del HelpDesk que no sea RE en FitDesk NO debe poder borrar.
+   */
+  readonly puedeEliminarTarea = computed(() => this.esAdminPlataforma() || this.esResponsableEquipo());
   // Asignar/modificar el rol ADMIN: SOLO ADMIN.
   readonly puedeAsignarAdmin = computed(() => this.esAdminPlataforma());
   /** Gerencia: visibilidad global de SOLO LECTURA (no opera). */
   readonly esGerencia = computed(() => this._rolesPlataforma().includes('GERENCIA'));
+
+  /**
+   * "Descargar la conversación SIN anonimizar", para responsables. El PDF sale con los nombres
+   * reales en vez de "Soporte".
+   *
+   * **A propósito NO se persiste** (ni en localStorage ni en el backend): es una excepción puntual a
+   * una medida de privacidad, así que tiene que caducar sola en vez de quedarse encendida sin que
+   * nadie se acuerde. La apaga `clearSession()`, que cubre tanto el cierre de sesión explícito como
+   * la expiración del token. Por defecto, siempre anonimizado.
+   */
+  readonly pdfSinAnonimizar = signal(false);
+  /** Quién puede activar esa excepción (el propio PDF lo re-verifica antes de generarse). */
+  readonly puedeVerNombresEnPdf = computed(() => this.esAdminPlataforma() || this.esResponsableEquipo());
   /**
    * ¿Su plano de visibilidad es el TABLERO COMPLETO? RE (su equipo/clientes), ADMIN y
    * Gerencia (global). Consultor y Especialista viven en el plano **operativo** —"sus
@@ -230,6 +260,7 @@ export class AuthService {
     this._session.set(null);
     this._rolesPlataforma.set([]);
     this.rolesPromise = null;
+    this.pdfSinAnonimizar.set(false); // la excepción de privacidad no sobrevive a la sesión
   }
 
   private refreshPromise: Promise<string | null> | null = null;

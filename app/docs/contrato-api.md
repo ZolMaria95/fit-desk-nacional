@@ -37,18 +37,84 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - Adjuntos: `GET /attachments/{id}` (blob; nombre en `Content-Disposition`)
 
 ## B) API nativa de Quarkus — `/api/**` (datos en Postgres)
-- **Board / legacy (lectura)** `GET /api/legacy/…`: `stories`, `sprints`, `boards`, `users`,
-  `equipo-miembros`, `progress`, `queries`, `weeklySupport`, `hdNotes`, `hdActions`, `hdPendientes`,
-  `hdPendientes-visibles`, `ticket-espejo`, `solNotes`.
-- **Board / legacy (escritura)** `PATCH|PUT|DELETE /api/legacy/…`: `stories/stories[/{id}]`,
-  `sprints`, `hdNotes`, `hdActions`, `hdPendientes`, `weeklySupport`, `progress`, `queries`,
-  `solNotes`, `ticket-espejo/{id}/assignee`.
+- **Board / legacy (lectura)** `GET /api/legacy/…`: `stories`, `boards`, `users`,
+  `equipo-miembros`, `weeklySupport`, `hdNotes`, `hdActions`, `hdPendientes`,
+  `hdPendientes-visibles`, `ticket-espejo`, `solNotes`. (El tablero es **continuo por equipo**, sin
+  sprints — ver "Modelo de dominio". `sprints`, `progress` y `queries` siguen existiendo en el
+  backend pero **el frontend ya no los consume**: vestigiales.)
+- **Board / legacy (escritura)** `POST|PATCH|PUT|DELETE /api/legacy/…`: `stories/stories[/{id}]`,
+  `hdNotes`, `hdActions`, `hdPendientes`, `weeklySupport`, `solNotes`,
+  `ticket-espejo/{id}/assignee`. (`sprints`/`progress`/`queries` = vestigiales.)
+- **⚠️ `turnoSenior` (PENDIENTE — el frontend ya lo consume, el backend `fit-desk-api` todavía NO lo
+  implementa; hoy responde 404, manejado con try/catch en `DataService`, sin romper la UI)**:
+  - `GET/PUT /api/legacy/turnoSenior?equipo=<codigo>` — mismo patrón que `weeklySupport?equipo=`
+    (rotación semanal por equipo, clave = fecha ISO del viernes de esa semana), pero con **2 roles**
+    en vez de 1 y **sin** el log de tickets que sí tiene `weeklySupport` (no aplica a esta pantalla):
+    ```json
+    { "weeks": { "<YYYY-MM-DD del viernes>": {
+        "mesaAyuda": "<hid o ''>", "emergentes": "<hid o ''>",
+        "notes": "", "updatedAt": "ISO"
+    } } }
+    ```
+  - `GET /api/legacy/turnoSenior/hoy` (header `X-Actor-Hid`, igual que el resto de `/api/legacy/`) —
+    agregado sobre TODOS los equipos: ¿el actor está de turno HOY, en cualquiera de los 2 roles, en
+    cualquier equipo? (la asignación de "Senior de Turno" es abierta a cualquier empleado, así que
+    puede tocarle un equipo al que ni pertenece — no alcanza con mirar solo un equipo). Usado para el
+    punto rojo del menú lateral ("Senior de Turno"), visible sin importar la pantalla activa:
+    ```json
+    { "deTurno": true, "rol": "mesaAyuda", "equipo": "CACEL", "equipoNombre": "COAC CACEL" }
+    ```
+    (`deTurno: false` y el resto de campos ausentes si no está de turno en ningún equipo hoy).
+  - A diferencia de `weeklySupport` (asignación limitada a miembros del equipo vía
+    `equipo-miembros`), el picker de "Senior de Turno" en el frontend usa el catálogo COMPLETO de
+    `users` (`HelpdeskService.hdUsers()`) — cualquier empleado de la empresa es asignable, sin
+    restricción de equipo. Ver `docs/decisiones.md` para el contexto completo.
+  - **Crear tarea:** `POST /stories/stories` (body = la tarjeta, **sin id**) → el **backend asigna el id**
+    atómicamente y devuelve `{ "id": "TA-NNN" }` (201). Reemplaza el id client-side (max+1) que podía
+    chocar entre vistas desactualizadas. El front hace **fallback** al PATCH si el POST no existe (backend viejo).
+  - **Borrar tarea:** `DELETE /stories/stories/{id}` — **autorizado server-side** por `X-Actor-Hid`: solo
+    **ADMIN** o el **RE del board**; nunca una tarea con ticket. Devuelve 204 / 404 / **403** / **409** (con ticket).
+  - **Nota:** el PATCH de una tarea hace read-modify-write; el frontend **coalesce** varios campos de una
+    misma tarea en UNA sola llamada (no dispares PATCH concurrentes a la misma fila → se pisan y dan 500).
+  - **Cliente de una tarea:** el body acepta `client` (código) y `clientName`. El backend resuelve `client`
+    al `Cliente` registrado (FK, por `codigo` o `helpdesk_client_id`); además guarda el código y nombre
+    **crudos** (`cliente_codigo_raw`, `cliente_nombre`, V17) para no perder un cliente NO registrado. En
+    `GET /stories`, una **REUNIÓN** con cliente del catálogo sirve el `client`/`clientName` **crudos** (el
+    front resuelve el nombre por `helpdesk.clients()` y el selector del catálogo hace round-trip); el resto
+    sirve el `Cliente` registrado (FK).
+  - **Crear tarea automática al asignar:** `POST /stories/desde-ticket-asignado` — body
+    `{ ticket, clienteCodigo, clienteNombre, titulo, asignadoHid, asignadoNombre }` + `X-Actor-Hid`. El
+    frontend lo llama justo tras confirmar una asignación al HelpDesk (`HelpdeskService.assignTicket`) si el
+    llamador tiene el `Ticket` completo. Si el ticket YA tiene tarea, no-op (`{ creada:false, tareaCodigo }`
+    idempotente). Tablero destino: el equipo responsable del **cliente** del ticket
+    (`Cliente.equipoResponsable`) si está registrado; si no, el equipo del **actor** (quien asignó), primero
+    como miembro y si no como responsable. Si ninguno resuelve, no crea nada (`{ creada:false, motivo:"sin
+    equipo" }`) — la asignación al HelpDesk ya ocurrió igual, queda la creación manual de siempre.
 - **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `PUT /foto`.
+  - `GET /me` → `{ roles, equipos, clientes, esGlobal }`. **`clientes`** = los del **ALCANCE** del actor
+    (EQUIPO→su equipo, REGIONAL→su regional, GLOBAL→todos los registrados), independiente del rol
+    (`Actor.equiposEnAlcance`). **`esGlobal`** (bool) = alcance GLOBAL (`Actor.esAlcanceGlobal`). El frontend:
+    si `esGlobal` (o no hay clientes de alcance) → selector de cliente con el **catálogo completo del HelpDesk**;
+    si no → limitado a `clientes` (su alcance). Cada cliente: `{ codigo (slug de Cliente), nombre }`.
 - **Transferencias** `/api/transferencias`: `POST` (crear), `GET`, `GET /entrantes`, `GET /salientes`,
-  `GET /aceptadas`, `POST /{id}/aceptar`, `POST /{id}/rechazar`, `GET /mi-equipo/miembros`,
-  `GET /equipo/{equipoId}/miembros`.
+  `GET /aceptadas`, `POST /{id}/aceptar`, `POST /{id}/rechazar`, `POST /{id}/cancelar`,
+  `GET /mi-equipo/miembros`, `GET /equipo/{equipoId}/miembros`.
+  - `POST /{id}/cancelar`: retira un envío PROPIO mientras sigue `PENDIENTE`. Autoriza quien gobierna el
+    equipo **ORIGEN** (no destino). Estado resultante `CANCELADA` (distinto de `RECHAZADA`: el destino no
+    debe ver un rechazo suyo que en realidad fue el emisor arrepintiéndose). Si la tarea nació oculta solo
+    para esa transferencia (ticket sin tarea previa), se descarta entera, igual que `rechazar`.
+  - `GET /equipo/{equipoId}/miembros`: elegibles para "asignar a" al aceptar. Ya NO es solo quien tiene
+    Asignación EQUIPO sobre ese equipo exacto: incluye también los equipos **hermanos** de su misma
+    Regional, quien tenga Asignación **REGIONAL** sobre esa Regional, y **cualquier** Asignación GLOBAL
+    (sin filtrar por rol) — así un responsable REGIONAL reparte entre toda su regional, no solo un equipo.
 - **Solicitudes** `/api/solicitudes`: `POST`, `GET`, `GET /entrantes`, `GET /mias`,
-  `POST /{id}/aprobar`, `POST /{id}/rechazar`.
+  `POST /{id}/aprobar`, `POST /{id}/rechazar`, `POST /{id}/cancelar`.
+  - El DTO incluye **`ticket`** (N° de ticket del HelpDesk de la tarea, o `null` si es tarea local),
+    igual que el de Transferencia. Permite abrir la conversación del ticket desde la Bandeja.
+  - `POST /{id}/cancelar`: retira una solicitud PROPIA mientras sigue `PENDIENTE`. Autoriza solo el propio
+    `solicitante` (es personal, no algo que gobierne el Responsable del equipo). Estado `CANCELADA`. Misma
+    regla de tarea oculta que `rechazar`.
+  - `estado` de ambas entidades ahora acepta también `CANCELADA` (migración `V20`, aditiva).
 - **Mensajes entre equipos** `/api/mensajes`: `POST`, `GET /entrantes`, `POST /{id}/visto`.
 - **Catálogos** `/api/catalogos`: `GET /roles`, `GET /workflow-estados`, `GET /health`.
 - **Regionales** `/api/regionales`: CRUD (`GET`, `GET /{id}`, `POST`, `PUT /{id}`, `DELETE /{id}`).

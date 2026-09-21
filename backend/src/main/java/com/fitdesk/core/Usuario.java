@@ -40,6 +40,10 @@ public class Usuario extends PanacheEntityBase {
     @Column(columnDefinition = "text")
     public String foto;
 
+    /** Preferencia de tema de la UI: 'dark' = oscuro; NULL/'light' = claro (default). */
+    @Column(length = 10)
+    public String tema;
+
     public boolean activo = true;
 
     @Column(name = "creado_en")

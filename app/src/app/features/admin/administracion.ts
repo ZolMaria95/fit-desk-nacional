@@ -252,7 +252,7 @@ export class Administracion {
   }
 
   /**
-   * Elimina una regional en cascada: borra sus equipos VACÍOS (con su tablero/sprints). Pide una
+   * Elimina una regional en cascada: borra sus equipos VACÍOS (con su tablero). Pide una
    * VERIFICACIÓN (escribir el código) por seguridad. El backend BLOQUEA (y muestra el motivo) si
    * algún equipo tiene tareas, o si hay técnicos que solo pertenecen a esta región (su Responsable
    * debe reclasificarlos primero), o si el actor no es ADMIN/RE de la región.

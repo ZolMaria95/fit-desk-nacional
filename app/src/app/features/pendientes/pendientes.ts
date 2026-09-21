@@ -8,8 +8,15 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { DataService } from '../../core/services/data.service';
+import { PerfilService } from '../../core/services/perfil.service';
 import { TicketMessagesDialog } from '../tickets/ticket-messages-dialog/ticket-messages-dialog';
 import { PendienteDateDialog, PendienteDateResult } from './pendiente-date-dialog/pendiente-date-dialog';
+import { CrearRecordatorioDialog, CrearRecordatorioResult } from './crear-recordatorio-dialog/crear-recordatorio-dialog';
+
+/** Prefijo de la clave sintética de un recordatorio SIN ticket (creado a mano, ligado solo a un
+ *  cliente) — nunca es un N° de ticket real del HelpDesk. Mismo criterio que "TA-NNN" para tareas
+ *  sin ticket en el Board. */
+const REC_PREFIX = 'REC-';
 
 interface PendItem {
   ticket: string;
@@ -45,6 +52,7 @@ export class Pendientes {
   private readonly data = inject(DataService);
   private readonly dialog = inject(MatDialog);
   private readonly route = inject(ActivatedRoute);
+  private readonly perfil = inject(PerfilService);
 
   /** Pendientes VISIBLES según rol (admin=todos, RE=su equipo, resto=los suyos). */
   private readonly pend = signal<PendItem[]>([]);
@@ -113,9 +121,31 @@ export class Pendientes {
   fmtAdded(iso?: string): string { return iso ? iso.split('T')[0] : ''; }
   trunc(s: string | undefined, n: number): string { return s && s.length > n ? s.slice(0, n) + '…' : s || '—'; }
 
+  /** ¿Es un recordatorio SIN ticket (creado a mano)? No hay conversación que abrir. */
+  esSinTicket(it: PendItem): boolean {
+    return it.ticket.startsWith(REC_PREFIX);
+  }
+
   // ── Acciones ──
   openConversation(ticket: string): void {
-    this.dialog.open(TicketMessagesDialog, { data: { ticketId: ticket }, width: '720px', maxWidth: '96vw' });
+    this.dialog.open(TicketMessagesDialog, { data: { ticketId: ticket }, width: '920px', maxWidth: '92vw' });
+  }
+  async crear(): Promise<void> {
+    const res = (await firstValueFrom(
+      this.dialog.open(CrearRecordatorioDialog, { width: '420px', maxWidth: '95vw' }).afterClosed(),
+    )) as CrearRecordatorioResult | undefined;
+    if (!res) return;
+    const clave = `${REC_PREFIX}${Date.now()}`;
+    this.data.setHdPendiente(clave, { clienteRaw: res.clienteRaw, dueDate: res.dueDate, dueTime: res.dueTime, nota: res.nota, paused: false });
+    // Optimista: `setHdPendiente` persiste con un PUT fire-and-forget (no awaited — mismo patrón
+    // que el resto de los overlays legacy), así que refrescar de inmediato desde el servidor puede
+    // ganarle la carrera al propio guardado y mostrar la lista vieja. Se agrega localmente ya mismo
+    // (el próximo `refresh()` real la reconcilia). El backend agrupa un recordatorio sin ticket bajo
+    // el EQUIPO DEL CREADOR (no hay ticket/cliente del que derivarlo) — `misEquipos()` es ese mismo
+    // dato, ya cargado para el perfil, así que se copia acá para que el stub optimista no aparezca
+    // un instante bajo "Sin equipo" antes de reconciliarse.
+    const equipo = this.perfil.misEquipos()[0]?.nombre;
+    this.pend.update((list) => [...list, { ticket: clave, clienteRaw: res.clienteRaw, dueDate: res.dueDate, dueTime: res.dueTime, nota: res.nota, paused: false, mine: true, miEquipo: true, equipo }]);
   }
   pausar(it: PendItem): void {
     this.data.updateHdPendiente(it.ticket, { paused: true });
@@ -130,18 +160,27 @@ export class Pendientes {
     const res = (await firstValueFrom(
       this.dialog
         .open(PendienteDateDialog, {
-          data: { title: 'Postergar recordatorio', ticket: it.ticket, dueDate: it.dueDate, dueTime: it.dueTime, nota: it.nota },
+          data: {
+            title: 'Postergar recordatorio', ticket: it.ticket, sinTicket: this.esSinTicket(it), clienteRaw: it.clienteRaw,
+            dueDate: it.dueDate, dueTime: it.dueTime, nota: it.nota,
+          },
           width: '420px',
           maxWidth: '95vw',
         })
         .afterClosed(),
     )) as PendienteDateResult | undefined;
     if (!res) return;
-    this.data.updateHdPendiente(it.ticket, { dueDate: res.dueDate, dueTime: res.dueTime, nota: res.nota, paused: false, lastAlerted: null });
+    // Igual que en `crear()`: `updateHdPendiente` persiste con un PUT fire-and-forget, así que
+    // se aplica el patch también localmente (optimista) para que el cliente editado (si es un
+    // recordatorio sin ticket) se vea de inmediato y no dependa de ganarle la carrera al `refresh()`.
+    const patch: Partial<PendItem> = { dueDate: res.dueDate, dueTime: res.dueTime, nota: res.nota, paused: false, lastAlerted: null };
+    if (this.esSinTicket(it)) patch.clienteRaw = res.clienteRaw;
+    this.data.updateHdPendiente(it.ticket, patch);
+    this.pend.update((list) => list.map((p) => (p.ticket === it.ticket ? { ...p, ...patch } : p)));
     this.refresh();
   }
-  remove(ticket: string): void {
-    this.data.removeHdPendiente(ticket);
+  async remove(ticket: string): Promise<void> {
+    await this.data.removeHdPendiente(ticket);
     this.refresh();
   }
 }

@@ -1,9 +1,22 @@
 <div class="mp-header">
   <div>
     <h2>Mi Panel</h2>
-    <p class="mp-sub">Seguimiento diario — Scrum Master</p>
+    <p class="mp-sub">Seguimiento diario del equipo</p>
   </div>
   <span class="grow"></span>
+  <!-- Selector de equipo: solo si el usuario puede revisar más de uno (responsable regional).
+       Mismo texto y comportamiento que el de la pestaña Equipo de Tickets. -->
+  @if (multiEquipo()) {
+    <mat-form-field class="mp-equipo-sel" appearance="outline" subscriptSizing="dynamic">
+      <mat-label>Equipo a revisar</mat-label>
+      <mat-select [value]="equipoSel()" (selectionChange)="onEquipoChange($event.value)">
+        <mat-option value="">Todos mis equipos</mat-option>
+        @for (e of equiposRevisar(); track e.codigo) {
+          <mat-option [value]="e.codigo">{{ e.nombre }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
   <button mat-icon-button (click)="refresh()" [disabled]="loading()" matTooltip="Actualizar" aria-label="Actualizar">
     <mat-icon>refresh</mat-icon>
   </button>
@@ -56,7 +69,9 @@
           [statusOptions]="statusOptions()"
           [nota]="noteOf(t)"
           [esAccion]="isAction(t)"
+          [puedeMarcarAccion]="puedeMarcarAccion()"
           [esPendiente]="isPending(t)"
+          [esGuardado]="isGuardado(t)"
           [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
           [mostrarDias]="true"
           (verConversacion)="openConversation(t)"
@@ -65,7 +80,8 @@
           (cambiarEstado)="changeStatus(t, $event)"
           (guardarNota)="onGuardarNota(t, $event)"
           (toggleAccion)="toggleAction(t)"
-          (togglePendiente)="togglePending(t)" />
+          (togglePendiente)="togglePending(t)"
+          (toggleGuardado)="toggleGuardado(t)" />
       }
     </div>
   } @else {
@@ -103,7 +119,9 @@
               [statusOptions]="statusOptions()"
               [nota]="noteOf(t)"
               [esAccion]="isAction(t)"
+              [puedeMarcarAccion]="puedeMarcarAccion()"
               [esPendiente]="isPending(t)"
+              [esGuardado]="isGuardado(t)"
               [yaEnBoard]="ticketsEnBoard().has(t.ticket)"
               [mostrarDias]="true"
               (verConversacion)="openConversation(t)"
@@ -112,7 +130,8 @@
               (cambiarEstado)="changeStatus(t, $event)"
               (guardarNota)="onGuardarNota(t, $event)"
               (toggleAccion)="toggleAction(t)"
-              (togglePendiente)="togglePending(t)" />
+              (togglePendiente)="togglePending(t)"
+              (toggleGuardado)="toggleGuardado(t)" />
           }
         </div>
       </div>
@@ -144,7 +163,8 @@
             <span class="badge-id">{{ s.id }}</span>
             <span class="badge-days" [class.critical]="due.critical">{{ due.label }}</span>
             @if (mem) {
-              <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ iniciales(mem.name) }}</span>
+              @let av = avatarDe(s.assignee);
+                <span class="mp-avatar" [style.background]="av.bg" [style.color]="av.fg" [title]="mem.name">{{ iniciales(mem.name) }}</span>
             } @else {
               <span class="mp-avatar empty" title="Sin asignar">?</span>
             }
@@ -190,7 +210,8 @@
               <td><span class="prio-pill" [class]="'prio-' + s.priority">{{ s.priority.toUpperCase() }}</span></td>
               <td>
                 @if (mem) {
-                  <span class="mp-avatar" [style.background]="mem.color" [title]="mem.name">{{ iniciales(mem.name) }}</span>
+                  @let av = avatarDe(s.assignee);
+                <span class="mp-avatar" [style.background]="av.bg" [style.color]="av.fg" [title]="mem.name">{{ iniciales(mem.name) }}</span>
                 } @else {
                   <span class="muted">Sin asignar</span>
                 }

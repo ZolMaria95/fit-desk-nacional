@@ -1,3 +1,7 @@
+:host {
+  --mix-base: #fff;
+}
+
 // "Solicitudes de Especialistas" — gemela de la página de Transferencias, con acento
 // NARANJA (la categoría de solicitudes, coherente con el overview).
 :host {
@@ -25,7 +29,7 @@
   border: 1px solid color-mix(in srgb, var(--acc) 45%, #e0e0e0); border-radius: 19px;
   background: #fff; color: var(--acc-dark); font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
   mat-icon { font-size: 19px; width: 19px; height: 19px; }
-  &:hover:not(:disabled) { background: color-mix(in srgb, var(--acc) 8%, #fff); }
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--acc) 8%, var(--mix-base, #fff)); }
   &:disabled { opacity: 0.55; cursor: default; }
 }
 
@@ -35,7 +39,7 @@
   .td-header-icon {
     flex: none; display: inline-flex; align-items: center; justify-content: center;
     width: 56px; height: 56px; border-radius: 14px;
-    background: color-mix(in srgb, var(--acc) 16%, #fff); color: var(--acc-dark);
+    background: color-mix(in srgb, var(--acc) 16%, var(--mix-base, #fff)); color: var(--acc-dark);
     mat-icon { font-size: 30px; width: 30px; height: 30px; }
   }
   .td-header-text { flex: 1; min-width: 0; }
@@ -45,7 +49,7 @@
   .td-note {
     flex: none; display: flex; align-items: flex-start; gap: 10px; max-width: 380px;
     padding: 12px 16px; border-radius: 12px;
-    background: color-mix(in srgb, var(--acc) 9%, #fff); border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent);
+    background: color-mix(in srgb, var(--acc) 9%, var(--mix-base, #fff)); border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent);
     > mat-icon { flex: none; color: var(--acc-dark); }
     .td-note-text { display: flex; flex-direction: column;
       strong { font-size: 0.9rem; color: var(--acc-dark); }
@@ -113,19 +117,35 @@
   td { padding: 11px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
   tbody tr { cursor: pointer; transition: background 0.1s; }
   tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: color-mix(in srgb, var(--acc) 5%, #fff); }
+  tbody tr:hover { background: color-mix(in srgb, var(--acc) 5%, var(--mix-base, #fff)); }
   tbody tr:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
-  tbody tr.sel { background: color-mix(in srgb, var(--acc) 11%, #fff); box-shadow: inset 3px 0 0 var(--acc); }
+  tbody tr.sel { background: color-mix(in srgb, var(--acc) 11%, var(--mix-base, #fff)); box-shadow: inset 3px 0 0 var(--acc); }
 }
 
 .c-tarea-in { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .c-tarea-icon {
   flex: none; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px;
-  border-radius: 10px; background: color-mix(in srgb, var(--acc) 14%, #fff); color: var(--acc-dark);
+  border-radius: 10px; background: color-mix(in srgb, var(--acc) 14%, var(--mix-base, #fff)); color: var(--acc-dark);
   mat-icon { font-size: 20px; width: 20px; height: 20px; }
 }
 .c-tarea-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.c-code { font-weight: 700; font-size: 0.82rem; color: var(--acc-dark); }
+.c-code {
+  font-weight: 700; font-size: 0.82rem; color: var(--acc-dark);
+  // inline-flex + wrap: en móvil el chip cae bajo el código en vez de ensanchar la columna.
+  // El flex va aquí (span interno) y NUNCA en el <td>, que rompería la rejilla de la tabla.
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+// Chip del N° de ticket: es un <button> real (abre la conversación) dentro de una fila
+// que también es clicable → el TS corta la propagación. Azul de marca (no el naranja de
+// esta pantalla) porque identifica el concepto "ticket" en toda la Bandeja.
+.c-ticket {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700;
+  padding: 1px 6px; min-height: 24px; border: 0; border-radius: 8px; cursor: pointer;
+  background: color-mix(in srgb, var(--brand, #048abf) 12%, transparent);
+  color: #01566f; // NO var(--brand-dark): sobre el tinte del chip da 3,16 (mínimo 4,5); así 7,06
+  &:hover { background: color-mix(in srgb, var(--brand, #048abf) 24%, transparent); }
+  &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 1px; }
+}
 .c-title { font-size: 0.9rem; font-weight: 600; color: var(--mat-sys-on-surface, #16202a);
   max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .c-cli { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted);
@@ -145,9 +165,11 @@
   &.tipo-transf { background: #efe7fb; color: #5b34a8; } }
 
 .c-estado { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 12px; font-size: 0.76rem; font-weight: 700; white-space: nowrap;
-  &.est-pendiente { background: color-mix(in srgb, var(--acc) 16%, #fff); color: var(--acc-dark); }
+  &.est-pendiente { background: color-mix(in srgb, var(--acc) 16%, var(--mix-base, #fff)); color: var(--acc-dark); }
   &.est-aprobada { background: #ddefd9; color: #1b5e20; }
-  &.est-rechazada { background: #fdecea; color: #c0392b; } }
+  &.est-rechazada { background: #fdecea; color: #c0392b; }
+  // Gris neutro, distinto del rojo de rechazada: es una acción propia, no un juicio del Responsable.
+  &.est-cancelada { background: #eef0f4; color: #4a5568; } }
 
 .td-list-foot { padding: 12px; font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--line-soft); }
 .td-empty-tab {
@@ -178,6 +200,19 @@
 .td-detail-actions { display: flex; gap: 8px; margin-top: 16px;
   button { flex: 1; } mat-icon { font-size: 18px; width: 18px; height: 18px; } }
 
+// Aviso en la pestaña "Enviadas": la pedí yo, así que en vez de Aprobar/Rechazar muestro el estado.
+.td-sent-note {
+  display: flex; align-items: flex-start; gap: 8px; margin-top: 14px;
+  padding: 10px 12px; border-radius: 10px; font-size: 0.85rem; line-height: 1.35;
+  background: color-mix(in srgb, var(--acc) 8%, var(--mix-base, #fff));
+  color: var(--acc-dark);
+  border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent);
+  mat-icon { flex: none; font-size: 19px; width: 19px; height: 19px; margin-top: 1px; }
+  &.est-aprobada { background: #e8f6ef; color: #1b7a4b; border-color: #bfe6d3; }
+  &.est-rechazada { background: #fdecea; color: #c0392b; border-color: #f5c6c0; }
+  &.est-cancelada { background: #eef0f4; color: #4a5568; border-color: #d8dce3; }
+}
+
 .td-detail-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; color: var(--muted);
   mat-icon { font-size: 36px; width: 36px; height: 36px; color: #c2cad2; } p { margin: 0; font-size: 0.88rem; } }
 
@@ -192,4 +227,24 @@
     li { display: flex; align-items: flex-start; gap: 8px; font-size: 0.85rem; line-height: 1.4; color: var(--muted); flex: 1 1 320px;
       mat-icon { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--acc-dark); margin-top: 1px; }
       strong { color: var(--mat-sys-on-surface, #16202a); } } }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+  .td-bread .td-bread-sep, .c-chevron { color: #6b7684; }
+  // Estas cuatro tienen `background: #fff` fijo en el tema claro. Faltaba pasarlas a oscuro:
+  // el buscador quedaba blanco con la letra blanca (contraste 1) y no se veía lo que se escribía.
+  // Misma línea que ya tenía transferencias-detalle, que sí estaba bien.
+  .td-refresh, .td-search, .td-filter, .td-list-card { background: #131a21; }
+  .td-search input::placeholder { color: #8b949e; }
+  .td-empty-tab, .td-detail-empty { color: #aab6c2; }
+}
+
+:host-context(html[data-theme='dark']) {
+  .c-tipo.tipo-reasig { background: #16202e; color: #8fc4f5; }
+  .c-estado.est-aprobada { background: #16241a; color: #8fd98f; }
+  .c-estado.est-cancelada, .td-sent-note.est-cancelada { background: #262c36; color: #b8c0cc; }
+  // El azul de marca no contrasta sobre la tarjeta oscura: azul claro, como el resto de chips.
+  .c-ticket { background: #16202e; color: #8fc4f5; }
 }

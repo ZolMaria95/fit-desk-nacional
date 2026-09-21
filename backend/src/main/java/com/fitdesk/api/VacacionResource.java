@@ -128,19 +128,28 @@ public class VacacionResource {
     // ── Aplica los campos editables + calcula días según el TIPO ──
     // VACACIONES: rango de calendario (inicio→fin), días = días de calendario, SIN factor.
     // PERMISO (con cargo a vacaciones): se ingresan días laborables y días = round(laborables×1,36).
+    // PERMISO_HORAS (corto, sin cargo): se ingresan horas; NO descuenta nada (dias en 0).
     private static void aplicar(Vacacion v, JsonNode in, LocalDate inicio, LocalDate fin) {
         String tipo = text(in, "tipo");
         if (tipo != null) {
-            v.tipo = "PERMISO".equalsIgnoreCase(tipo) ? "PERMISO" : "VACACIONES";
+            v.tipo = "PERMISO".equalsIgnoreCase(tipo) ? "PERMISO"
+                    : "PERMISO_HORAS".equalsIgnoreCase(tipo) ? "PERMISO_HORAS"
+                    : "VACACIONES";
         }
         v.fechaInicio = inicio;
         v.fechaFin = fin;
         if ("PERMISO".equals(v.tipo)) {
             v.diasLaborables = in.has("diasLaborables") ? Math.max(0, in.get("diasLaborables").asInt(0)) : v.diasLaborables;
             v.diasVacacion = Vacacion.calcularDiasVacacion(v.diasLaborables); // × 1,36
+            v.horas = null;
+        } else if ("PERMISO_HORAS".equals(v.tipo)) {
+            v.horas = in.has("horas") ? Math.max(0.0, in.get("horas").asDouble(0)) : v.horas;
+            v.diasLaborables = 0;
+            v.diasVacacion = 0; // separado, sin cargo a vacaciones: no descuenta nada
         } else {
             v.diasVacacion = (int) (ChronoUnit.DAYS.between(inicio, fin) + 1); // días de calendario, inclusive
             v.diasLaborables = laborablesEnRango(inicio, fin); // informativo
+            v.horas = null;
         }
         v.nota = text(in, "nota"); // permite limpiarla
     }
@@ -206,6 +215,7 @@ public class VacacionResource {
         o.put("fechaFin", v.fechaFin != null ? v.fechaFin.toString() : null);
         o.put("diasLaborables", v.diasLaborables);
         o.put("diasVacacion", v.diasVacacion);
+        o.put("horas", v.horas);
         o.put("tipo", v.tipo);
         o.put("estado", v.estado);
         o.put("nota", v.nota);

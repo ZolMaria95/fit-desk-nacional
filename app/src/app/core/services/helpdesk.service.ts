@@ -1,8 +1,11 @@
 import { HttpClient, HttpContext, HttpParameterCodec, HttpParams } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { environment } from '../../../environments/environment';
 import { HD_SAFE } from '../interceptors/helpdesk-auth.interceptor';
+import { AuthService } from './auth.service';
+import { DataService, Story } from './data.service';
 import {
   Ticket,
   applyMessages,
@@ -101,6 +104,9 @@ const HD_STATUS_LS_KEY = 'fit-daily_hd_statuses';
 @Injectable({ providedIn: 'root' })
 export class HelpdeskService {
   private readonly http = inject(HttpClient);
+  private readonly data = inject(DataService);
+  private readonly auth = inject(AuthService);
+  private readonly snack = inject(MatSnackBar);
   // Dev: helpdeskProxyUrl vacío → base relativa `/api/v1` (la reenvía el proxy del
   // dev server). Prod: URL del Cloudflare Worker.
   readonly base = `${environment.helpdeskProxyUrl}/api/v1`;
@@ -134,6 +140,17 @@ export class HelpdeskService {
   private static readonly PAGE_SIZE = 12;
   private readonly _tickets = signal<Ticket[]>([]);
   readonly tickets = this._tickets.asReadonly();
+  /** Pulso de la ÚLTIMA mutación CONFIRMADA de un ticket (estado o asignado). El Board lo
+   *  observa para reconciliar esa tarjeta al instante (moverla de columna / cambiar el asignado)
+   *  sin esperar el sync completo. Regla de oro: solo se emite tras confirmar la escritura al API. */
+  private readonly _ticketMutado = signal<{
+    ticket: string;
+    estado?: string;
+    asignadoId?: string;
+    asignadoName?: string;
+    at: number;
+  } | null>(null);
+  readonly ticketMutado = this._ticketMutado.asReadonly();
   private readonly _total = signal(0);
   readonly total = this._total.asReadonly(); // total server-side de la consulta actual
   readonly loading = signal(false);
@@ -379,6 +396,32 @@ export class HelpdeskService {
       this.setStatus(mensajeError(err), 'error');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /** Fetch SIN efectos de la 1ª página de tickets de un conjunto de clientes, ordenada por
+   *  modificación desc. Para el poller de "nuevos tickets del equipo": NO toca `_tickets`/
+   *  `_total` (no interfiere con la vista de Tickets). Best-effort: si falla, devuelve []. */
+  async fetchEquipo(clientIds: string[], limit = 30): Promise<Ticket[]> {
+    if (!clientIds.length) return [];
+    return this.fetchPaginaSinEfectos(new HttpParams().set('client_id', clientIds.join(',')), limit);
+  }
+
+  /** Igual que `fetchEquipo` pero por ASIGNADO: la 1ª página de los tickets de una persona.
+   *  La alerta de novedades avisa al consultor de SUS tickets, dirija o no algún equipo. */
+  async fetchAsignados(hid: string, limit = 30): Promise<Ticket[]> {
+    if (!hid?.trim()) return [];
+    return this.fetchPaginaSinEfectos(new HttpParams().set('assigned_user_id', hid.trim()), limit);
+  }
+
+  /** Base común: 1 página ordenada por modificación desc, SIN tocar `_tickets`/`_total`. */
+  private async fetchPaginaSinEfectos(filtro: HttpParams, limit: number): Promise<Ticket[]> {
+    try {
+      let params = filtro.set('limit', String(limit)).set('offset', '0').set('modified_date_order', 'desc');
+      const data = await firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets`, { params }));
+      return (data?.items || []).map(mapTicket).map(evaluarFechas).map(clasificar);
+    } catch {
+      return [];
     }
   }
 
@@ -652,8 +695,13 @@ export class HelpdeskService {
    * Asigna un ticket a un empleado en el API. Igual que el Helpdesk web:
    * PUT /tickets/tickets/:id con el form-urlencoded `assigned_user_id`. Devuelve
    * true si el PUT respondió OK.
+   *
+   * `ticket` (opcional): si el llamador ya tiene el Ticket completo (cliente, asunto), se usa
+   * para crear la tarea AUTOMÁTICAMENTE en el board si el ticket todavía no tenía una — ver
+   * `crearTareaSiHaceFalta()`. Sin `ticket` no se intenta (los call sites que solo tienen el
+   * número siguen funcionando igual que antes, sin creación automática).
    */
-  async assignTicket(ticketId: string, userId: string): Promise<boolean> {
+  async assignTicket(ticketId: string, userId: string, ticket?: Ticket): Promise<boolean> {
     if (!ticketId || !userId) return false;
     const want = String(userId).trim().toUpperCase();
     try {
@@ -669,15 +717,66 @@ export class HelpdeskService {
       // board —que deriva el dueño de la tarea del ticket— lo refleje YA, sin esperar el sync
       // completo. Best-effort: si falla (o estamos en modo Firebase), el sync completo reconcilia.
       await this.refreshEspejoAssignee(ticketId, want);
+      // Pulso: el Board muestra el nuevo asignado al instante (regla #8: nombre resuelto, no el código).
+      const u = this._users().find((x) => x.id === want);
+      this._ticketMutado.set({ ticket: ticketId, asignadoId: want, asignadoName: u?.name || want, at: Date.now() });
+      if (ticket) void this.crearTareaSiHaceFalta(ticket, want, u?.name || want);
       return true;
     } catch {
       return false;
     }
   }
 
+  /**
+   * Si el ticket recién asignado NO tiene tarea en ningún board, la crea automáticamente
+   * (equipo responsable del cliente; si no resuelve, el equipo de quien asigna — ver el backend).
+   * Best-effort y silencioso ante error: la asignación al HelpDesk ya se confirmó, esto es un
+   * plus. Idempotente en el backend, así que el chequeo local es solo una optimización.
+   */
+  private async crearTareaSiHaceFalta(ticket: Ticket, asignadoHid: string, asignadoName: string): Promise<void> {
+    // `quarkusApiUrl` vacío es VÁLIDO en onprem/AWS (mismo-origen, URLs relativas) — no exigir
+    // `!!quarkusApiUrl`, que descartaba justo ese caso (ver el mismo fix ya hecho en
+    // `PerfilService.usaQuarkus()`). Con el chequeo viejo, esto NUNCA se ejecutaba en producción.
+    if (environment.dataBackend !== 'quarkus') return;
+    if (this.data.stories().some((s) => String(s.ticket) === String(ticket.ticket))) return;
+    try {
+      const hid = String(this.auth.session()?.id || '');
+      const r = await fetch(`${environment.quarkusApiUrl}/api/legacy/stories/desde-ticket-asignado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(hid ? { 'X-Actor-Hid': hid } : {}) },
+        body: JSON.stringify({
+          ticket: ticket.ticket,
+          clienteCodigo: ticket.clientId || undefined,
+          clienteNombre: ticket.clienteRaw || undefined,
+          titulo: ticket.asunto || undefined,
+          asignadoHid,
+          asignadoNombre: asignadoName,
+        }),
+      });
+      if (!r.ok) return;
+      const d: { creada: boolean; tareaCodigo?: string; board?: string } = await r.json();
+      if (!d.creada || !d.tareaCodigo || !d.board) return;
+      // Ya se sabe todo lo necesario (lo mandamos nosotros): se inserta en la caché local sin
+      // recargar, igual que hace `DataService.addStory()` tras confirmar su propio POST.
+      const nueva: Story = {
+        id: d.tareaCodigo, board: d.board, status: 'todo', priority: 'media', description: '',
+        assignee: asignadoHid, client: ticket.clientId || null, clientName: ticket.clienteRaw || undefined,
+        ticket: ticket.ticket, dueDate: '', points: 1, progress: 0, approved: false, approvedDate: null,
+        waitingClient: false, waitingDate: null, title: ticket.asunto || undefined,
+      };
+      this.data.stories.update((list) => [...list, nueva]);
+      this.snack.open(`Se creó la tarea ${d.tareaCodigo} para el ticket #${ticket.ticket}.`, 'OK', { duration: 4000 });
+    } catch {
+      // silencioso: la asignación ya quedó confirmada, esto es un plus best-effort
+    }
+  }
+
   /** Refresca el asignado de un ticket en el espejo de Quarkus (write-through de la reasignación). */
   private async refreshEspejoAssignee(ticketId: string, hid: string): Promise<void> {
-    if (environment.dataBackend !== 'quarkus' || !environment.quarkusApiUrl) return;
+    // Mismo bug que en `crearTareaSiHaceFalta`: `quarkusApiUrl` vacío (onprem/AWS, mismo-origen)
+    // es válido, no "sin backend". Con `!!quarkusApiUrl`, este write-through nunca corría en
+    // producción — el board dependía por completo del sync completo para verse al día.
+    if (environment.dataBackend !== 'quarkus') return;
     try {
       await firstValueFrom(
         this.http.put(`${environment.quarkusApiUrl}/api/legacy/ticket-espejo/${ticketId}/assignee`, {
@@ -785,6 +884,8 @@ export class HelpdeskService {
       );
       // Reflejar en el ticket en memoria (en ambas listas, si está cargado).
       this.patchTicket(ticketId, { estatus: estadoNombre });
+      // Pulso: el Board reconcilia esta tarjeta al instante (nueva columna + badge de estatus).
+      this._ticketMutado.set({ ticket: ticketId, estado: estadoNombre, at: Date.now() });
       return true;
     } catch {
       return false;

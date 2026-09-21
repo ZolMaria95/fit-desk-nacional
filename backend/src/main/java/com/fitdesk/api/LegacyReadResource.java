@@ -20,6 +20,7 @@ import com.fitdesk.overlay.Consulta;
 import com.fitdesk.overlay.Progreso;
 import com.fitdesk.overlay.RotacionSemanal;
 import com.fitdesk.overlay.TicketAccion;
+import com.fitdesk.overlay.TicketGuardado;
 import com.fitdesk.overlay.TicketNota;
 import com.fitdesk.overlay.TicketPendiente;
 
@@ -91,7 +92,23 @@ public class LegacyReadResource {
                     ? (t.asignadoA.helpdeskUserId != null ? t.asignadoA.helpdeskUserId : t.asignadoA.codigoLocal)
                     : null;
             s.put("assignee", (hdAsignado != null && !hdAsignado.isBlank()) ? hdAsignado : localAsignado);
-            s.put("client", t.cliente != null ? t.cliente.codigo : null);
+            // Cliente: para una REUNIÓN con cliente del catálogo (posiblemente NO registrado) se sirve el
+            // código/nombre CRUDO guardado (helpdesk_client_id) → el board lo resuelve por
+            // helpdesk.clients() y el picker (catálogo) hace round-trip. Para el resto manda el FK.
+            String cliCodigo;
+            String cliNombre;
+            if ("REUNION".equals(t.tipo) && t.clienteCodigoRaw != null) {
+                cliCodigo = t.clienteCodigoRaw;
+                cliNombre = t.clienteNombre != null ? t.clienteNombre
+                        : (t.cliente != null ? t.cliente.nombre : t.clienteCodigoRaw);
+            } else if (t.cliente != null) {
+                cliCodigo = t.cliente.codigo;
+                cliNombre = t.cliente.nombre;
+            } else {
+                cliCodigo = t.clienteCodigoRaw;
+                cliNombre = t.clienteNombre;
+            }
+            s.put("client", cliCodigo);
             s.put("ticket", t.ticketEspejo != null ? t.ticketEspejo.helpdeskTicketId : "");
             s.put("dueDate", ds(t.fechaLimite));
             s.put("points", t.puntos);
@@ -106,8 +123,8 @@ public class LegacyReadResource {
             if (t.ticketEspejo != null && t.ticketEspejo.estadoOrigen != null) {
                 s.put("hdEstatus", t.ticketEspejo.estadoOrigen);
             }
-            if (t.cliente != null) {
-                s.put("clientName", t.cliente.nombre);
+            if (cliNombre != null) {
+                s.put("clientName", cliNombre);
             }
             // Tipo de tarea + reunión (V11).
             s.put("tipo", t.tipo != null ? t.tipo : "DESARROLLO_SOPORTE");
@@ -116,6 +133,7 @@ public class LegacyReadResource {
             if (t.link != null) s.put("link", t.link);
             if (t.inicio != null) s.put("inicio", t.inicio);
             if (t.fin != null) s.put("fin", t.fin);
+            if (t.recordatorioMin != null) s.put("recordatorioMin", t.recordatorioMin);
             mapa.put(t.codigo, s);
         }
         return Map.of("stories", mapa);
@@ -223,6 +241,11 @@ public class LegacyReadResource {
             m.put("name", u.nombre);
             m.put("role", u.alias);
             m.put("color", u.color);
+            // `id` es el código LOCAL ("SC"), pero las tareas y los tickets se asignan por
+            // helpdesk_user_id ("MSC001"): con solo `id` el frontend nunca encontraba al miembro y
+            // el color guardado aquí no llegaba a pintarse en ningún sitio. Campo ADITIVO (no se
+            // toca `id`, que ya lo consume el board legacy).
+            m.put("hid", u.helpdeskUserId);
             lista.add(m);
         }
         return Map.of("users", lista);
@@ -300,9 +323,14 @@ public class LegacyReadResource {
         Set<Long> vistos = new HashSet<>();
         // Miembros del equipo (asignación EQUIPO) + ESPECIALISTAS globales (soporte nacional que
         // cubre cualquier equipo, p. ej. quien rota en la semana aunque no sea del equipo).
-        List<Asignacion> candidatos = new ArrayList<>();
-        candidatos.addAll(Asignacion.<Asignacion>list("alcanceTipo = 'EQUIPO' and alcanceEquipo = ?1 and activo = true", eq));
-        candidatos.addAll(Asignacion.<Asignacion>list("alcanceTipo = 'GLOBAL' and rol.codigo = 'ESPECIALISTA' and activo = true"));
+        List<Asignacion> delEquipo =
+                Asignacion.<Asignacion>list("alcanceTipo = 'EQUIPO' and alcanceEquipo = ?1 and activo = true", eq);
+        List<Asignacion> globales =
+                Asignacion.<Asignacion>list("alcanceTipo = 'GLOBAL' and rol.codigo = 'ESPECIALISTA' and activo = true");
+        // El equipo va PRIMERO para que, al deduplicar, quien es de este equipo Y además
+        // especialista global quede marcado como del equipo (que es lo que espera quien asigna).
+        List<Asignacion> candidatos = new ArrayList<>(delEquipo);
+        candidatos.addAll(globales);
         for (Asignacion a : candidatos) {
             Usuario u = a.usuario;
             if (u == null || !vistos.add(u.id)) {
@@ -312,6 +340,10 @@ public class LegacyReadResource {
             // id del picker = helpdesk_user_id (empleado del API); fallback al codigo local.
             m.put("id", u.helpdeskUserId != null ? u.helpdeskUserId : u.codigoLocal);
             m.put("name", u.nombre);
+            // ADITIVO: marca a los ESPECIALISTAS de alcance GLOBAL (soporte nacional). Aparecen en
+            // el selector de TODOS los equipos —pueden cubrir cualquier semana— y sin distinguirlos
+            // se confundían con la gente del equipo propio. El frontend los agrupa aparte.
+            m.put("global", !"EQUIPO".equals(a.alcanceTipo));
             out.add(m);
         }
         return out;
@@ -364,6 +396,21 @@ public class LegacyReadResource {
             m.put(a.helpdeskTicketId, a.marcado);
         }
         return m;
+    }
+
+    // ── /hdGuardados → { "<ticket>": true } — SOLO los del actor, 100% personal ──
+    @GET
+    @Path("/hdGuardados")
+    public Map<String, Object> hdGuardados(@HeaderParam("X-Actor-Hid") String actorHid) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        Usuario actor = Usuario.findByHelpdeskUserId(actorHid == null ? "" : actorHid.trim());
+        if (actor == null) {
+            return out;
+        }
+        for (TicketGuardado g : TicketGuardado.<TicketGuardado>list("usuario = ?1 order by helpdeskTicketId", actor)) {
+            out.put(g.helpdeskTicketId, true);
+        }
+        return out;
     }
 
     // ── /hdPendientes → { "<ticket>": {...} } — SOLO los del actor (dueño) ──
@@ -449,6 +496,8 @@ public class LegacyReadResource {
         if (p.lastAlerted != null) {
             m.put("lastAlerted", p.lastAlerted.toString());
         }
+        m.put("nota", p.nota);
+        m.put("paused", p.paused);
         return m;
     }
 

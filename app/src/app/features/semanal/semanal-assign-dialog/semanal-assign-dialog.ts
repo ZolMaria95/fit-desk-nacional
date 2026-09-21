@@ -1,14 +1,15 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { nombrePropio } from '../../../core/colores';
 
 export interface SemAssignData {
   range: string;
-  team: { id: string; name?: string }[];
+  team: { id: string; name?: string; global?: boolean }[];
   assignee: string;
   notes: string;
   hasExisting: boolean;
@@ -28,8 +29,18 @@ export type SemAssignResult = { assignee: string; notes: string } | { clear: tru
         <mat-label>Consultor</mat-label>
         <mat-select [(ngModel)]="assignee">
           <mat-option value="">Seleccionar…</mat-option>
-          @for (m of data.team; track m.id) {
-            <mat-option [value]="m.id">{{ m.name || m.id }}</mat-option>
+          @for (m of delEquipo(); track m.id) {
+            <mat-option [value]="m.id">{{ nombre(m) }}</mat-option>
+          }
+          <!-- Los ESPECIALISTAS de alcance GLOBAL salen en el selector de TODOS los equipos porque
+               pueden cubrir cualquier semana. Van aparte y al final: mezclados con la gente del
+               equipo parecían de aquí y confundían a quien asigna. -->
+          @if (soporteNacional().length) {
+            <mat-optgroup label="Soporte nacional">
+              @for (m of soporteNacional(); track m.id) {
+                <mat-option [value]="m.id">{{ nombre(m) }}</mat-option>
+              }
+            </mat-optgroup>
           }
         </mat-select>
       </mat-form-field>
@@ -69,6 +80,14 @@ export type SemAssignResult = { assignee: string; notes: string } | { clear: tru
 export class SemanalAssignDialog {
   private readonly ref = inject(MatDialogRef<SemanalAssignDialog>);
   readonly data = inject<SemAssignData>(MAT_DIALOG_DATA);
+
+  /** Gente del equipo elegido. */
+  readonly delEquipo = computed(() => (this.data.team || []).filter((m) => !m.global));
+  /** Especialistas de alcance GLOBAL: pueden cubrir la semana de cualquier equipo. */
+  readonly soporteNacional = computed(() => (this.data.team || []).filter((m) => m.global));
+
+  /** El HelpDesk guarda los nombres en MAYÚSCULAS; se presentan legibles. */
+  nombre(m: { id: string; name?: string }): string { return nombrePropio(m.name || '') || m.id; }
 
   assignee = this.data.assignee;
   notes = this.data.notes;

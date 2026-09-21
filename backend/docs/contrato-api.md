@@ -43,12 +43,27 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - **Board / legacy (escritura)** `PATCH|PUT|DELETE /api/legacy/…`: `stories/stories[/{id}]`,
   `sprints`, `hdNotes`, `hdActions`, `hdPendientes`, `weeklySupport`, `progress`, `queries`,
   `solNotes`, `ticket-espejo/{id}/assignee`.
+  - `POST /stories/desde-ticket-asignado`: crea la tarea automáticamente al asignar un ticket que aún no
+    la tenía (lo llama el frontend tras confirmar la asignación al HelpDesk). Body `{ ticket,
+    clienteCodigo, clienteNombre, titulo, asignadoHid, asignadoNombre }` + `X-Actor-Hid`. Idempotente
+    (si ya hay tarea, no-op). Tablero: `Cliente.equipoResponsable` del cliente del ticket; si no resuelve,
+    el equipo del actor (miembro, o responsable); si ninguno resuelve, no crea nada.
 - **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `PUT /foto`.
 - **Transferencias** `/api/transferencias`: `POST` (crear), `GET`, `GET /entrantes`, `GET /salientes`,
-  `GET /aceptadas`, `POST /{id}/aceptar`, `POST /{id}/rechazar`, `GET /mi-equipo/miembros`,
-  `GET /equipo/{equipoId}/miembros`.
+  `GET /aceptadas`, `POST /{id}/aceptar`, `POST /{id}/rechazar`, `POST /{id}/cancelar`,
+  `GET /mi-equipo/miembros`, `GET /equipo/{equipoId}/miembros`.
+  - `POST /{id}/cancelar`: retira un envío PROPIO PENDIENTE (autoriza quien gobierna el equipo ORIGEN).
+    Estado `CANCELADA`, distinto de `RECHAZADA`. Misma regla de tarea oculta que `rechazar`.
+  - `GET /equipo/{equipoId}/miembros`: elegibles para "asignar a" al aceptar. Incluye Asignación EQUIPO
+    sobre ese equipo o sus **hermanos** de la misma Regional, Asignación **REGIONAL** sobre esa Regional,
+    y cualquier Asignación **GLOBAL** (sin filtrar por rol) — un responsable REGIONAL ya no depende de
+    tener además una Asignación EQUIPO redundante para verse a sí mismo ni a su gente.
 - **Solicitudes** `/api/solicitudes`: `POST`, `GET`, `GET /entrantes`, `GET /mias`,
-  `POST /{id}/aprobar`, `POST /{id}/rechazar`.
+  `POST /{id}/aprobar`, `POST /{id}/rechazar`, `POST /{id}/cancelar`.
+  - El DTO incluye **`ticket`** (N° de ticket del HelpDesk de la tarea, o `null` si es tarea local),
+    igual que el de Transferencia. Permite abrir la conversación del ticket desde la Bandeja.
+  - `POST /{id}/cancelar`: retira una solicitud PROPIA PENDIENTE (autoriza solo el `solicitante`). Estado
+    `CANCELADA`. `estado` de ambas entidades acepta ahora `CANCELADA` (migración `V20`, aditiva).
 - **Mensajes entre equipos** `/api/mensajes`: `POST`, `GET /entrantes`, `POST /{id}/visto`.
 - **Catálogos** `/api/catalogos`: `GET /roles`, `GET /workflow-estados`, `GET /health`.
 - **Regionales** `/api/regionales`: CRUD (`GET`, `GET /{id}`, `POST`, `PUT /{id}`, `DELETE /{id}`).

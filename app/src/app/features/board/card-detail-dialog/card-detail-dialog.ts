@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -17,6 +18,7 @@ import { wireDialogEsc } from '../../../core/dialog-esc';
 import { AuthService } from '../../../core/services/auth.service';
 import { DataService, Story } from '../../../core/services/data.service';
 import { HdClient, HdUser, HelpdeskService } from '../../../core/services/helpdesk.service';
+import { PerfilService } from '../../../core/services/perfil.service';
 import { TicketMessagesDialog } from '../../tickets/ticket-messages-dialog/ticket-messages-dialog';
 import { estadoStyle } from '../../tickets/tickets-card-utils';
 import { ConfirmDialog } from '../confirm-dialog/confirm-dialog';
@@ -68,6 +70,7 @@ export interface CardDetailData {
     MatProgressSpinnerModule,
     MatDatepickerModule,
     MatTooltipModule,
+    MatCheckboxModule,
   ],
   templateUrl: './card-detail-dialog.html',
   styleUrl: './card-detail-dialog.scss',
@@ -76,6 +79,7 @@ export class CardDetailDialog {
   private readonly data = inject(DataService);
   private readonly auth = inject(AuthService);
   private readonly helpdesk = inject(HelpdeskService);
+  private readonly perfil = inject(PerfilService);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   private readonly ref = inject(MatDialogRef<CardDetailDialog>);
@@ -92,8 +96,15 @@ export class CardDetailDialog {
   readonly showClientEditor = computed(() => this.isNew || (this.esHelpdesk() && !this.story?.ticket));
 
   // ── Envío entre equipos (solo modo Quarkus, sobre una tarea existente) ──
-  /** Enviar a otro equipo: Responsable de Equipo o ADMIN. */
-  readonly puedeEnviarEquipo = computed(() => !this.isNew && this.data.usesQuarkus() && this.auth.puedeTransferir());
+  /** Enviar a otro equipo: Responsable de Equipo o ADMIN, y **del equipo dueño de esta tarea**
+   *  (el backend autoriza contra el board de origen, no contra el equipo del actor). */
+  readonly puedeEnviarEquipo = computed(
+    () =>
+      !this.isNew &&
+      this.data.usesQuarkus() &&
+      this.auth.puedeTransferir() &&
+      this.perfil.gobiernaBoard(this.story?.board),
+  );
   /** Escalar por solicitud: Especialista. */
   readonly puedeEscalar = computed(() => !this.isNew && this.data.usesQuarkus() && this.auth.esEspecialista());
   /** Mensaje al responsable del equipo de la tarea: entre Responsables de Equipo (o ADMIN). */
@@ -108,6 +119,37 @@ export class CardDetailDialog {
     const owner = String(this.story?.assignee || '').trim().toUpperCase();
     return !!owner && owner === String(this.auth.session()?.id || '').trim().toUpperCase();
   });
+
+  /** Checkbox "Finalizado" — mismas condiciones que la tarjeta del board (`onFinalize` en
+   *  board.ts) y que mover (`puedeMover`, arriba): solo tareas SIN ticket (con ticket lo define el
+   *  propio ticket); puede finalizarla el DUEÑO de la tarea o RE/Supervisor/admin — decisión
+   *  confirmada con la dueña (antes solo RE/Supervisor). */
+  async onFinalize(ev: MatCheckboxChange): Promise<void> {
+    if (!this.story || this.story.ticket) return;
+    if (!this.puedeMover()) {
+      ev.source.checked = !!this.story.approved; // revierte al estado real
+      this.snack.open('Solo el dueño de la tarea, un Responsable de Equipo o el Helpdesk pueden finalizarla.', 'OK', { duration: 3500 });
+      return;
+    }
+    if (!ev.checked) {
+      this.data.unapproveStory(this.story.id);
+      this.story.approved = false;
+      return;
+    }
+    const ok = await firstValueFrom(
+      this.dialog
+        .open(ConfirmDialog, {
+          data: { title: 'Finalizar tarea', message: `¿Marcar "${this.story.title}" como finalizada?`, confirmText: 'Finalizar' },
+        })
+        .afterClosed(),
+    );
+    if (!ok) {
+      ev.source.checked = false; // cancelado → quita el check
+      return;
+    }
+    this.data.approveStory(this.story.id);
+    this.story.approved = true;
+  }
 
   /** Abre el diálogo para transferir la tarea a otro equipo (crea una transferencia PENDIENTE). */
   enviarAotroEquipo(): void {
@@ -158,18 +200,32 @@ export class CardDetailDialog {
     return { id, name: this.story?.clientName || id };
   }
 
-  // Clientes del API (consulta independiente + cache). Fallback a los locales
-  // mientras el API responde, para que el buscador tenga algo de inmediato.
-  readonly clientes = signal<HdClient[]>(this.initialClients());
+  // Clientes del selector, SCOPEADOS por alcance: GLOBAL → catálogo COMPLETO del HelpDesk;
+  // EQUIPO/REGIONAL → solo los de su alcance (`perfil.misClientes`). Fallback al catálogo si el alcance
+  // no trae clientes (equipo sin registrar, o backend viejo sin `esGlobal`) → nunca queda vacío.
+  // EXCEPCIÓN: crear una tarea NUEVA sin ticket (aún) → catálogo COMPLETO sin importar el alcance.
+  // Una tarea sin ticket no tiene por qué ser de un cliente del propio equipo/regional (p. ej. un
+  // consultor de un equipo cubre puntualmente algo de otro cliente). En cuanto hay un ticket (venía
+  // prefijado al abrir desde Tickets, o se tecleó y se buscó aquí) vuelve a acotarse: el cliente lo
+  // define el ticket real, y no tendría sentido ofrecer uno distinto al de su propio HelpDesk.
+  // MÉTODOS (no `computed`) a propósito: `ticket` es una property plana (`[(ngModel)]`), no un signal
+  // — un `computed` no se recalcularía al escribir en el campo; el CD local del propio input sí.
+  clientes(): HdClient[] {
+    if (this.isNew && !this.ticket.trim()) return this.initialClients();
+    const scoped = this.perfil.misClientes();
+    return this.perfil.esGlobal() || scoped.length === 0
+      ? this.initialClients()
+      : scoped.map((c) => ({ id: c.codigo, name: c.nombre }));
+  }
   readonly clientFilter = signal('');
   clientModel: HdClient | string | null = null;
   private clientTouched = false;
-  readonly filteredClients = computed<HdClient[]>(() => {
+  filteredClients(): HdClient[] {
     const f = this.clientFilter().toLowerCase().trim();
     const list = this.clientes();
     if (!f) return list;
     return list.filter((c) => c.name.toLowerCase().includes(f) || c.id.toLowerCase().includes(f));
-  });
+  }
 
   // Empleados asignables: consulta independiente al API del Helpdesk (con cache).
   // Arranca con el cache/semilla del servicio para respuesta inmediata.
@@ -196,12 +252,12 @@ export class CardDetailDialog {
       this.assignees.set(this.ensureCurrent(users));
       if (!this.assigneeTouched) this.syncAssigneeModel();
     });
-    // Clientes del API para el buscador; sincroniza el cliente pre-cargado (prefill).
+    // Clientes del buscador (scopeados por alcance): cargamos el catálogo del HelpDesk (para GLOBAL)
+    // y el perfil (esGlobal + clientes del alcance); `clientes` (computed) elige la fuente. Se
+    // resincroniza el cliente pre-cargado (prefill) cuando llegan.
     this.syncClientModel();
-    this.helpdesk.getClients().then((cs) => {
-      if (cs.length) this.clientes.set(cs);
-      if (!this.clientTouched) this.syncClientModel();
-    });
+    this.perfil.cargarMiPerfil().then(() => { if (!this.clientTouched) this.syncClientModel(); });
+    this.helpdesk.getClients().then(() => { if (!this.clientTouched) this.syncClientModel(); });
   }
 
   private syncClientModel(): void {
@@ -231,6 +287,16 @@ export class CardDetailDialog {
     this.clientId = val?.id ?? '';
     this.clientModel = val;
     this.clientFilter.set('');
+  }
+
+  /** Nombre del cliente seleccionado (del catálogo del HelpDesk). Se guarda junto al código para no
+   *  perder el nombre de un cliente NO registrado (mismo criterio que la reunión) y poder buscar por él. */
+  private clientNameResolved(): string {
+    const id = this.clientId;
+    if (!id) return '';
+    const m = this.clientModel;
+    if (m && typeof m !== 'string' && m.name) return m.name;
+    return this.clientes().find((c) => c.id === id)?.name || this.story?.clientName || '';
   }
 
   // ── Consulta del ticket → autocompleta el modal (solo nueva tarea) ──
@@ -366,7 +432,7 @@ export class CardDetailDialog {
   openTicketConversation(): void {
     const id = this.ticket.trim();
     if (!id) return;
-    this.dialog.open(TicketMessagesDialog, { data: { ticketId: id }, width: '720px', maxWidth: '96vw' });
+    this.dialog.open(TicketMessagesDialog, { data: { ticketId: id }, width: '920px', maxWidth: '92vw' });
   }
 
   async save(): Promise<void> {
@@ -380,17 +446,25 @@ export class CardDetailDialog {
 
     if (this.isNew) {
       const ticket = this.ticket.trim();
-      this.data.addStory({
-        title,
-        priority: this.priority,
-        description: this.description.trim(),
-        status: this.status,
-        dueDate: this.dueDateStr(),
-        assignee,
-        client: this.clientId || null,
-        ticket,
-        progress: pct,
-      });
+      // Guardado CONFIRMADO: si el backend no acepta, se avisa y el modal queda ABIERTO
+      // (no se pierde lo escrito ni se muestra una tarjeta que no se guardó).
+      try {
+        await this.data.addStory({
+          title,
+          priority: this.priority,
+          description: this.description.trim(),
+          status: this.status,
+          dueDate: this.dueDateStr(),
+          assignee,
+          client: this.clientId || null,
+          clientName: this.clientNameResolved(),
+          ticket,
+          progress: pct,
+        });
+      } catch {
+        this.snack.open('No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.', 'OK', { duration: 4000 });
+        return;
+      }
       // Al CREAR siempre se empuja la asignación al API (sin omitir por coincidir
       // con el prefill): garantiza que el ticket quede asignado al técnico elegido.
       this.maybeAssignHd(ticket, assignee);
@@ -417,7 +491,10 @@ export class CardDetailDialog {
     this.data.updateStoryAssignee(task.id, assignee);
     // El Helpdesk puede cambiar el cliente de tareas SIN ticket (las que tienen
     // ticket toman el cliente del ticket en el sync del board).
-    if (this.esHelpdesk() && !task.ticket) this.data.updateStoryClient(task.id, this.clientId || null);
+    if (this.esHelpdesk() && !task.ticket) {
+      this.data.updateStoryClient(task.id, this.clientId || null);
+      this.data.updateStoryClientName(task.id, this.clientNameResolved());
+    }
     if (this.editable) this.data.updateStoryPriority(task.id, this.priority);
     // Si la tarea tiene ticket y cambió el asignado → reflejar en el Helpdesk.
     this.maybeAssignHd(task.ticket, assignee, task.assignee);
@@ -445,14 +522,23 @@ export class CardDetailDialog {
    * dejaría el ticket huérfano en el tablero. Solo son eliminables las tareas propias
    * del board (reuniones/locales). Misma regla que la × de la tarjeta y que
    * `deleteCard`/`clearBoard` del board; aquí faltaba y el botón quedaba operativo.
+   * Además, borrar es potestad SOLO del Responsable de Equipo (o ADMIN): antes bastaba con
+   * ser dueño/soporte y una tarea se borró por error (ver docs/decisiones 2026-08-04).
    */
-  readonly puedeEliminar = computed(() => !this.isNew && !this.story?.ticket);
+  readonly puedeEliminar = computed(
+    () => !this.isNew && !this.story?.ticket && this.auth.puedeEliminarTarea(),
+  );
 
   async remove(): Promise<void> {
     if (!this.story) return;
     // Defensa en profundidad: aunque el botón esté oculto, nunca borrar una tarea con ticket.
     if (this.story.ticket) {
       this.snack.open('Las tareas con ticket asociado no se pueden eliminar.', 'OK', { duration: 4000 });
+      return;
+    }
+    // Defensa en profundidad: solo Responsable de Equipo o ADMIN pueden eliminar.
+    if (!this.auth.puedeEliminarTarea()) {
+      this.snack.open('Solo el Responsable de Equipo puede eliminar tareas.', 'OK', { duration: 4000 });
       return;
     }
     const ok = await firstValueFrom(

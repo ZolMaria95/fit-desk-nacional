@@ -142,6 +142,16 @@
         <mat-datepicker #duePicker></mat-datepicker>
       </mat-form-field>
     </div>
+
+    <!-- Mismas condiciones que la tarjeta del board: solo en "Entregado", solo tareas SIN ticket
+         (con ticket lo define el propio ticket). -->
+    @if (status === 'done') {
+      <div class="cd-field">
+        <mat-checkbox [checked]="story?.approved" [disabled]="!!story?.ticket" (change)="onFinalize($event)">
+          {{ story?.approved ? 'Finalizado ✓' : 'Finalizado' }}
+        </mat-checkbox>
+      </div>
+    }
   </section>
 
   <!-- ── 3. TRABAJO REALIZADO ── -->

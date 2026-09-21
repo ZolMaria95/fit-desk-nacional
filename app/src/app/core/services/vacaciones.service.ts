@@ -21,7 +21,9 @@ export interface Vacacion {
   fechaFin: string;     // YYYY-MM-DD
   diasLaborables: number;
   diasVacacion: number;
-  tipo: 'VACACIONES' | 'PERMISO';
+  /** Horas del permiso corto. Solo tiene valor cuando `tipo === 'PERMISO_HORAS'`. */
+  horas: number | null;
+  tipo: 'VACACIONES' | 'PERMISO' | 'PERMISO_HORAS';
   estado: string;
   nota: string | null;
   registradoPor: string | null;
@@ -33,8 +35,10 @@ export interface VacacionInput {
   fechaInicio: string;
   fechaFin: string;
   diasLaborables: number;
-  tipo: 'VACACIONES' | 'PERMISO';
+  tipo: 'VACACIONES' | 'PERMISO' | 'PERMISO_HORAS';
   nota?: string;
+  /** Solo se manda cuando `tipo === 'PERMISO_HORAS'`. */
+  horas?: number;
 }
 
 /** Feriado / día no laborable de la empresa (nacional). Puede ser un día o un rango (puente). */

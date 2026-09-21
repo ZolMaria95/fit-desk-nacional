@@ -11,6 +11,7 @@ import java.util.Set;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fitdesk.api.Actor;
 import com.fitdesk.core.Asignacion;
 import com.fitdesk.core.Board;
 import com.fitdesk.core.Cliente;
@@ -20,6 +21,7 @@ import com.fitdesk.core.Tarea;
 import com.fitdesk.core.TicketEspejo;
 import com.fitdesk.core.Usuario;
 import com.fitdesk.core.WorkflowEstado;
+import com.fitdesk.notificaciones.NotificacionService;
 import com.fitdesk.overlay.Consulta;
 import com.fitdesk.overlay.Progreso;
 import com.fitdesk.overlay.RotacionSemanal;
@@ -46,6 +48,9 @@ public class LegacyWriteService {
 
     @Inject
     ObjectMapper mapper;
+
+    @Inject
+    NotificacionService notificaciones;
 
     /** status legacy del board → codigo de workflow_estado (mismo mapeo que el ETL). */
     private static final Map<String, String> STATUS_A_WORKFLOW = Map.of(
@@ -98,17 +103,59 @@ public class LegacyWriteService {
         }
     }
 
-    /** DELETE /stories/stories/{id}: borra la tarjeta (desliga progreso/consulta que la referencien). */
+    /** Resultado de un intento de borrado de tarea (para que el resource devuelva 204/404/403/409). */
+    public enum DeleteResult { OK, NOT_FOUND, FORBIDDEN, HAS_TICKET }
+
+    /**
+     * DELETE /stories/stories/{id}: borra la tarjeta (desliga progreso/consulta que la referencien).
+     * Autorización SERVER-SIDE (no se confía en el cliente): SOLO ADMIN o el Responsable de Equipo del
+     * board pueden borrar; NUNCA una tarea con ticket asociado (nace del HelpDesk). Cierra la fuga por la
+     * que un bundle viejo en caché (PWA) podía borrar tareas sin ticket llamando este endpoint sin control
+     * (ver docs/decisiones — incidentes TA-224 / TA-230). El actor llega en X-Actor-Hid.
+     */
     @Transactional
-    public boolean deleteStory(String id) {
+    public DeleteResult deleteStory(String id, String actorHid) {
         Tarea t = Tarea.findByCodigo(id);
         if (t == null) {
-            return false;
+            return DeleteResult.NOT_FOUND;
+        }
+        if (t.ticketEspejo != null) {
+            return DeleteResult.HAS_TICKET;
+        }
+        Long equipoId = (t.board != null && t.board.equipo != null) ? t.board.equipo.id : null;
+        if (!(Actor.esAdmin(actorHid) || Actor.gobierna(actorHid, equipoId))) {
+            return DeleteResult.FORBIDDEN;
         }
         Progreso.update("tarea = null where tarea = ?1", t);
         Consulta.update("tarea = null where tarea = ?1", t);
         t.delete();
-        return true;
+        return DeleteResult.OK;
+    }
+
+    /** Siguiente codigo TA-NNN, derivado del MÁXIMO REAL de la BD (no del cliente). Atómico dentro de la tx. */
+    private String nextTareaCodigo() {
+        Number max = (Number) Tarea.getEntityManager()
+                .createNativeQuery("SELECT COALESCE(MAX(CAST(SUBSTRING(codigo FROM 4) AS INTEGER)), 0) "
+                        + "FROM tarea WHERE codigo ~ '^TA-[0-9]+$'")
+                .getSingleResult();
+        return "TA-" + String.format("%03d", max.intValue() + 1);
+    }
+
+    /**
+     * POST /stories/stories: crea una tarea con id ASIGNADO POR EL SERVIDOR (atómico). Antes el id lo
+     * calculaba el navegador (max+1 de SU vista); una vista DESACTUALIZADA podía chocar y PISAR la tarea de
+     * otro (ver docs/decisiones). Ahora el backend lo deriva del máximo REAL de la tabla. Devuelve el codigo.
+     */
+    @Transactional
+    public String createStory(JsonNode fields) {
+        Tarea t = new Tarea();
+        t.codigo = nextTareaCodigo();
+        t.board = board();
+        t.workflowEstado = workflowByStatus(null);
+        // Fuerza el INSERT ya: si el codigo choca por creación concurrente, falla AQUÍ y el resource reintenta.
+        t.persistAndFlush();
+        applyFields(t, fields);
+        return t.codigo;
     }
 
     private Tarea upsertTarea(String codigo) {
@@ -128,6 +175,13 @@ public class LegacyWriteService {
         if (f == null || !f.isObject()) {
             return;
         }
+        // Estado ANTES de aplicar cambios, para el buzón de notificaciones (detecta TRANSICIONES,
+        // no el valor final): "antes no tenía asignado, ahora sí" / "antes no estaba en Entregado sin
+        // finalizar, ahora sí". En una tarea recién creada, t.asignadoA ya es null y su workflowEstado
+        // es el default (no "final"), así que ambas comparaciones funcionan igual en creación y en PATCH.
+        Usuario asignadoAntes = t.asignadoA;
+        boolean sinFinalizarAntes = esTareaSinFinalizarPendiente(t);
+        boolean aprobadoAntes = t.aprobado;
         if (f.has("status")) {
             t.workflowEstado = workflowByStatus(text(f, "status"));
         }
@@ -145,7 +199,14 @@ public class LegacyWriteService {
             t.asignadoA = usuarioBy(text(f, "assignee"));
         }
         if (f.has("client")) {
-            t.cliente = clienteBy(text(f, "client"));
+            String raw = text(f, "client");
+            t.cliente = clienteBy(raw); // FK si el cliente está registrado; null si no
+            // Conserva el código crudo (p. ej. helpdesk_client_id del catálogo) para no perder
+            // un cliente NO registrado (reunión con cualquier cliente del HelpDesk).
+            t.clienteCodigoRaw = raw != null && !raw.isBlank() ? raw : null;
+        }
+        if (f.has("clientName")) {
+            t.clienteNombre = trunc(text(f, "clientName"), 300);
         }
         if (f.has("ticket")) {
             t.ticketEspejo = espejoFor(text(f, "ticket"), t);
@@ -203,7 +264,31 @@ public class LegacyWriteService {
         if (f.has("fin")) {
             t.fin = text(f, "fin");
         }
+        if (f.has("recordatorioMin")) {
+            // Minutos antes del inicio para la alerta de la reunión. null / <=0 / no numérico → sin recordatorio.
+            JsonNode rm = f.get("recordatorioMin");
+            t.recordatorioMin = (rm == null || rm.isNull() || !rm.canConvertToInt() || rm.asInt() <= 0) ? null : rm.asInt();
+        }
         t.actualizadoEn = OffsetDateTime.now();
+
+        // Buzón: solo en la TRANSICIÓN (evita renotificar en cada PATCH si el valor no cambió de
+        // "no cumple" a "cumple"). Tareas CON ticket nunca generan estas dos (lo filtran los propios
+        // métodos de NotificacionService).
+        if (t.asignadoA != null && t.asignadoA != asignadoAntes) {
+            notificaciones.tareaAsignada(t);
+        }
+        if (esTareaSinFinalizarPendiente(t) && !sinFinalizarAntes) {
+            notificaciones.tareaSinFinalizar(t);
+        }
+        if (t.aprobado && !aprobadoAntes) {
+            notificaciones.resolverTareaFinalizada(t);
+        }
+    }
+
+    /** Tarea sin ticket, ya en la columna final (Entregado) y sin marcarse Finalizada. */
+    private static boolean esTareaSinFinalizarPendiente(Tarea t) {
+        return t.ticketEspejo == null && t.workflowEstado != null
+                && "final".equals(t.workflowEstado.categoria) && !t.aprobado;
     }
 
     private TicketEspejo espejoFor(String ticket, Tarea t) {
@@ -387,6 +472,13 @@ public class LegacyWriteService {
      * PUT /hdPendientes: { "<ticket>": {...} } — los pendientes DEL ACTOR. Cada pendiente tiene
      * dueño (usuario=actor) y la reconciliación borra solo los del actor ausentes (no los de otros).
      * Sin actor no se escribe (default deny).
+     *
+     * ⚠️ NO USADO por el frontend actual (ver `putHdPendiente`, singular, más abajo) — se conserva
+     * solo por compatibilidad, pero un cliente con el mapa local incompleto que llame a este PUT
+     * BORRARÍA todos los pendientes reales del actor ausentes del envío. Incidente 2026-09-17:
+     * esto pasó tres veces (crear en ráfaga, eliminar uno, postergar uno) porque `setHdPendiente`/
+     * `updateHdPendiente`/`removeHdPendiente` reenviaban aquí el mapa completo. Los tres ahora usan
+     * el endpoint de abajo (un ticket, sin reconciliar). No agregar nuevos llamadores de este método.
      */
     @Transactional
     public void putHdPendientes(JsonNode node, String actorHid) {
@@ -399,25 +491,8 @@ public class LegacyWriteService {
             Iterator<Map.Entry<String, JsonNode>> it = node.fields();
             while (it.hasNext()) {
                 Map.Entry<String, JsonNode> e = it.next();
-                String num = e.getKey();
-                JsonNode p = e.getValue();
-                keep.add(num);
-                TicketPendiente tp = TicketPendiente.findByTicketAndUsuario(num, actor);
-                if (tp == null) {
-                    tp = new TicketPendiente();
-                    tp.helpdeskTicketId = num;
-                    tp.usuario = actor;
-                    tp.persist();
-                }
-                tp.asunto = trunc(text(p, "asunto"), 500);
-                tp.clienteRaw = trunc(text(p, "clienteRaw"), 300);
-                tp.dueDate = date(text(p, "dueDate"));
-                tp.dueTime = text(p, "dueTime");
-                tp.addedAt = instante(text(p, "addedAt"));
-                tp.lastAlerted = date(text(p, "lastAlerted"));
-                tp.ticketEspejo = TicketEspejo.findByHelpdeskTicketId(num);
-                tp.cliente = clienteByNombre(text(p, "clienteRaw"));
-                tp.actualizadoEn = OffsetDateTime.now();
+                keep.add(e.getKey());
+                upsertPendiente(actor, e.getKey(), e.getValue());
             }
         }
         // Reconciliar SOLO los del actor (nunca toca los de otros usuarios).
@@ -426,6 +501,43 @@ public class LegacyWriteService {
         } else {
             TicketPendiente.delete("usuario = ?1 and helpdeskTicketId not in ?2", actor, keep);
         }
+    }
+
+    /**
+     * PUT /hdPendientes/{ticket}: crea o reemplaza UN SOLO pendiente del actor — sin reconciliar
+     * (nunca borra otros). Es el que usa el frontend para crear/pausar/reanudar/postergar: manda
+     * SIEMPRE el objeto completo resultante para ese ticket (no un patch parcial), igual que antes,
+     * pero ya no puede arrastrar al resto si el mapa local del cliente estaba incompleto.
+     */
+    @Transactional
+    public boolean putHdPendiente(String ticket, JsonNode p, String actorHid) {
+        Usuario actor = actorHid == null || actorHid.isBlank() ? null : Usuario.findByHelpdeskUserId(actorHid.trim());
+        if (actor == null) {
+            return false;
+        }
+        upsertPendiente(actor, ticket, p);
+        return true;
+    }
+
+    private void upsertPendiente(Usuario actor, String ticket, JsonNode p) {
+        TicketPendiente tp = TicketPendiente.findByTicketAndUsuario(ticket, actor);
+        if (tp == null) {
+            tp = new TicketPendiente();
+            tp.helpdeskTicketId = ticket;
+            tp.usuario = actor;
+            tp.persist();
+        }
+        tp.asunto = trunc(text(p, "asunto"), 500);
+        tp.clienteRaw = trunc(text(p, "clienteRaw"), 300);
+        tp.dueDate = date(text(p, "dueDate"));
+        tp.dueTime = text(p, "dueTime");
+        tp.addedAt = instante(text(p, "addedAt"));
+        tp.lastAlerted = date(text(p, "lastAlerted"));
+        tp.ticketEspejo = TicketEspejo.findByHelpdeskTicketId(ticket);
+        tp.cliente = clienteByNombre(text(p, "clienteRaw"));
+        tp.nota = trunc(text(p, "nota"), 300);
+        tp.paused = p.path("paused").asBoolean(false);
+        tp.actualizadoEn = OffsetDateTime.now();
     }
 
     /**

@@ -41,6 +41,41 @@ export function stripHtml(str: string): string {
   return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * HTML → texto plano CONSERVANDO los saltos de línea (a diferencia de `stripHtml`, que
+ * los colapsa). Pensado para copiar un mensaje o exportarlo a PDF con su estructura:
+ * `<br>` y el cierre de bloques (`p/div/li/pre/tr`) se vuelven `\n`. Colapsa 3+ saltos
+ * a 2 y recorta espacios de cada línea.
+ */
+export function htmlToText(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = String(html || '');
+  div.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+  div.querySelectorAll('p, div, li, pre, tr').forEach((el) => el.append('\n'));
+  return (div.textContent || div.innerText || '')
+    .replace(/[ \t]+\n/g, '\n') // espacios sobrantes antes del salto
+    .replace(/\n{3,}/g, '\n\n') // colapsa saltos de más
+    .replace(/[ \t]{2,}/g, ' ') // colapsa espacios internos
+    .trim();
+}
+
+/** client_id (catálogo del HelpDesk) de los clientes de los equipos a revisar, cruzando por NOMBRE
+ *  (el catálogo usa id numérico; el alcance guarda código+nombre). `sel` opcional filtra a un solo equipo
+ *  por `codigo`. Reutilizado por la pestaña Equipo de Tickets y por el poller de "nuevos tickets del equipo". */
+export function equipoClientIdsDe(
+  equiposRevisar: { codigo: string; nombre: string; clientes: { codigo: string; nombre: string }[] }[],
+  clients: { id: string; name: string }[],
+  sel = '',
+): string[] {
+  const names = new Set<string>();
+  for (const e of equiposRevisar) {
+    if (sel && e.codigo !== sel) continue;
+    for (const c of e.clientes) names.add((c.nombre || '').trim().toUpperCase());
+  }
+  if (!names.size) return [];
+  return clients.filter((c) => names.has((c.name || '').trim().toUpperCase())).map((c) => c.id);
+}
+
 /** Quita scripts, handlers on* y javascript: del HTML de un mensaje (port de _safeHtml). */
 export function safeHtml(html: string): string {
   return String(html || '')
@@ -77,8 +112,61 @@ function inlineMarkdown(escaped: string): string {
     .replace(/(^|[\s(>])\*(?!\s)([^\n*]+?)(?<!\s)\*/g, '$1<i>$2</i>');
 }
 
-// Estilos inline que conservamos al pegar (formato visible, sin layout).
-const STYLE_KEEP = ['color', 'background-color', 'font-size', 'font-family'];
+// Estilos inline que conservamos al pegar (formato visible, sin layout). `color`/
+// `background-color` se sanean aparte (ver `colorLuminance`/su uso en `serializePasted`) —
+// no se copian tal cual del origen.
+const STYLE_KEEP = ['font-size', 'font-family'];
+
+/**
+ * Luminancia aproximada (0-255, promedio simple de los 3 canales) de un valor CSS de color, o
+ * `null` si no se pudo parsear con confianza. Cubre hex (`#rgb`/`#rrggbb`), `rgb()`/`rgba()`, y
+ * los nombres `black`/`white` — que son los que de verdad aparecen en pegados de Word/Outlook.
+ * No sanea lo que no reconoce (mejor dejarlo pasar que arriesgar un falso positivo).
+ */
+function colorLuminance(value: string): number | null {
+  const v = value.trim().toLowerCase();
+  if (v === 'black') return 0;
+  if (v === 'white') return 255;
+  let m = /^#([0-9a-f]{3})$/.exec(v);
+  if (m) {
+    const [r, g, b] = [...m[1]].map((c) => parseInt(c + c, 16));
+    return (r + g + b) / 3;
+  }
+  m = /^#([0-9a-f]{6})$/.exec(v);
+  if (m) {
+    const n = m[1];
+    const r = parseInt(n.slice(0, 2), 16);
+    const g = parseInt(n.slice(2, 4), 16);
+    const b = parseInt(n.slice(4, 6), 16);
+    return (r + g + b) / 3;
+  }
+  m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(v);
+  if (m) return (+m[1] + +m[2] + +m[3]) / 3;
+  return null;
+}
+
+/**
+ * Satura `color`/`background-color` pegados a un rango legible en fondo CLARO — el HelpDesk del
+ * cliente solo tiene tema claro, así que esa es siempre la referencia, sin importar el tema activo
+ * en FitDesk al pegar. Un `background-color` casi negro (resaltado que se confunde con el fondo
+ * oscuro de FitDesk mientras se escribe, e ilegible en cualquier lado con fondo claro) se
+ * reemplaza por un amarillo tipo resaltador, forzando también un `color` oscuro legible en el
+ * mismo nodo. Un `color` casi blanco SIN un fondo oscuro propio que lo justifique (invisible
+ * sobre fondo claro) se descarta, para que herede el oscuro por defecto.
+ */
+function sanearColorPegado(rawColor?: string, rawBg?: string): { color?: string; backgroundColor?: string } {
+  let color = rawColor;
+  let backgroundColor = rawBg;
+  const lumBg = backgroundColor != null ? colorLuminance(backgroundColor) : null;
+  const lumColor = color != null ? colorLuminance(color) : null;
+  if (lumBg !== null && lumBg < 60) {
+    backgroundColor = '#fff59d';
+    color = '#1a1a1a';
+  } else if (lumColor !== null && lumColor > 235) {
+    color = undefined;
+  }
+  return { color, backgroundColor };
+}
 
 // Etiquetas de ESTRUCTURA que se conservan tal cual (con su propia envoltura):
 // listas, citas y tablas con sus celdas. Preserva el formato real de ChatGPT/web.
@@ -297,6 +385,14 @@ function serializePasted(node: Node, preWs = false, inCode = false): string {
 
     // Conserva color/fondo/fuente como estilo saneado (sin url(), comillas ni <>).
     const keep: string[] = [];
+    const rawColor = /(?:^|;)\s*color\s*:\s*([^;]+)/i.exec(style)?.[1].trim().replace(/["'<>]/g, '');
+    const rawBg = /(?:^|;)\s*background-color\s*:\s*([^;]+)/i.exec(style)?.[1].trim().replace(/["'<>]/g, '');
+    const { color: safeColor, backgroundColor: safeBg } = sanearColorPegado(
+      rawColor && !/url\s*\(|expression/i.test(rawColor) ? rawColor : undefined,
+      rawBg && !/url\s*\(|expression/i.test(rawBg) ? rawBg : undefined,
+    );
+    if (safeColor) keep.push(`color: ${safeColor}`);
+    if (safeBg) keep.push(`background-color: ${safeBg}`);
     STYLE_KEEP.forEach((prop) => {
       const m = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i').exec(style);
       const val = m?.[1].trim().replace(/["'<>]/g, '');
@@ -365,6 +461,89 @@ export function extFromMime(mime: string): string {
     'image/svg+xml': '.svg',
   };
   return MAP[m] ?? '';
+}
+
+/** ¿El buffer arranca con esta firma de bytes? */
+function empiezaCon(buf: Uint8Array, sig: number[]): boolean {
+  if (buf.length < sig.length) return false;
+  return sig.every((b, i) => buf[i] === b);
+}
+
+/** ¿Aparece esta secuencia de bytes en el buffer? */
+function contieneBytes(buf: Uint8Array, s: number[]): boolean {
+  if (!s.length) return false;
+  for (let i = 0; i + s.length <= buf.length; i++) {
+    let ok = true;
+    for (let j = 0; j < s.length; j++) {
+      if (buf[i + j] !== s[j]) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+/** ¿Aparece este texto ASCII en el buffer? (para mirar DENTRO de contenedores zip). */
+function contiene(buf: Uint8Array, texto: string): boolean {
+  return contieneBytes(buf, [...texto].map((c) => c.charCodeAt(0)));
+}
+
+/** Igual, pero en UTF-16LE: así se guardan los nombres de las entradas del directorio OLE2. */
+function contieneUtf16(buf: Uint8Array, texto: string): boolean {
+  const s: number[] = [];
+  for (const c of texto) s.push(c.charCodeAt(0), 0);
+  return contieneBytes(buf, s);
+}
+
+/** Firmas simples (los primeros bytes bastan para identificar el formato). */
+const FIRMAS: { ext: string; sig: number[] }[] = [
+  { ext: '.pdf', sig: [0x25, 0x50, 0x44, 0x46] },             // %PDF
+  { ext: '.png', sig: [0x89, 0x50, 0x4e, 0x47] },
+  { ext: '.jpg', sig: [0xff, 0xd8, 0xff] },
+  { ext: '.gif', sig: [0x47, 0x49, 0x46, 0x38] },             // GIF8
+  { ext: '.rar', sig: [0x52, 0x61, 0x72, 0x21] },             // Rar!
+  { ext: '.7z', sig: [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c] },
+  { ext: '.gz', sig: [0x1f, 0x8b] },
+  { ext: '.xml', sig: [0x3c, 0x3f, 0x78, 0x6d, 0x6c] },       // <?xml
+];
+
+/**
+ * Extensión deducida de la FIRMA BINARIA del archivo. Es la última línea de defensa (y la única
+ * que no depende de cabeceras): sirve cuando no llega `Content-Disposition` —p. ej. detrás de un
+ * proxy que no lo reenvía— y el MIME es genérico (`application/octet-stream`). Sin extensión, el
+ * sistema operativo no puede abrir el archivo y el usuario lo ve como "dañado".
+ * Lee solo los primeros 8 KB (basta para la cabecera y, en los contenedores, para el índice).
+ */
+export async function extFromBytes(blob: Blob): Promise<string> {
+  try {
+    const buf = new Uint8Array(await blob.slice(0, 8192).arrayBuffer());
+    if (!buf.length) return '';
+
+    for (const f of FIRMAS) {
+      if (empiezaCon(buf, f.sig)) return f.ext;
+    }
+    // WEBP = contenedor RIFF: "RIFF" + 4 bytes de tamaño + "WEBP".
+    if (empiezaCon(buf, [0x52, 0x49, 0x46, 0x46]) && contiene(buf.slice(8, 12), 'WEBP')) return '.webp';
+
+    // ZIP: puede ser un .zip de verdad o un Office moderno (xlsx/docx/pptx son zips).
+    // Se distingue por las carpetas internas, visibles en el índice del contenedor.
+    if (empiezaCon(buf, [0x50, 0x4b, 0x03, 0x04])) {
+      if (contiene(buf, 'xl/')) return '.xlsx';
+      if (contiene(buf, 'word/')) return '.docx';
+      if (contiene(buf, 'ppt/')) return '.pptx';
+      return '.zip';
+    }
+
+    // OLE2 (Office legacy): el tipo real está en el nombre de la entrada del directorio (UTF-16LE).
+    if (empiezaCon(buf, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) {
+      if (contieneUtf16(buf, 'Workbook') || contieneUtf16(buf, 'Book')) return '.xls';
+      if (contieneUtf16(buf, 'WordDocument')) return '.doc';
+      if (contieneUtf16(buf, 'PowerPoint')) return '.ppt';
+      return '.xls'; // el adjunto OLE2 típico en soporte es una hoja de cálculo
+    }
+    return '';
+  } catch {
+    return ''; // no se pudo leer el blob: se baja sin extensión, como antes
+  }
 }
 
 export function mapTicket(t: any): Ticket {

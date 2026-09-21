@@ -1,23 +1,28 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ConfirmDialog } from '../../board/confirm-dialog/confirm-dialog';
+import { abrirTicketDialog } from '../../../core/ticket-dialog';
 import { errorMsg } from '../../board/transferir/enviar-equipo-dialog';
 import { Solicitud, TransferenciasService } from '../../../core/services/transferencias.service';
 
-type TabKey = 'pendientes' | 'aprobadas' | 'rechazadas';
+type TabKey = 'pendientes' | 'enviadas' | 'aprobadas' | 'rechazadas';
 type TipoFiltro = '' | 'REASIGNACION' | 'TRANSFERENCIA';
 
 /**
  * Página interior de "Solicitudes de Especialistas" (drill-down desde la Bandeja).
- * Maestro-detalle en NARANJA (categoría de solicitudes). Solo datos REALES: Pendientes
- * (`solicitudesEntrantes`); Aprobadas/Rechazadas quedan vacías (el backend no expone ese
- * historial). Los tipos reales son Reasignación y Transferencia (no hay "Apoyo técnico"),
- * y la solicitud no guarda prioridad → sin esa columna.
+ * Maestro-detalle en NARANJA (categoría de solicitudes). Datos REALES: Pendientes
+ * (`solicitudesEntrantes`) y Enviadas (`misSolicitudes`, lo que YO pedí); Aprobadas/Rechazadas
+ * quedan vacías (el backend no expone ese historial agregado). Los tipos reales son
+ * Reasignación y Transferencia (no hay "Apoyo técnico"), y la solicitud no guarda prioridad
+ * → sin esa columna.
  */
 @Component({
   selector: 'app-solicitudes-detalle',
@@ -35,8 +40,11 @@ type TipoFiltro = '' | 'REASIGNACION' | 'TRANSFERENCIA';
 export class SolicitudesDetalle {
   private readonly svc = inject(TransferenciasService);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   readonly pendientes = signal<Solicitud[]>([]);
+  /** Solicitudes que YO envié (cualquier estado), para revisarlas y cancelar las que sigan pendientes. */
+  readonly enviadas = signal<Solicitud[]>([]);
   readonly loading = signal(true);
   readonly busy = signal<number | null>(null);
 
@@ -52,8 +60,14 @@ export class SolicitudesDetalle {
   );
   /** Estas dos pestañas aún no tienen fuente en el backend. */
   readonly tabSinDatos = computed(() => this.tab() === 'aprobadas' || this.tab() === 'rechazadas');
+  /** ¿Estoy viendo lo que YO envié? En ese caso no puedo aprobar/rechazar mi propia solicitud. */
+  readonly esEnviadas = computed(() => this.tab() === 'enviadas');
 
-  private readonly listaBase = computed<Solicitud[]>(() => (this.tab() === 'pendientes' ? this.pendientes() : []));
+  private readonly listaBase = computed<Solicitud[]>(() => {
+    if (this.tab() === 'pendientes') return this.pendientes();
+    if (this.tab() === 'enviadas') return this.enviadas();
+    return [];
+  });
 
   readonly filas = computed<Solicitud[]>(() => {
     const q = this.busqueda().trim().toLowerCase();
@@ -77,7 +91,12 @@ export class SolicitudesDetalle {
     return list.find((s) => s.id === id) ?? list[0] ?? null;
   });
 
-  readonly conteos = computed(() => ({ pendientes: this.pendientes().length, aprobadas: 0, rechazadas: 0 }));
+  readonly conteos = computed(() => ({
+    pendientes: this.pendientes().length,
+    enviadas: this.enviadas().length,
+    aprobadas: 0,
+    rechazadas: 0,
+  }));
   readonly totalTab = computed(() => this.listaBase().length);
 
   constructor() {
@@ -87,7 +106,9 @@ export class SolicitudesDetalle {
   async cargar(): Promise<void> {
     this.loading.set(true);
     try {
-      this.pendientes.set(await this.svc.solicitudesEntrantes());
+      const [pend, env] = await Promise.all([this.svc.solicitudesEntrantes(), this.svc.misSolicitudes()]);
+      this.pendientes.set(pend);
+      this.enviadas.set(env);
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo cargar.'), 'OK', { duration: 5000 });
     } finally {
@@ -105,11 +126,18 @@ export class SolicitudesDetalle {
     this.seleccionadaId.set(s.id);
   }
 
+  /** Abre la conversación del ticket asociado SIN salir de la Bandeja. */
+  abrirTicket(numero: string | null | undefined, ev?: Event): void {
+    ev?.stopPropagation(); // la fila entera es clicable: no seleccionarla además
+    if (!numero) return;
+    void abrirTicketDialog(this.dialog, { ticketId: numero });
+  }
+
   tipoLabel(t: Solicitud['tipo']): string {
     return t === 'TRANSFERENCIA' ? 'Transferencia' : 'Reasignación';
   }
   estadoLabel(e: Solicitud['estado']): string {
-    return { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada' }[e] ?? e;
+    return { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada' }[e] ?? e;
   }
 
   fecha(iso: string | null): string {
@@ -144,6 +172,32 @@ export class SolicitudesDetalle {
       await this.cargar();
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo rechazar.'), 'OK', { duration: 5000 });
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  /** Retira una solicitud PROPIA mientras sigue pendiente de respuesta. */
+  async cancelar(s: Solicitud): Promise<void> {
+    const ok = await firstValueFrom(
+      this.dialog
+        .open(ConfirmDialog, {
+          data: {
+            title: 'Cancelar solicitud',
+            message: `¿Cancelar la solicitud de "${s.tareaTitulo || s.tareaCodigo}"?`,
+            confirmText: 'Cancelar solicitud',
+          },
+        })
+        .afterClosed(),
+    );
+    if (!ok) return;
+    this.busy.set(s.id);
+    try {
+      await this.svc.cancelarSolicitud(s.id);
+      this.snack.open('Solicitud cancelada.', 'OK', { duration: 3000 });
+      await this.cargar();
+    } catch (e: unknown) {
+      this.snack.open(errorMsg(e, 'No se pudo cancelar.'), 'OK', { duration: 5000 });
     } finally {
       this.busy.set(null);
     }

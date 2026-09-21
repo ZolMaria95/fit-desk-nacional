@@ -2,26 +2,119 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { PALETA, esHexValido, reservadoPara } from '../../core/colores';
+import { ColoresService } from '../../core/services/colores.service';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AuthService } from '../../core/services/auth.service';
 import { PerfilService } from '../../core/services/perfil.service';
+import { ThemeService } from '../../core/services/theme.service';
 
 /** Perfil del usuario logueado: datos + foto personalizable (persistida en Neon). */
 @Component({
   selector: 'app-perfil-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule],
+  imports: [MatDialogModule, MatButtonModule, MatCheckboxModule, MatIconModule, MatSlideToggleModule, MatTooltipModule],
   templateUrl: './perfil-dialog.html',
   styleUrl: './perfil-dialog.scss',
 })
 export class PerfilDialog {
   private readonly auth = inject(AuthService);
   readonly perfil = inject(PerfilService);
+  readonly theme = inject(ThemeService);
   private readonly ref = inject(MatDialogRef<PerfilDialog>);
   private readonly snack = inject(MatSnackBar);
 
   readonly session = this.auth.session;
   readonly subiendo = signal(false);
+
+  // ── Color identificativo ──
+  readonly paleta = PALETA;
+  private readonly colores = inject(ColoresService);
+  /** Hexadecimal del campo de texto; se sincroniza con el color efectivo mientras sea válido. */
+  readonly hexEditado = signal('');
+  readonly hexInvalido = signal(false);
+
+  /** Color que se está mostrando: el elegido, o el derivado si no ha elegido. */
+  readonly colorActual = computed(() => this.colores.color(String(this.auth.session()?.id || '')));
+
+  /** Lo que se ve en el campo de texto: lo que el usuario esté escribiendo o, si no ha tocado
+   *  nada, su color actual — para que pueda leerlo y copiarlo sin tener que adivinarlo. */
+  readonly hexMostrado = computed(() => this.hexEditado() || this.colorActual().toUpperCase());
+
+  /** Tinta de las iniciales sobre el avatar (el fondo es el color elegido). */
+  readonly tintaAvatar = computed(() => this.colores.avatar(String(this.auth.session()?.id || '')).fg);
+
+  esMiColor(c: string): boolean {
+    return c.toUpperCase() === this.colorActual().toUpperCase();
+  }
+
+  /** Nombres de otras personas que ya usan ese color (el aviso de "ocupado"). */
+  nombresQueUsan(c: string): string[] {
+    return this.colores.nombresQueUsan(c, String(this.auth.session()?.id || ''));
+  }
+
+  /** Aviso bajo el selector cuando el color elegido lo comparte alguien más. */
+  readonly avisoOcupado = computed(() => {
+    const otros = this.colores.nombresQueUsan(this.colorActual(), String(this.auth.session()?.id || ''));
+    return otros.length ? `Este color ya lo usa ${otros.join(', ')}. Puedes quedártelo igual.` : '';
+  });
+
+  async elegir(c: string): Promise<void> {
+    const hex = String(c || '').trim();
+    if (!esHexValido(hex)) return;
+    this.hexEditado.set(hex.toUpperCase());
+    this.hexInvalido.set(false);
+    await this.guardarColor(hex.toUpperCase());
+  }
+
+  /** Escritura manual del hexadecimal: solo guarda cuando está completo y es válido. */
+  onHex(v: string): void {
+    const s = String(v || '').trim();
+    this.hexEditado.set(s);
+    if (!s) { this.hexInvalido.set(false); return; }
+    const ok = esHexValido(s);
+    this.hexInvalido.set(!ok);
+    if (ok) void this.guardarColor(s.toUpperCase());
+  }
+
+  async quitarColor(): Promise<void> {
+    this.hexEditado.set('');
+    this.hexInvalido.set(false);
+    await this.guardarColor(null);
+  }
+
+  private async guardarColor(c: string | null): Promise<void> {
+    // Colores apartados para una persona concreta: se avisa antes de intentarlo, para que el
+    // usuario entienda por qué no puede en vez de ver un error genérico. El backend lo rechaza igual.
+    const dueno = c ? reservadoPara(c, String(this.auth.session()?.id || '')) : '';
+    if (dueno) {
+      const nombre = this.colores.nombreDe(dueno) || dueno;
+      this.snack.open(`Ese color está reservado para ${nombre}.`, 'OK', { duration: 4000 });
+      this.hexEditado.set('');
+      return;
+    }
+    try {
+      await this.perfil.guardarColor(c);
+      this.snack.open(c ? 'Color actualizado' : 'Color quitado: vuelves al automático', 'OK', { duration: 2500 });
+    } catch {
+      this.snack.open('No se pudo guardar el color. Intenta de nuevo.', 'OK', { duration: 4000 });
+    }
+  }
+
+  // ── PDF de conversaciones con nombres reales (solo responsables, solo esta sesión) ──
+  readonly puedeVerNombresEnPdf = this.auth.puedeVerNombresEnPdf;
+  readonly sinAnonimizar = this.auth.pdfSinAnonimizar;
+  onSinAnonimizar(activo: boolean): void {
+    this.auth.pdfSinAnonimizar.set(activo);
+    if (activo) {
+      this.snack.open('Las conversaciones que descargues llevarán los nombres reales hasta que cierres sesión.', 'OK', {
+        duration: 5000,
+      });
+    }
+  }
   /** Lightbox: ver la foto completa al hacer clic. */
   readonly verFoto = signal(false);
 

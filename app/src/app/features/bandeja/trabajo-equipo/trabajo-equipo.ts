@@ -1,20 +1,21 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { abrirTicketDialog } from '../../../core/ticket-dialog';
 import { errorMsg } from '../../board/transferir/enviar-equipo-dialog';
-import { SearchService } from '../../../core/services/search.service';
 import { Transferencia, TransferenciasService } from '../../../core/services/transferencias.service';
 
 /**
  * Página interior de "Trabajo de mi equipo (de otros tableros)" (drill-down desde la Bandeja).
  * SOLO LECTURA: transferencias COMPLETADAS dirigidas a mis equipos, es decir tareas que
  * VINIERON de otros tableros y ahora lleva alguien de mi equipo. Su acción principal es
- * **abrir el ticket** de la tarea en la vista Tickets (para dar seguimiento).
+ * **abrir la conversación del ticket** de la tarea, en un modal y sin salir de la Bandeja.
  */
 @Component({
   selector: 'app-trabajo-equipo',
@@ -32,8 +33,7 @@ import { Transferencia, TransferenciasService } from '../../../core/services/tra
 export class TrabajoEquipo {
   private readonly svc = inject(TransferenciasService);
   private readonly snack = inject(MatSnackBar);
-  private readonly search = inject(SearchService);
-  private readonly router = inject(Router);
+  private readonly dialog = inject(MatDialog);
 
   readonly items = signal<Transferencia[]>([]);
   readonly loading = signal(true);
@@ -98,14 +98,14 @@ export class TrabajoEquipo {
     this.seleccionadaId.set(t.id);
   }
 
-  /** Abre el ticket asociado en la vista Tickets (búsqueda global por N°). */
-  verTicket(t: Transferencia): void {
-    if (!t.ticket) {
+  /** Abre la conversación del ticket asociado SIN salir de la Bandeja. */
+  abrirTicket(numero: string | null | undefined, ev?: Event): void {
+    ev?.stopPropagation(); // la fila entera es clicable: no seleccionarla además
+    if (!numero) {
       this.snack.open('Esta tarea no tiene un ticket asociado.', 'OK', { duration: 3000 });
       return;
     }
-    this.search.buscar('ticket', t.ticket);
-    void this.router.navigate(['/tickets']);
+    void abrirTicketDialog(this.dialog, { ticketId: numero });
   }
 
   /** "20/05/2025 10:32" (o "—"). */

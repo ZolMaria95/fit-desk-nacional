@@ -1,6 +1,7 @@
-<div class="sprint-bar">
-  @if (boards().length > 1) {
-    <mat-form-field appearance="outline" class="sprint-select" subscriptSizing="dynamic">
+<div class="board-bar">
+  <!-- Selector de tablero: solo en vista POR EQUIPO (RE/Admin/Gerencia sin consolidado). -->
+  @if (boards().length > 1 && !esConsolidado()) {
+    <mat-form-field appearance="outline" class="board-select" subscriptSizing="dynamic">
       <mat-label>Equipo / Tablero</mat-label>
       <mat-select [value]="currentBoard()" (selectionChange)="switchBoard($event.value)">
         @for (b of boards(); track b.codigo) {
@@ -9,33 +10,23 @@
       </mat-select>
     </mat-form-field>
   }
-  <mat-form-field appearance="outline" class="sprint-select" subscriptSizing="dynamic">
-    <mat-label>Sprint</mat-label>
-    <mat-select [value]="activeSprintId()" (selectionChange)="setSprint($event.value)">
-      @for (s of sprints(); track s.id) {
-        <mat-option [value]="s.id">{{ s.name }}{{ s.status === 'completed' ? ' ✓' : '' }}</mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
-  <button mat-icon-button (click)="openEditSprint()" matTooltip="Editar sprint actual" [disabled]="!activeSprint()">
-    <mat-icon>edit</mat-icon>
-  </button>
-  <button mat-icon-button (click)="openNewSprint()" matTooltip="Nuevo sprint">
-    <mat-icon>add</mat-icon>
-  </button>
 
-  @if (activeSprint(); as sp) {
-    <div class="sprint-banner">
-      <span class="sb-name">{{ sp.name }}</span>
-      @if (sp.goal) { <span class="sb-goal">— {{ sp.goal }}</span> }
-      <span class="sb-sep">·</span>
-      @if (sp.start || sp.end) {
-        <span class="sb-dates">{{ fmtSprintDate(sp.start) }} → {{ fmtSprintDate(sp.end) }}</span>
-        <span class="sb-sep">·</span>
-      }
-      <span class="sb-cap">{{ sp.capacity }} pts</span>
-      <span class="sb-status" [class]="'st-' + sp.status">{{ sp.status }}</span>
-    </div>
+  <!-- Consultores/especialistas: vista consolidada FORZADA (título). RE/Admin/Gerencia: toggle. -->
+  @if (esConsolidado() && !veTableroCompleto()) {
+    <h2 class="board-title"><mat-icon>dashboard_customize</mat-icon> Mis tareas · todos los equipos</h2>
+  }
+  @if (veTableroCompleto()) {
+    <button
+      type="button"
+      class="mine-toggle consolidado-toggle"
+      mat-stroked-button
+      [class.active]="consolidadoManual()"
+      [attr.aria-pressed]="consolidadoManual()"
+      (click)="toggleConsolidado()"
+      matTooltip="Ver todas mis tareas de todos los equipos en un solo tablero"
+    >
+      <mat-icon>dashboard_customize</mat-icon> Mis tareas (todos los equipos)
+    </button>
   }
 
   <span class="spacer"></span>
@@ -84,6 +75,8 @@
       }
     </mat-button-toggle-group>
 
+    <!-- En consolidado el feed YA es "mis tareas de todos los equipos": estos filtros no aplican. -->
+    @if (!esConsolidado()) {
     <button
       type="button"
       class="mine-toggle"
@@ -95,8 +88,9 @@
     >
       <mat-icon>person</mat-icon> Asignados a mí
     </button>
+    }
 
-    @if (puedeVerEquipo()) {
+    @if (puedeVerEquipo() && !esConsolidado()) {
       <button
         type="button"
         class="mine-toggle"
@@ -110,7 +104,7 @@
       </button>
     }
 
-  @if (assigneeChips().length) {
+  @if (assigneeChips().length && !esConsolidado()) {
     <div class="assignee-filter">
       <span class="filter-label">Asignado a:</span>
       <mat-form-field appearance="outline" class="assignee-select" subscriptSizing="dynamic">
@@ -138,7 +132,8 @@
         <mat-chip-set class="assignee-chips">
           @for (id of selectedAssignees(); track id) {
             @let mem = resolveMember(id);
-            <mat-chip class="achip" [style.background]="pastel(mem?.color || '#9aa0a6')" [matTooltip]="mem?.name || '—'" (removed)="removeAssignee(id)">
+            @let ch = chipAsignado(id);
+            <mat-chip class="achip" [style.background]="ch.bg" [style.color]="ch.fg" [matTooltip]="mem?.name || '—'" (removed)="removeAssignee(id)">
               {{ shortName(mem?.name || '—') }}
               <button matChipRemove [attr.aria-label]="'Quitar ' + (mem?.name || '—')">
                 <mat-icon>close</mat-icon>
@@ -252,8 +247,8 @@
               } @else {
                 <span class="prio-badge" [class]="'prio-' + card.priority">{{ $any(PRIORITY_LABELS)[card.priority] }}</span>
               }
-              @if (esForanea(card)) {
-                <span class="team-badge" matTooltip="Tarea de otro equipo (sigue en su tablero); te la asignaron">
+              @if (mostrarEquipo(card)) {
+                <span class="team-badge" matTooltip="Equipo dueño de la tarea">
                   <mat-icon inline>groups</mat-icon>{{ boardLabel(card.board) }}
                 </span>
               }
@@ -279,8 +274,9 @@
                 </mat-menu>
               }
               <!-- Las tareas CON ticket asociado no se pueden borrar (nacen del HelpDesk);
-                   solo las tareas propias del board (sin ticket) son eliminables. -->
-              @if (puedeGestionarTodo() && !card.ticket) {
+                   solo las tareas propias del board (sin ticket) son eliminables, y SOLO por
+                   el Responsable de Equipo (o ADMIN) — no por soporte/supervisor del HelpDesk. -->
+              @if (puedeEliminarTarea() && !card.ticket) {
                 <button
                   mat-icon-button
                   class="del-btn"
@@ -343,12 +339,6 @@
                 >
                   {{ wd !== null && wd >= 3 ? '⚠ Notificar al cliente' : '⏳ Esperando cliente' }}
                 </button>
-              }
-              @case ('review') {
-                <div class="card-check" (click)="$event.stopPropagation()">
-                  <mat-checkbox [checked]="false" (change)="onCert(card, $event)" aria-label="Certificado"></mat-checkbox>
-                  <span class="check-text">Certificado</span>
-                </div>
               }
               @case ('done') {
                 <div class="card-check" (click)="$event.stopPropagation()">

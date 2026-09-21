@@ -85,7 +85,17 @@
                       <div class="c-tarea-in">
                         <span class="c-tarea-icon"><mat-icon>{{ t.ticket ? 'confirmation_number' : 'local_offer' }}</mat-icon></span>
                         <span class="c-tarea-text">
-                          <span class="c-code">{{ t.tareaCodigo }}@if (t.ticket) { <span class="c-ticket">#{{ t.ticket }}</span> }</span>
+                          <span class="c-code">
+                            {{ t.tareaCodigo }}
+                            @if (t.ticket) {
+                              <!-- La fila también es clicable (selecciona): el handler corta la propagación. -->
+                              <button type="button" class="c-ticket"
+                                      (click)="abrirTicket(t.ticket, $event)"
+                                      (keydown)="$event.stopPropagation()"
+                                      [attr.aria-label]="'Abrir conversación del ticket número ' + t.ticket"
+                                      title="Abrir conversación del ticket">#{{ t.ticket }}</button>
+                            }
+                          </span>
                           <span class="c-title" [title]="t.tareaTitulo">{{ t.tareaTitulo || '(sin título)' }}</span>
                           @if (t.clienteTarea) { <span class="c-cli"><mat-icon>business</mat-icon> {{ t.clienteTarea }}</span> }
                         </span>
@@ -125,7 +135,14 @@
             <div class="td-detail-id">
               <span class="c-tarea-icon"><mat-icon>{{ s.ticket ? 'confirmation_number' : 'local_offer' }}</mat-icon></span>
               <div class="td-detail-id-text">
-                <span class="c-code">{{ s.tareaCodigo }}@if (s.ticket) { <span class="c-ticket">#{{ s.ticket }}</span> }</span>
+                <span class="c-code">
+                  {{ s.tareaCodigo }}
+                  @if (s.ticket) {
+                    <button type="button" class="c-ticket" (click)="abrirTicket(s.ticket)"
+                            [attr.aria-label]="'Abrir conversación del ticket número ' + s.ticket"
+                            title="Abrir conversación del ticket">#{{ s.ticket }}</button>
+                  }
+                </span>
                 <span class="td-detail-title">{{ s.tareaTitulo || '(sin título)' }}</span>
               </div>
             </div>
@@ -152,8 +169,8 @@
 
             <div class="td-detail-actions">
               @if (s.ticket) {
-                <button mat-flat-button color="primary" type="button" class="td-vt" (click)="verTicket(s)">
-                  <mat-icon>open_in_new</mat-icon> Ver ticket en Tickets
+                <button mat-flat-button color="primary" type="button" class="td-vt" (click)="abrirTicket(s.ticket)">
+                  <mat-icon>forum</mat-icon> Ver conversación del ticket
                 </button>
               } @else {
                 <span class="td-noticket"><mat-icon>info</mat-icon> Sin ticket asociado (tarea local).</span>
@@ -166,7 +183,7 @@
             <h3 class="td-help-h"><mat-icon>help</mat-icon> ¿Qué es esto?</h3>
             <ul>
               <li><mat-icon>move_to_inbox</mat-icon><span>Son tareas que <strong>vinieron de otros tableros</strong> y que ahora lleva tu equipo.</span></li>
-              <li><mat-icon>open_in_new</mat-icon><span><strong>Ver ticket:</strong> abre el ticket asociado en la vista <strong>Tickets</strong> para dar seguimiento.</span></li>
+              <li><mat-icon>forum</mat-icon><span><strong>Ver conversación:</strong> abre el ticket asociado <strong>sin salir de la Bandeja</strong>, para dar seguimiento.</span></li>
               <li><mat-icon>lock</mat-icon><span>Esta vista es de <strong>solo lectura</strong>: la tarea se gestiona en el tablero que la ejecuta.</span></li>
             </ul>
           </div>

@@ -1,0 +1,128 @@
+<div class="st-toolbar">
+  <h2>Senior de Turno</h2>
+  @if (mostrarSelector()) {
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="st-team">
+      <mat-label>Equipo</mat-label>
+      <mat-select [ngModel]="turnoTeam()" (ngModelChange)="selectTeam($event)">
+        @for (b of boards(); track b.codigo) {
+          <mat-option [value]="b.codigo">{{ b.equipo || b.nombre }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+  <span class="grow"></span>
+  <div class="st-nav">
+    <button mat-icon-button (click)="prevMonth()" aria-label="Mes anterior"><mat-icon>chevron_left</mat-icon></button>
+    <span class="st-period">{{ periodLabel() }}</span>
+    <button mat-icon-button (click)="nextMonth()" aria-label="Mes siguiente"><mat-icon>chevron_right</mat-icon></button>
+    <button mat-stroked-button (click)="goToday()">Hoy</button>
+  </div>
+</div>
+
+<div class="st-layout">
+  <!-- Calendario -->
+  <section class="st-calendar-wrap">
+    <div class="st-calendar-header">
+      <h3>{{ periodLabel() }}</h3>
+      <span class="st-legend">
+        <span class="leg"><span class="dot dot-current"></span>Semana actual</span>
+        <span class="leg"><span class="dot dot-mesa"></span>Mesa de Ayuda</span>
+        <span class="leg"><span class="dot dot-emerg"></span>Emergentes</span>
+      </span>
+    </div>
+
+    <div class="st-calendar">
+      @for (d of DAY_LABELS; track d) {
+        <div class="st-dayname">{{ d }}</div>
+      }
+      @for (c of calendarCells(); track $index) {
+        <button
+          class="st-cell"
+          [class.other]="c.isOther"
+          [class.today]="c.isToday"
+          [class.friday]="c.isFri"
+          [class.current]="c.isCurrentWeek && !c.assigned"
+          [class.cur-assigned]="c.isCurrentWeek && c.assigned"
+          (click)="onCellClick(c)"
+        >
+          <span class="st-cell-num">{{ c.dayNum }}</span>
+          @if (c.isFri && (c.mesaAyuda || c.emergentes)) {
+            <span class="st-cell-chips">
+              @if (c.mesaAyuda) {
+                <span class="st-cell-chip" [style.background]="c.mesaAyuda.color.bg" [style.color]="c.mesaAyuda.color.fg" [title]="'Mesa de Ayuda: ' + c.mesaAyuda.name">{{ c.mesaAyuda.name }}</span>
+              }
+              @if (c.emergentes) {
+                <span class="st-cell-chip" [style.background]="c.emergentes.color.bg" [style.color]="c.emergentes.color.fg" [title]="'Emergentes: ' + c.emergentes.name">{{ c.emergentes.name }}</span>
+              }
+            </span>
+          }
+        </button>
+      }
+    </div>
+  </section>
+
+  <!-- Resumen lateral -->
+  <aside class="st-summary">
+    <!-- Semana actual -->
+    <div class="st-card st-current">
+      <div class="st-card-label">Semana actual</div>
+      <div class="st-range">{{ currentWeek().range }}</div>
+      <div class="st-role-row">
+        <span class="st-role-label">Mesa de Ayuda</span>
+        <span class="st-role-name" [class.empty]="!currentWeek().mesaAyuda" [style.color]="currentWeek().mesaAyuda?.color?.fg || null">
+          {{ currentWeek().mesaAyuda?.name || 'Sin asignar' }}
+        </span>
+      </div>
+      <div class="st-role-row">
+        <span class="st-role-label">Emergentes</span>
+        <span class="st-role-name" [class.empty]="!currentWeek().emergentes" [style.color]="currentWeek().emergentes?.color?.fg || null">
+          {{ currentWeek().emergentes?.name || 'Sin asignar' }}
+        </span>
+      </div>
+      <button mat-flat-button color="primary" class="sm" (click)="openAssign(currentWeek().key)">Asignar / Editar</button>
+    </div>
+
+    <!-- Próximas semanas -->
+    <div class="st-block">
+      <div class="st-block-head">
+        <span class="st-block-title">Próximas semanas</span>
+        <span class="st-count">{{ nextCount() }}</span>
+      </div>
+      <div class="st-weeks">
+        @for (w of nextWeeks(); track w.key) {
+          <button class="st-week-item" (click)="openAssign(w.key)">
+            <span class="w-range">{{ w.range }}</span>
+            <span class="w-roles">
+              @if (w.mesaAyuda) {
+                <span class="w-name" [style.background]="w.mesaAyuda.color.bg" [style.color]="w.mesaAyuda.color.fg" [title]="'Mesa de Ayuda: ' + w.mesaAyuda.name">{{ w.mesaAyuda.name }}</span>
+              }
+              @if (w.emergentes) {
+                <span class="w-name" [style.background]="w.emergentes.color.bg" [style.color]="w.emergentes.color.fg" [title]="'Emergentes: ' + w.emergentes.name">{{ w.emergentes.name }}</span>
+              }
+              @if (!w.assigned) {
+                <span class="w-name empty">Sin asignar</span>
+              }
+            </span>
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Resumen de asignaciones -->
+    <div class="st-block">
+      <div class="st-block-head">
+        <span class="st-block-title">Resumen de asignaciones</span>
+      </div>
+      <div class="st-stats">
+        @for (s of stats(); track s.id) {
+          <div class="st-stat" [style.borderLeftColor]="s.color.fg">
+            <span class="s-name" [style.color]="s.color.fg">{{ s.name }}</span>
+            <span class="s-count" [style.color]="s.color.fg">{{ s.count }} {{ s.count === 1 ? 'semana' : 'semanas' }}</span>
+          </div>
+        } @empty {
+          <div class="st-empty">Sin asignaciones registradas</div>
+        }
+      </div>
+    </div>
+  </aside>
+</div>

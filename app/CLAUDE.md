@@ -41,6 +41,10 @@ los datos propios en PostgreSQL. Ver el contrato en [`docs/contrato-api.md`](doc
   los inputs SÍ funcionan fuera de `mat-form-field` (adaptador de fecha nativo global).
 - **ESC jerárquico en modales:** usar `wireDialogEsc(ref, onEsc?)` (`core/dialog-esc.ts`) — ESC cierra
   primero el popup abierto y solo cierra el modal si no hay nada encima.
+- **Descargas:** siempre por `core/descargar.ts` (`descargarUrl`/`descargarBlob`). Un `<a download>` suelto
+  **no dispara nada en la PWA instalada** (hay que agregarlo al DOM), y revocar el blob URL justo después
+  del `click()` baja el archivo **vacío**. Para el nombre, nunca dependas solo de `Content-Disposition`:
+  hay cascada nombre → MIME → **firma binaria** (`extFromBytes`).
 
 ## Correr / construir / desplegar
 - **Local (dev):** `npm ci` → `ng serve` (usa el proxy de `proxy.conf.json`), o `ng serve -c quarkus`

@@ -108,9 +108,19 @@
                       (keydown.enter)="seleccionar(t)" (keydown.space)="seleccionar(t); $event.preventDefault()">
                     <td class="c-tarea">
                       <div class="c-tarea-in">
-                        <span class="c-tarea-icon"><mat-icon>local_offer</mat-icon></span>
+                        <span class="c-tarea-icon"><mat-icon>{{ t.ticket ? 'confirmation_number' : 'local_offer' }}</mat-icon></span>
                         <span class="c-tarea-text">
-                          <span class="c-code">{{ t.tareaCodigo }}</span>
+                          <span class="c-code">
+                            {{ t.tareaCodigo }}
+                            @if (t.ticket) {
+                              <!-- La fila también es clicable (selecciona): el handler corta la propagación. -->
+                              <button type="button" class="c-ticket"
+                                      (click)="abrirTicket(t.ticket, $event)"
+                                      (keydown)="$event.stopPropagation()"
+                                      [attr.aria-label]="'Abrir conversación del ticket número ' + t.ticket"
+                                      title="Abrir conversación del ticket">#{{ t.ticket }}</button>
+                            }
+                          </span>
                           <span class="c-title" [title]="t.tareaTitulo">{{ t.tareaTitulo || '(sin título)' }}</span>
                           @if (t.clienteTarea) { <span class="c-cli"><mat-icon>business</mat-icon> {{ t.clienteTarea }}</span> }
                         </span>
@@ -150,9 +160,16 @@
           <div class="td-detail">
             <h3 class="td-panel-h">Detalle de la transferencia</h3>
             <div class="td-detail-id">
-              <span class="c-tarea-icon"><mat-icon>local_offer</mat-icon></span>
+              <span class="c-tarea-icon"><mat-icon>{{ s.ticket ? 'confirmation_number' : 'local_offer' }}</mat-icon></span>
               <div class="td-detail-id-text">
-                <span class="c-code">{{ s.tareaCodigo }}</span>
+                <span class="c-code">
+                  {{ s.tareaCodigo }}
+                  @if (s.ticket) {
+                    <button type="button" class="c-ticket" (click)="abrirTicket(s.ticket)"
+                            [attr.aria-label]="'Abrir conversación del ticket número ' + s.ticket"
+                            title="Abrir conversación del ticket">#{{ s.ticket }}</button>
+                  }
+                </span>
                 <span class="td-detail-title">{{ s.tareaTitulo || '(sin título)' }}</span>
               </div>
             </div>
@@ -186,15 +203,28 @@
             }
 
             @if (esEnviadas()) {
-              <!-- La envié yo: no puedo aceptar/rechazar mi propia transferencia; solo espero. -->
+              <!-- La envié yo: no puedo aceptar/rechazar mi propia transferencia. -->
               <div class="td-sent-note" [class]="'est-' + s.estado.toLowerCase()">
-                <mat-icon>{{ s.estado === 'PENDIENTE' ? 'schedule_send' : (s.estado === 'RECHAZADA' ? 'undo' : 'check_circle') }}</mat-icon>
-                <span>{{ s.estado === 'PENDIENTE'
-                  ? 'Esperando que ' + (s.equipoDestino || 'el equipo destino') + ' acepte la transferencia.'
-                  : (s.estado === 'RECHAZADA'
-                    ? (s.equipoDestino || 'El equipo destino') + ' rechazó la transferencia.'
-                    : (s.equipoDestino || 'El equipo destino') + ' aceptó la transferencia.') }}</span>
+                <mat-icon>{{
+                  s.estado === 'PENDIENTE' ? 'schedule_send'
+                  : s.estado === 'RECHAZADA' ? 'undo'
+                  : s.estado === 'CANCELADA' ? 'cancel'
+                  : 'check_circle'
+                }}</mat-icon>
+                <span>{{
+                  s.estado === 'PENDIENTE' ? 'Esperando que ' + (s.equipoDestino || 'el equipo destino') + ' acepte la transferencia.'
+                  : s.estado === 'RECHAZADA' ? (s.equipoDestino || 'El equipo destino') + ' rechazó la transferencia.'
+                  : s.estado === 'CANCELADA' ? 'Cancelaste el envío.'
+                  : (s.equipoDestino || 'El equipo destino') + ' aceptó la transferencia.'
+                }}</span>
               </div>
+              @if (s.estado === 'PENDIENTE') {
+                <div class="td-detail-actions">
+                  <button mat-stroked-button type="button" [disabled]="busy() === 't-' + s.id" (click)="cancelar(s)">
+                    <mat-icon>cancel</mat-icon> Cancelar envío
+                  </button>
+                </div>
+              }
             } @else if (s.estado === 'PENDIENTE') {
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="td-asignar">
                 <mat-label>Asignar a</mat-label>

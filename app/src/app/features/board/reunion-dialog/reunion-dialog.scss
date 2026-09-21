@@ -1,3 +1,7 @@
+:host {
+  --mix-base: #fff;
+}
+
 // Modal de reunión — campos tipo "tarjeta" (label arriba dentro de un borde
 // redondeado + icono), header con subtítulo y cierre, caja de Consejo y pie fijo.
 // Se aleja de los mat-form-field crudos para un formulario más legible y cómodo.
@@ -92,12 +96,57 @@
   &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 2px; }
 
   &.on {
-    background: color-mix(in srgb, var(--brand, #048abf) 12%, #fff);
+    background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff));
     border-color: color-mix(in srgb, var(--brand, #048abf) 45%, transparent);
     color: var(--brand-dark, #0390bc);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
 }
+
+// ── Recordatorio (chips de minutos + input personalizado) ──
+.rf-remind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.rf-remind-chip {
+  border: 1px solid var(--mat-sys-outline-variant, #d6dbe0);
+  border-radius: 999px;
+  background: var(--mat-sys-surface, #fff);
+  color: var(--mat-sys-on-surface-variant, #5a6470);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  min-height: 34px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  &:hover:not(.on) { background: rgba(0, 0, 0, 0.04); }
+  &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 2px; }
+  &.on {
+    background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff));
+    border-color: color-mix(in srgb, var(--brand, #048abf) 55%, transparent);
+    color: var(--brand-dark, #0390bc);
+  }
+}
+.rf-remind-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+}
+.rf-remind-input {
+  width: 68px;
+  text-align: right;
+  padding: 6px 8px;
+  border: 1px solid var(--mat-sys-outline-variant, #d6dbe0);
+  border-radius: 8px;
+  font: inherit;
+  &:focus { outline: none; border-color: var(--brand, #048abf); }
+}
+.rf-remind-unit { font-size: 12.5px; color: var(--mat-sys-on-surface-variant, #5a6470); }
+.rf-remind-hint { margin: 6px 0 0; font-size: 11.5px; color: var(--mat-sys-on-surface-variant, #5a6470); line-height: 1.4; }
 
 // ── Campo tarjeta ──
 .rf-field {
@@ -294,4 +343,12 @@
     .rf-btn-txt { display: none; }
     .rf-danger { min-width: 40px; padding: 0 8px; }
   }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+  --rf-border: #39434d;
+  .rf-field { background: #1a222b; }
+  .rf-input::placeholder, .rf-value.rf-placeholder, .rf-menu-search input::placeholder { color: #8b949e; }
 }

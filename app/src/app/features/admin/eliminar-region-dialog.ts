@@ -20,7 +20,7 @@ export interface EliminarRegionData { codigo: string; nombre: string; }
     <mat-dialog-content>
       <p>Vas a eliminar la región <strong>{{ data.nombre }}</strong> ({{ data.codigo }}).</p>
       <p class="muted">
-        Se borrarán también sus <strong>equipos vacíos</strong> con su tablero y sprints. Se bloquea si algún
+        Se borrarán también sus <strong>equipos vacíos</strong> con su tablero. Se bloquea si algún
         equipo tiene tareas o técnicos exclusivos de esta región. <strong>Esta acción no se puede deshacer.</strong>
       </p>
       <mat-form-field appearance="outline" class="full">

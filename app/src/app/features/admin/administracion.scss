@@ -1,4 +1,5 @@
 :host {
+  --mix-base: #fff;
   --line: var(--mat-sys-outline-variant, #e6e9ee);
   --line-soft: #eef1f5;
   --muted: var(--mat-sys-on-surface-variant, #5a6470);
@@ -17,7 +18,7 @@
     flex: none;
     display: inline-flex; align-items: center; justify-content: center;
     width: 52px; height: 52px; border-radius: 14px;
-    background: color-mix(in srgb, var(--brand, #048abf) 14%, #fff);
+    background: color-mix(in srgb, var(--brand, #048abf) 14%, var(--mix-base, #fff));
     color: var(--brand, #048abf);
     mat-icon { font-size: 28px; width: 28px; height: 28px; }
   }
@@ -30,7 +31,7 @@
   border: 1px solid color-mix(in srgb, var(--brand, #048abf) 40%, #e0e0e0); border-radius: 20px;
   background: #fff; color: var(--brand-dark, #0390bc); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
   mat-icon { font-size: 20px; width: 20px; height: 20px; }
-  &:hover:not(:disabled) { background: color-mix(in srgb, var(--brand, #048abf) 8%, #fff); }
+  &:hover:not(:disabled) { background: color-mix(in srgb, var(--brand, #048abf) 8%, var(--mix-base, #fff)); }
   &:disabled { opacity: 0.55; cursor: default; }
 }
 
@@ -104,7 +105,7 @@
   }
   td { padding: 11px 16px; border-bottom: 1px solid var(--line-soft); color: var(--mat-sys-on-surface, #16202a); vertical-align: middle; }
   tbody tr:last-child td { border-bottom: none; }
-  tbody tr:hover { background: color-mix(in srgb, var(--brand, #048abf) 4%, #fff); }
+  tbody tr:hover { background: color-mix(in srgb, var(--brand, #048abf) 4%, var(--mix-base, #fff)); }
   tbody tr.fila-inactiva td { color: var(--muted); font-style: italic; }
   .c-code { font-weight: 700; font-size: 0.82rem; color: var(--brand-dark, #0390bc); }
   .empty-row { text-align: center; color: var(--muted); font-style: italic; padding: 28px; }
@@ -112,7 +113,7 @@
 // Asignaciones: fila seleccionable + tabla más compacta (7 columnas).
 .grid-asig tbody tr { cursor: pointer; }
 .grid-asig tbody tr:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: -2px; }
-.grid-asig tbody tr.sel { background: color-mix(in srgb, var(--brand, #048abf) 9%, #fff); box-shadow: inset 3px 0 0 var(--brand, #048abf); }
+.grid-asig tbody tr.sel { background: color-mix(in srgb, var(--brand, #048abf) 9%, var(--mix-base, #fff)); box-shadow: inset 3px 0 0 var(--brand, #048abf); }
 .grid-asig th, .grid-asig td { padding: 11px 10px; }
 .grid-asig .rol-badge { font-size: 0.72rem; padding: 3px 8px; }
 .grid-asig .avatar { width: 28px; height: 28px; }
@@ -130,7 +131,7 @@
 .avatar {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 50%;
-  background: color-mix(in srgb, var(--brand, #048abf) 14%, #fff); color: var(--brand-dark, #0390bc);
+  background: color-mix(in srgb, var(--brand, #048abf) 14%, var(--mix-base, #fff)); color: var(--brand-dark, #0390bc);
   font-size: 0.72rem; font-weight: 700;
   &.avatar-lg { width: 44px; height: 44px; font-size: 0.9rem; }
 }
@@ -172,7 +173,7 @@
 .help-h {
   display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 1rem; font-weight: 700; color: var(--mat-sys-on-surface, #16202a);
   .help-h-ic { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%;
-    background: color-mix(in srgb, var(--brand, #048abf) 14%, #fff); color: var(--brand, #048abf);
+    background: color-mix(in srgb, var(--brand, #048abf) 14%, var(--mix-base, #fff)); color: var(--brand, #048abf);
     mat-icon { font-size: 18px; width: 18px; height: 18px; } }
 }
 .help-lead { margin: 0 0 14px; font-size: 0.85rem; line-height: 1.45; color: var(--muted); }
@@ -203,7 +204,7 @@
   display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #fff; border: 1px solid var(--line); border-radius: 14px;
   .stat-ic { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 12px;
     mat-icon { font-size: 22px; width: 22px; height: 22px; } }
-  .i-info { background: color-mix(in srgb, var(--brand, #048abf) 12%, #fff); color: var(--brand, #048abf); }
+  .i-info { background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff)); color: var(--brand, #048abf); }
   .i-warn { background: #fdf1e3; color: #d98a1f; }
   .i-blue { background: #e7eefb; color: #2f5fb3; }
   .i-ok { background: #e3f4ee; color: #1b7a4b; }
@@ -260,4 +261,27 @@ mat-dialog-content { overflow-x: hidden; }
   &.custom { overflow: hidden; background: repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 12px 12px;
     input[type='color'] { position: absolute; inset: 0; opacity: 0; cursor: pointer; border: none; padding: 0; } }
   &.clear { background: #fff; }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+  .c-chevron { color: #6b7684; }
+  .rol-badge { background: #252d36; color: #aab6c2; }
+  .ico:hover { background: #232c36; }
+  .badge.badge-si { background: #123a36; color: #8fd9cf; }
+  .help-item .i-ok { background: #123a36; color: #8fd9cf; }
+  .stat-card .i-warn { background: #33280f; color: #f0c070; }
+  .detail-empty { color: #aab6c2; }
+}
+
+// ─── TEMA OSCURO (superficies) ───
+// La causa de fondo era la misma que en la tarjeta de ticket: el TEXTO usa
+// `--mat-sys-on-surface` (que ya vira a claro) pero las SUPERFICIES seguían en #fff.
+:host-context(html[data-theme='dark']) {
+  --line-soft: #232c36;
+  .admin-card, .help-card, .detail-card, .stat-card,
+  .admin-refresh, .a-search, .a-filter, .btn-outline, .ico { background: #131a21; }
+  .acciones-h, .grid thead th { background: #1a222b; }
+  .swatch.clear { background: #131a21; }
 }

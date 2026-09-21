@@ -72,9 +72,15 @@
       <span class="tc-assignee-dot" [style.background]="avatar().color"></span>
       <span class="tc-assignee-name">{{ avatar().nombre }}</span>
     </span>
-    <button class="tc-flag" [class.on]="esAccion()" (click)="$event.stopPropagation(); toggleAccion.emit()"
-            [matTooltip]="esAccion() ? 'Quitar acción' : 'Marcar acción'" aria-label="Acción">
-      <mat-icon>flag</mat-icon>
+    @if (puedeMarcarAccion()) {
+      <button class="tc-flag" [class.on]="esAccion()" (click)="$event.stopPropagation(); toggleAccion.emit()"
+              [matTooltip]="esAccion() ? 'Quitar acción' : 'Marcar acción'" aria-label="Acción">
+        <mat-icon>flag</mat-icon>
+      </button>
+    }
+    <button class="tc-flag save" [class.on]="esGuardado()" (click)="$event.stopPropagation(); toggleGuardado.emit()"
+            [matTooltip]="esGuardado() ? 'Quitar de guardados' : 'Guardar'" aria-label="Guardar">
+      <mat-icon>{{ esGuardado() ? 'bookmark' : 'bookmark_border' }}</mat-icon>
     </button>
     <button class="tc-flag pend" [class.on]="esPendiente()" (click)="$event.stopPropagation(); togglePendiente.emit()"
             [matTooltip]="esPendiente() ? 'Quitar recordatorio' : 'Crear recordatorio'" aria-label="Recordatorio">

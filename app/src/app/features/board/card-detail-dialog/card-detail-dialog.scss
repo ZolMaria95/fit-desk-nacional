@@ -241,3 +241,8 @@
     .danger { min-width: 40px; padding: 0 8px; }
   }
 }
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  .prio-chip { background: #1a222b; }
+}

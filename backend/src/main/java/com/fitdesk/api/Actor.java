@@ -39,6 +39,80 @@ public final class Actor {
     }
 
     /**
+     * ¿El actor "ve todo" (alcance GLOBAL)? true si es ADMIN (incluye MSC001 bootstrap) o si tiene alguna
+     * Asignación VIGENTE de alcance GLOBAL, INDEPENDIENTE del rol — así un CONSULTOR con alcance global
+     * también aplica. Misma noción de "ve todo" que usa {@code LegacyReadResource.boardsVisibles}.
+     */
+    public static boolean esAlcanceGlobal(String hid) {
+        if (esAdmin(hid)) {
+            return true;
+        }
+        Usuario u = usuario(hid);
+        if (u == null) {
+            return false;
+        }
+        LocalDate hoy = LocalDate.now();
+        for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
+            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+                continue;
+            }
+            if ("GLOBAL".equals(a.alcanceTipo)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Equipos que caen en el ALCANCE del actor, **independiente del rol** (a diferencia de
+     * {@code equiposGestionables}/{@code equiposComoResponsable}, que solo cuentan RESPONSABLE_EQUIPO):
+     * GLOBAL/ADMIN = todos, EQUIPO = ese equipo, REGIONAL = todos los de esa regional. Sirve para
+     * scopear por alcance lo que el actor puede VER (p. ej. sus clientes), no solo lo que gobierna.
+     */
+    public static Set<Long> equiposEnAlcance(String hid) {
+        Set<Long> ids = new HashSet<>();
+        if (esAdmin(hid)) {
+            for (Equipo e : Equipo.<Equipo>listAll()) {
+                ids.add(e.id);
+            }
+            return ids;
+        }
+        Usuario u = usuario(hid);
+        if (u == null) {
+            return ids;
+        }
+        LocalDate hoy = LocalDate.now();
+        for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
+            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+                continue;
+            }
+            switch (a.alcanceTipo == null ? "" : a.alcanceTipo) {
+                case "GLOBAL" -> {
+                    for (Equipo e : Equipo.<Equipo>listAll()) {
+                        ids.add(e.id);
+                    }
+                }
+                case "EQUIPO" -> {
+                    if (a.alcanceEquipo != null) {
+                        ids.add(a.alcanceEquipo.id);
+                    }
+                }
+                case "REGIONAL" -> {
+                    if (a.alcanceRegional != null) {
+                        for (Equipo e : Equipo.<Equipo>list("regional = ?1", a.alcanceRegional)) {
+                            ids.add(e.id);
+                        }
+                    }
+                }
+                default -> {
+                    /* CLIENTE u otros no otorgan equipo */
+                }
+            }
+        }
+        return ids;
+    }
+
+    /**
      * Equipos que el actor GOBIERNA como Responsable de Equipo (asignar/transferir):
      * todos si es ADMIN; si es RESPONSABLE_EQUIPO, los de sus asignaciones de ese rol
      * (alcance GLOBAL = todos, EQUIPO = ese, REGIONAL = todos los de la regional).

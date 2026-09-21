@@ -1,4 +1,4 @@
-import { Component, OnDestroy, TemplateRef, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, OnDestroy, TemplateRef, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 import { BreakpointObserver } from '@angular/cdk/layout';
@@ -18,15 +18,16 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { AuthService } from '../../core/services/auth.service';
+import { ColoresService } from '../../core/services/colores.service';
 import { Client, DataService, Story } from '../../core/services/data.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { TransferenciasService } from '../../core/services/transferencias.service';
 import { ShellService } from '../../core/services/shell.service';
 import { MatMenuModule } from '@angular/material/menu';
 import { CardDetailDialog } from './card-detail-dialog/card-detail-dialog';
 import { ReunionDialog } from './reunion-dialog/reunion-dialog';
 import { ConfirmDialog } from './confirm-dialog/confirm-dialog';
-import { SprintDialog } from './sprint-dialog/sprint-dialog';
 import {
   HD_ESTADO_ESPERANDO,
   HD_ESTADO_POR_STATUS,
@@ -49,7 +50,7 @@ import {
   resolveMember,
   roundUp5,
   shortName,
-  statusFromTicketEstado,
+  storyPatchFromEstado,
 } from './board-utils';
 
 type PriorityFilter = 'all' | Priority;
@@ -87,11 +88,13 @@ interface Column {
 })
 export class Board implements OnDestroy {
   private readonly data = inject(DataService);
+  private readonly colores = inject(ColoresService);
   private readonly auth = inject(AuthService);
   private readonly helpdesk = inject(HelpdeskService);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   private readonly transfer = inject(TransferenciasService);
+  private readonly theme = inject(ThemeService);
   private readonly shell = inject(ShellService);
   private readonly breakpoints = inject(BreakpointObserver);
   private readonly route = inject(ActivatedRoute);
@@ -122,6 +125,17 @@ export class Board implements OnDestroy {
   /** ¿Mostrar el toggle "Mi equipo"? RE/ADMIN y en modo Quarkus. */
   readonly puedeVerEquipo = computed(() => this.data.usesQuarkus() && this.auth.puedeTransferir());
 
+  /** Toggle "Mis tareas (todos los equipos)" para RE/Admin/Gerencia (default off; ellos ven por equipo). */
+  readonly consolidadoManual = signal(false);
+  /** Vista CONSOLIDADA: consultores/especialistas (SIEMPRE, no ven selector) o RE/Admin/Gerencia con el
+   *  toggle activo. Muestra TODAS mis tareas de todos los equipos en un tablero continuo, con el equipo
+   *  indicado en cada card. La audiencia forzada = quien NO ve el tablero completo (`veTableroCompleto`). */
+  readonly esConsolidado = computed(
+    () => this.data.usesQuarkus() && (!this.auth.veTableroCompleto() || this.consolidadoManual()),
+  );
+  /** Expuesto al template: ¿el usuario es RE/Admin/Gerencia (ve el tablero por equipo + toggle)? */
+  readonly veTableroCompleto = this.auth.veTableroCompleto;
+
   constructor() {
     // Carga empleados y clientes del Helpdesk (consulta independiente + cache) para
     // resolver nombre/rol del asignado y nombre/color del cliente en las cards.
@@ -129,7 +143,7 @@ export class Board implements OnDestroy {
     this.helpdesk.getClients();
     this.helpdesk.getTicketStatuses();
     // Al abrir: carga los tableros visibles, entra al del usuario y sincroniza (read-only).
-    // Si venimos con un deep-link (?board&sprint&card), el modal se abre DENTRO de initBoards
+    // Si venimos con un deep-link (?board&card), el modal se abre DENTRO de initBoards
     // en cuanto están las stories (sin esperar el sync del HelpDesk, que es lento).
     this.data.ensureInit().then(() => this.initBoards());
     // ENFOQUE POR ROL: Consultor y Especialista viven en el plano "sus tareas"
@@ -152,6 +166,15 @@ export class Board implements OnDestroy {
     // Publica los filtros de esta vista en el drawer del shell (una vez, tras el primer
     // render), igual que Tickets. Se limpian al salir en ngOnDestroy.
     afterNextRender(() => this.shell.setFilters(this.filtersTpl() ?? null));
+    // Reconciliación VIVA: cuando una escritura CONFIRMADA (estado/asignación) emite el pulso
+    // `helpdesk.ticketMutado` desde CUALQUIER origen (modal de conversación, card-detail o Tickets),
+    // el board actualiza ESA tarjeta al instante —sin esperar el sync completo— para que salte de
+    // columna y/o muestre el nuevo asignado. `untracked` evita que el effect dependa de las señales
+    // que él mismo escribe (`stories`/`ticketAssigneeMap`), y con ello re-ejecuciones en bucle.
+    effect(() => {
+      const m = this.helpdesk.ticketMutado();
+      if (m) untracked(() => this.reconcileTicketLive(m));
+    });
   }
 
   ngOnDestroy(): void {
@@ -160,6 +183,11 @@ export class Board implements OnDestroy {
 
   toggleTeam(): void {
     this.teamOnly.update((v) => !v);
+  }
+
+  /** Alterna la vista consolidada (solo RE/Admin/Gerencia; los demás la tienen forzada). */
+  toggleConsolidado(): void {
+    this.consolidadoManual.update((v) => !v);
   }
 
   // ── Tableros (multi-equipo) ──
@@ -173,7 +201,7 @@ export class Board implements OnDestroy {
       // Si el deep-link pide un tablero que el usuario puede ver, entrar a ese; si no, el primero.
       const target = this.route.snapshot.queryParamMap.get('board');
       const entrar = target && list.some((b) => b.codigo === target) ? target : list[0]?.codigo;
-      if (entrar) await this.data.switchBoard(entrar);
+      if (entrar) this.data.switchBoard(entrar);
     }
     // Deep-link "en board": abre el modal EN CUANTO están las stories (tras switchBoard),
     // sin esperar el sync de estados del HelpDesk (lento). Fire-and-forget → el sync sigue.
@@ -181,13 +209,11 @@ export class Board implements OnDestroy {
     await this.syncTicketStatuses();
   }
 
-  /** Deep-link desde Tickets ("en board"): fija el sprint de la tarea y la resalta. */
+  /** Deep-link desde Tickets ("en board"): resalta y abre la tarjeta de la tarea. */
   private async focusCardFromRoute(): Promise<void> {
     const p = this.route.snapshot.queryParamMap;
     const cardId = p.get('card');
     if (!cardId) return;
-    const sprint = p.get('sprint');
-    if (sprint) this.setSprint(sprint);
     // La data carga async: se sondea hasta ~3s por la story del deep-link.
     for (let i = 0; i < 15; i++) {
       const story = this.data.stories().find((s) => s.id === cardId);
@@ -210,20 +236,21 @@ export class Board implements OnDestroy {
   /** Selector de tablero: cambia de board y re-sincroniza los estados de ticket del nuevo. */
   async switchBoard(codigo: string): Promise<void> {
     if (!codigo || codigo === this.currentBoard()) return;
-    await this.data.switchBoard(codigo);
+    this.data.switchBoard(codigo);
     await this.syncTicketStatuses();
   }
 
-  /** Consulta el estado del ticket de cada tarea con ticket y la ubica en su columna. */
+  /** Consulta el estado del ticket de cada tarea con ticket y la ubica en su columna. En vista
+   *  consolidada sincroniza MIS tareas de todos los equipos; en vista por tablero, solo el actual. */
   private async syncTicketStatuses(): Promise<void> {
-    const active = this.data.sprints().active;
-    const conTicket = this.data.getStoriesBySprint(active).filter((s) => s.ticket);
+    const src = this.esConsolidado() ? this.misTareas() : this.data.getStoriesByBoard();
+    const conTicket = src.filter((s) => s.ticket);
     if (!conTicket.length) return;
     this.syncing.set(true);
     // Estado FRESCO del ticket: se lee EN VIVO (GET read-only) por tarjeta, así el board refleja
     // los cierres/cambios recientes del HelpDesk. La caché ticket_espejo (que puede estar
     // desactualizada) queda solo como RESPALDO si la lectura viva falla (404/ticket viejo).
-    // Solo tarjetas del sprint activo con ticket → volumen acotado. Sigue siendo read-only.
+    // Solo tarjetas del tablero con ticket → volumen acotado. Sigue siendo read-only.
     const cache = this.data.usesQuarkus() ? await this.data.getTicketEspejoCache() : null;
     const prios: Record<string, string> = {};
     const asignados: Record<string, { id: string; name: string }> = {};
@@ -241,31 +268,55 @@ export class Board implements OnDestroy {
           id: String(raw.assigned_user_id ?? raw.usuarioAsignado ?? '').trim().toUpperCase(),
           name: String(raw.assigned_person ?? raw.nombreAsignado ?? '').trim(),
         };
+        // Todos los cambios de ESTA tarea se acumulan en UN patch y se escriben en UNA sola
+        // llamada. Antes se disparaba un PATCH por campo (cliente, nombre, estado, status…) de
+        // forma concurrente contra la misma tarea; el backend hace read-modify-write y dos PATCH
+        // simultáneos a la misma fila se pisaban → 500 + update perdido. Con el tablero continuo
+        // se sincronizan TODAS las tareas (no solo las del sprint activo), así que coalescer es
+        // clave para no inundar el backend.
+        const patch: Partial<Story> = {};
         // El cliente de una tarea con ticket lo define el ticket (id + nombre, para
         // mostrar el nombre aunque el cliente no esté en el catálogo).
         const clientId = String(raw.client_id ?? '').trim();
-        if (clientId && s.client !== clientId) this.data.updateStoryClient(s.id, clientId);
+        if (clientId && s.client !== clientId) patch.client = clientId;
         const clientName = String(raw.cliente ?? '').trim();
-        if (clientName && s.clientName !== clientName) this.data.updateStoryClientName(s.id, clientName);
+        if (clientName && s.clientName !== clientName) patch.clientName = clientName;
         // La carga del board es SOLO LECTURA contra el HelpDesk: NO se re-empuja la asignación.
         // Antes, si el asignado local difería del del ticket, se llamaba a assignTicket() aquí y
         // se REASIGNABA el ticket real en el HelpDesk en cada carga (sin acción del usuario, y podía
         // arrastrar un cambio de estado del lado del HelpDesk). La asignación al HelpDesk ahora ocurre
         // solo por acción explícita (diálogo de la tarjeta / asignar ticket).
-        const estado = String(raw.estado || '');
-        if (estado && s.hdEstatus !== estado) this.data.updateStoryHdEstatus(s.id, estado);
-        const m = statusFromTicketEstado(estado);
-        if (s.status !== m.status) this.data.updateStoryStatus(s.id, m.status);
-        // El check "Finalizado" lo define siempre el ticket (marca o desmarca).
-        if (m.approved !== undefined && !!s.approved !== m.approved) {
-          m.approved ? this.data.approveStory(s.id) : this.data.unapproveStory(s.id);
-        }
-        if (m.waiting && !s.waitingClient) this.data.setWaitingClient(s.id, true);
+        // Estado del ticket → columna + badge + flags. Mismo mapeo que la reconciliación viva
+        // (`reconcileTicketLive`), centralizado en `storyPatchFromEstado` para no duplicarlo.
+        Object.assign(patch, storyPatchFromEstado(s, String(raw.estado || '')));
+        if (Object.keys(patch).length) this.data.patchStory(s.id, patch);
       }),
     );
     this.ticketPrioMap.set(prios);
     this.ticketAssigneeMap.set(asignados);
     this.syncing.set(false);
+  }
+
+  /**
+   * Reconcilia UNA tarjeta del tablero tras una mutación CONFIRMADA (pulso `helpdesk.ticketMutado`):
+   * si cambió el estado, mueve la card de columna y actualiza el badge de estatus; si cambió la
+   * asignación, refresca el asignado efectivo. Optimista-tras-confirmar: usa el valor ya escrito y
+   * confirmado por el API (sin GET extra) → refresco inmediato. El `syncTicketStatuses` posterior
+   * (al entrar/cambiar de tablero) reconcilia la verdad viva del HelpDesk.
+   */
+  private reconcileTicketLive(m: { ticket: string; estado?: string; asignadoId?: string; asignadoName?: string }): void {
+    const s = this.data.getStoriesByBoard().find((x) => x.ticket === m.ticket);
+    if (!s) return; // el ticket no está en el tablero visible → nada que reconciliar.
+    if (m.estado) {
+      const patch = storyPatchFromEstado(s, m.estado);
+      if (Object.keys(patch).length) this.data.patchStory(s.id, patch);
+    }
+    if (m.asignadoId !== undefined) {
+      this.ticketAssigneeMap.set({
+        ...this.ticketAssigneeMap(),
+        [m.ticket]: { id: (m.asignadoId || '').trim().toUpperCase(), name: m.asignadoName || '' },
+      });
+    }
   }
 
   /** Prioridad/orden del ticket asociado a la tarjeta (vacío si no se ha sincronizado o no tiene). */
@@ -289,8 +340,10 @@ export class Board implements OnDestroy {
   readonly prioClase = prioBadgeClase;
 
   // ── Helpers expuestos al template ──
+  // El color SIEMPRE sale de `ColoresService`: es lo que hace que la persona se vea igual aquí,
+  // en la tarjeta de ticket, en Vacaciones y en el Semanal.
   readonly resolveMember = (id: string | null | undefined) =>
-    resolveMember(id, this.data.team(), this.helpdesk.hdUsers());
+    resolveMember(id, this.data.team(), this.helpdesk.hdUsers(), (hid) => this.colores.color(hid));
 
   /** Asignado EFECTIVO de una tarjeta. Para tareas CON ticket YA sincronizado, el del ticket
    *  (el HelpDesk manda; solo lectura). Si no, el guardado en la tarea. Se usa en el display,
@@ -303,6 +356,11 @@ export class Board implements OnDestroy {
     return String(card.assignee || '').trim();
   }
 
+  /** Fondo+tinta del chip de un asignado en los filtros. Sustituye a `pastel()`, que mezclaba
+   *  SIEMPRE hacia blanco: en tema oscuro dejaba un chip casi blanco y el .scss le forzaba encima
+   *  texto casi blanco (contraste ~1). `colorChip` resuelve el par según el tema. */
+  chipAsignado(id: string) { return this.colores.chip(id); }
+
   /** Nombre + color del asignado efectivo (para pintar la card), o null si "Sin asignar". */
   assigneeView(card: Story): { name: string; color: string } | null {
     const id = this.effAssignee(card);
@@ -311,12 +369,15 @@ export class Board implements OnDestroy {
     if (m && m.name && m.name !== '—') return { name: m.name, color: m.color };
     // Asignado del ticket fuera del roster: usa el nombre que trae el propio ticket.
     const tName = card.ticket ? this.ticketAssigneeMap()[card.ticket]?.name : '';
-    if (tName) return { name: tName, color: colorFor(id) };
+    if (tName) return { name: tName, color: this.colores.color(id) };
     return m ? { name: m.name, color: m.color } : null;
   }
   readonly dueInfo = dueInfo;
   readonly progColor = progColor;
-  readonly clientStyle = clientStyle;
+  /** El tinte del post-it va como estilo INLINE → el tema se resuelve aquí (una hoja de
+   *  estilos no puede pisar un `style`). Al leer la señal del tema dentro de la función,
+   *  el tablero se repinta solo al conmutar claro/oscuro. */
+  readonly clientStyle = (c: { id?: string; color?: string } | undefined) => clientStyle(c, this.theme.esOscuro());
   readonly pastel = pastel;
   readonly cardTilt = cardTilt;
   readonly STATUS_LABELS = STATUS_LABELS;
@@ -350,46 +411,59 @@ export class Board implements OnDestroy {
   // ── Permisos ──
   readonly puedeGestionarTodo = this.auth.puedeGestionarTodo;
   readonly puedeBorrarBoard = this.auth.puedeBorrarBoard;
+  // Eliminar una tarea suelta: SOLO Responsable de Equipo o ADMIN (no soporte/supervisor-HD).
+  readonly puedeEliminarTarea = this.auth.puedeEliminarTarea;
   private get myId(): string {
     return String(this.auth.session()?.id || '').trim().toUpperCase();
-  }
-
-  // ── Sprints ──
-  readonly sprints = computed(() => this.data.sprints().sprints);
-  readonly activeSprintId = computed(() => this.data.sprints().active);
-  readonly activeSprint = computed(() => this.data.getActiveSprint());
-
-  setSprint(id: string): void {
-    this.data.setActiveSprint(id);
-  }
-  openNewSprint(): void {
-    this.dialog.open(SprintDialog, { data: { sprint: null }, width: '480px', maxWidth: '95vw' });
-  }
-  openEditSprint(): void {
-    const s = this.activeSprint();
-    if (s) this.dialog.open(SprintDialog, { data: { sprint: s }, width: '480px', maxWidth: '95vw' });
-  }
-  fmtSprintDate(iso?: string): string {
-    if (!iso) return '';
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
   // ── Estado derivado ──
   readonly clients = computed(() => this.data.clients());
 
-  /** Base visible: tareas del sprint activo, ocultando DONE aprobadas pasado 1 día. */
-  readonly visibleStories = computed<Story[]>(() => {
-    const active = this.data.sprints().active;
-    const board = this.data.currentBoard();
+  /** Oculta DONE aprobadas pasado el cutoff de 2 días y colapsa duplicados por ticket (conserva la
+   *  tarea de id más bajo = la original). Compartido por `visibleStories` (por tablero) y `misTareas`
+   *  (consolidado). Las tareas SIN ticket no se colapsan (son únicas). */
+  private dedupYcutoff(list: Story[]): Story[] {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 2); // done-finalizadas salen del board tras 2 días
     const cutoffStr = cutoff.toISOString().split('T')[0];
-    return this.data
-      .stories()
-      // El sprint es único POR board → filtrar también por el tablero actual.
-      .filter((s) => s.sprint === active && (!board || (s.board || 'CUENCA') === board))
-      .filter((s) => !(s.status === 'done' && s.approved && (s.approvedDate || '') < cutoffStr));
+    const base = list.filter((s) => !(s.status === 'done' && s.approved && (s.approvedDate || '') < cutoffStr));
+    const idNum = (id: string) => parseInt(String(id).replace(/\D/g, ''), 10) || 0;
+    const keeper = new Map<string, string>(); // ticket → id de la tarea a conservar
+    for (const s of base) {
+      const t = String(s.ticket || '').trim();
+      if (!t) continue;
+      const cur = keeper.get(t);
+      if (!cur || idNum(s.id) < idNum(cur)) keeper.set(t, s.id);
+    }
+    return base.filter((s) => {
+      const t = String(s.ticket || '').trim();
+      return !t || keeper.get(t) === s.id;
+    });
+  }
+
+  /** Base visible: tareas del TABLERO actual (continuo, sin sprints), ocultando DONE aprobadas
+   *  pasado el cutoff de 2 días. */
+  readonly visibleStories = computed<Story[]>(() => {
+    const board = this.data.currentBoard();
+    return this.dedupYcutoff(this.data.stories().filter((s) => !board || (s.board || 'CUENCA') === board));
   });
+
+  /** CONSOLIDADO: TODAS mis tareas (asignado efectivo = yo) de TODOS los tableros (ignora `currentBoard`),
+   *  con el mismo dedup + cutoff. Es el feed de la vista consolidada. */
+  readonly misTareas = computed<Story[]>(() => {
+    const me = this.myId;
+    if (!me) return [];
+    return this.dedupYcutoff(this.data.stories().filter((s) => this.effAssignee(s).toUpperCase() === me));
+  });
+
+  /** Fuente FINAL de tarjetas: consolidada (mis tareas de todos los equipos) o por tablero. */
+  readonly feed = computed<Story[]>(() => (this.esConsolidado() ? this.misTareas() : this.cardsSource()));
+
+  /** Fuente para poblar los selects de filtro (asignado/cliente): consolidada o del tablero actual. */
+  private readonly filterSource = computed<Story[]>(() =>
+    this.esConsolidado() ? this.misTareas() : this.visibleStories(),
+  );
 
   /**
    * Fuente de tarjetas para las columnas: la base del tablero activo y, si "Asignados a mí"
@@ -435,9 +509,15 @@ export class Board implements OnDestroy {
     return b?.equipo || b?.nombre || codigo;
   }
 
+  /** ¿Pintar el badge de equipo en la card? SIEMPRE en consolidado (todas son de equipos mezclados);
+   *  en la vista por tablero, solo las foráneas (transferidas que siguen en el board de su dueño). */
+  mostrarEquipo(card: Story): boolean {
+    return this.esConsolidado() || this.esForanea(card);
+  }
+
   /** Empleados asignados en el board (para el multi-select), ordenados por nombre. */
   readonly assigneeChips = computed(() => {
-    const ids = [...new Set(this.visibleStories().map((s) => this.effAssignee(s)).filter(Boolean))] as string[];
+    const ids = [...new Set(this.filterSource().map((s) => this.effAssignee(s)).filter(Boolean))] as string[];
     return ids
       .map((id) => this.resolveMember(id))
       .filter((m): m is NonNullable<typeof m> => !!m)
@@ -446,7 +526,7 @@ export class Board implements OnDestroy {
 
   /** Clientes presentes en las tareas del board (para el multi-select), por nombre. */
   readonly clientChips = computed(() => {
-    const ids = [...new Set(this.visibleStories().map((s) => s.client).filter(Boolean))] as string[];
+    const ids = [...new Set(this.filterSource().map((s) => s.client).filter(Boolean))] as string[];
     return ids
       .map((id) => {
         const c = this.clientOf(id);
@@ -477,13 +557,16 @@ export class Board implements OnDestroy {
     const mine = this.mineOnly();
     const team = this.teamOnly();
     const me = this.myId;
-    const filtered = this.cardsSource().filter((s) => {
+    // En consolidado el feed YA es "mis tareas de todos los equipos": los filtros mine/team/assignee
+    // no aplican (serían redundantes y su UI está oculta). Prioridad/cliente/búsqueda sí aplican.
+    const cons = this.esConsolidado();
+    const filtered = this.feed().filter((s) => {
       const ea = this.effAssignee(s); // asignado efectivo (del ticket si lo tiene)
       // "Asignados a mí" recorta a mis tareas; si además está "Mi equipo", no se recorta (gana equipo).
-      if (mine && !team && ea.toUpperCase() !== me) return false;
+      if (!cons && mine && !team && ea.toUpperCase() !== me) return false;
       if (prio !== 'all' && this.prioBandaDe(s) !== prio) return false;
       if (clients.size > 0 && !(s.client && clients.has(s.client))) return false;
-      if (assignees.size > 0 && !(!ea || assignees.has(ea))) return false;
+      if (!cons && assignees.size > 0 && !(!ea || assignees.has(ea))) return false;
       // Campo 1: N° de ticket O código de tarea (TA-NNN = s.id), coincidencia parcial local.
       if (code) {
         const t = String(s.ticket || '').toLowerCase();
@@ -698,6 +781,11 @@ export class Board implements OnDestroy {
       { duration: 4000 },
     );
   }
+  /** Igual que `avisoSinPermiso`, pero para finalizar: a diferencia de mover, NO incluye al
+   *  propio asignado (solo RE/Supervisor) — mensaje propio para no decir algo que no aplica. */
+  private avisoSinPermisoFinalizar(): void {
+    this.snack.open('Solo un Responsable de Equipo o el Helpdesk pueden finalizar esta tarea.', 'OK', { duration: 4000 });
+  }
 
   async drop(event: CdkDragDrop<Story[]>, target: Status): Promise<void> {
     await this.moveCard(event.item.data as Story, target);
@@ -780,7 +868,10 @@ export class Board implements OnDestroy {
 
   /** Etiqueta legible del subtipo de reunión. */
   subtipoLabel(subtipo?: string): string {
-    return subtipo === 'PRESENTACION' ? 'Presentación' : subtipo === 'CAPACITACION' ? 'Capacitación' : 'Reunión';
+    return subtipo === 'PRESENTACION' ? 'Presentación'
+      : subtipo === 'CAPACITACION' ? 'Capacitación'
+      : subtipo === 'TRABAJO' ? 'Reunión de trabajo'
+      : 'Reunión';
   }
 
   /** URL absoluta del enlace de reunión. Si viene sin esquema (p.ej. "meet.google.com/…"),
@@ -818,40 +909,15 @@ export class Board implements OnDestroy {
     if (willWait) this.pushHdEstado(card, HD_ESTADO_ESPERANDO);
   }
 
-  async onCert(card: Story, ev: MatCheckboxChange): Promise<void> {
-    if (!ev.checked) return;
-    if (!this.puedeOperar(card)) {
-      ev.source.checked = false;
-      this.avisoSinPermiso();
-      return;
-    }
-    // Confirmación (igual que cualquier cambio de columna).
-    const ok = await firstValueFrom(
-      this.dialog
-        .open(ConfirmDialog, {
-          data: {
-            title: 'Certificar tarea',
-            message: `¿Marcar "${card.title}" como certificada y moverla a Finalizado?`,
-            confirmText: 'Certificar',
-          },
-        })
-        .afterClosed(),
-    );
-    if (!ok) {
-      ev.source.checked = false; // cancelado → quita el check
-      return;
-    }
-    this.data.updateStoryStatus(card.id, 'done');
-    this.pushHdEstado(card, HD_ESTADO_POR_STATUS['done']);
-  }
-
   /** Check "Finalizado" en Done. Tareas CON ticket: lo define el ticket (read-only).
    *  Tareas SIN ticket: el usuario lo marca/desmarca (con confirmación al marcar). */
   async onFinalize(card: Story, ev: MatCheckboxChange): Promise<void> {
     if (card.ticket) return; // las que tienen ticket lo definen por el ticket
+    // Mismo criterio que mover/arrastrar: el DUEÑO de la tarea (asignado efectivo) o
+    // RE/Supervisor/admin — decisión confirmada con la dueña (antes solo RE/Supervisor).
     if (!this.puedeOperar(card)) {
       ev.source.checked = !!card.approved; // revierte al estado real
-      this.avisoSinPermiso();
+      this.avisoSinPermisoFinalizar();
       return;
     }
     if (!ev.checked) {
@@ -882,6 +948,11 @@ export class Board implements OnDestroy {
       this.snack.open('Las tareas con ticket asociado no se pueden eliminar.', 'OK', { duration: 3500 });
       return;
     }
+    // Defensa en profundidad: solo Responsable de Equipo o ADMIN pueden eliminar.
+    if (!this.puedeEliminarTarea()) {
+      this.snack.open('Solo el Responsable de Equipo puede eliminar tareas.', 'OK', { duration: 3500 });
+      return;
+    }
     const ok = await firstValueFrom(
       this.dialog
         .open(ConfirmDialog, {
@@ -899,15 +970,14 @@ export class Board implements OnDestroy {
   }
 
   async clearBoard(): Promise<void> {
-    const active = this.data.sprints().active;
-    const enSprint = this.data.getStoriesBySprint(active);
+    const enBoard = this.data.getStoriesByBoard();
     // Solo se borran las tareas SIN ticket; las que tienen ticket nacen del HelpDesk y se conservan.
-    const eliminables = enSprint.filter((s) => !s.ticket);
-    const conTicket = enSprint.length - eliminables.length;
+    const eliminables = enBoard.filter((s) => !s.ticket);
+    const conTicket = enBoard.length - eliminables.length;
     const ids = eliminables.map((s) => s.id);
     if (!ids.length) {
       this.snack.open(
-        conTicket ? 'Solo hay tareas con ticket asociado (no se pueden borrar).' : 'No hay tareas en el sprint.',
+        conTicket ? 'Solo hay tareas con ticket asociado (no se pueden borrar).' : 'No hay tareas en el tablero.',
         'OK',
         { duration: 3500 },
       );
@@ -918,7 +988,7 @@ export class Board implements OnDestroy {
         .open(ConfirmDialog, {
           data: {
             title: 'Borrar board',
-            message: `Vas a eliminar ${ids.length} tarea(s) sin ticket del sprint activo.${conTicket ? `\n\n(${conTicket} tarea(s) con ticket asociado NO se borran.)` : ''}\n\nEsta acción NO se puede deshacer.`,
+            message: `Vas a eliminar ${ids.length} tarea(s) sin ticket del tablero.${conTicket ? `\n\n(${conTicket} tarea(s) con ticket asociado NO se borran.)` : ''}\n\nEsta acción NO se puede deshacer.`,
             confirmText: 'Borrar todo',
             danger: true,
             requireWord: 'BORRAR',

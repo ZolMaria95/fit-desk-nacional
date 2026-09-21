@@ -15,7 +15,9 @@ import com.fitdesk.core.Solicitud;
 import com.fitdesk.core.Tarea;
 import com.fitdesk.core.Transferencia;
 import com.fitdesk.core.Usuario;
+import com.fitdesk.notificaciones.NotificacionService;
 
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -38,6 +40,9 @@ import jakarta.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class SolicitudResource {
+
+    @Inject
+    NotificacionService notificaciones;
 
     // ── Crear: el Especialista escala sobre una tarea SUYA ───────────────
     @POST
@@ -112,6 +117,7 @@ public class SolicitudResource {
         s.equipoDestino = destino;
         s.asignadoSugerido = sugerido;
         s.persist();
+        notificaciones.solicitudPendiente(s);
         return Response.status(Response.Status.CREATED).entity(describir(s)).build();
     }
 
@@ -193,6 +199,7 @@ public class SolicitudResource {
             t.estado = "PENDIENTE";
             t.motivo = s.motivo;
             t.persist();
+            notificaciones.transferenciaPendiente(t);
             s.transferencia = t;
         }
         s.resueltaPor = Actor.usuario(actorHid);
@@ -233,12 +240,51 @@ public class SolicitudResource {
         return Response.ok(describir(s)).build();
     }
 
+    /**
+     * Cancela una solicitud PROPIA mientras sigue PENDIENTE. La autoriza el propio
+     * {@code solicitante} — a diferencia de aprobar/rechazar, una Solicitud es personal (sobre
+     * la tarea que uno mismo tiene asignada), no algo que gobierne el Responsable del equipo.
+     * Estado distinto de RECHAZADA a propósito: no es que el Responsable la haya rechazado.
+     */
+    @POST
+    @Path("/{id}/cancelar")
+    @Transactional
+    public Response cancelar(@PathParam("id") Long id, JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid) {
+        Solicitud s = Solicitud.findById(id);
+        if (s == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        if (!"PENDIENTE".equals(s.estado)) {
+            return bad("la solicitud ya fue resuelta (" + s.estado + ")");
+        }
+        Usuario actor = Actor.usuario(actorHid);
+        if (actor == null || s.solicitante == null || !s.solicitante.id.equals(actor.id)) {
+            return forbidden("solo quien la solicitó puede cancelarla");
+        }
+        // Misma regla que rechazar: la tarea que nació SOLO para esta solicitud (ticket sin
+        // tarea previa) se descarta entera, sin dejar rastro.
+        if (s.tarea != null && s.tarea.pendienteTransferencia) {
+            Tarea oculta = s.tarea;
+            s.delete();
+            oculta.delete();
+            return Response.ok(Map.of("ok", true, "descartada", true)).build();
+        }
+        s.estado = "CANCELADA";
+        if (in != null && text(in, "motivo") != null) {
+            s.motivo = text(in, "motivo");
+        }
+        s.resueltoEn = OffsetDateTime.now();
+        return Response.ok(describir(s)).build();
+    }
+
     // ── Serialización legible ────────────────────────────────────────────
     static Map<String, Object> describir(Solicitud s) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", s.id);
         m.put("tareaCodigo", s.tarea != null ? s.tarea.codigo : null);
         m.put("tareaTitulo", s.tarea != null ? s.tarea.titulo : null);
+        // N° de ticket del HelpDesk (si la tarea nace de un ticket) → abrir la conversación desde la Bandeja.
+        m.put("ticket", (s.tarea != null && s.tarea.ticketEspejo != null) ? s.tarea.ticketEspejo.helpdeskTicketId : null);
         m.put("equipoTarea", (s.tarea != null && s.tarea.board != null && s.tarea.board.equipo != null)
                 ? s.tarea.board.equipo.nombre : null);
         m.put("solicitanteHid", s.solicitante != null ? s.solicitante.helpdeskUserId : null);

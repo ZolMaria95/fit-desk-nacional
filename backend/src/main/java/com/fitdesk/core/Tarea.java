@@ -60,6 +60,16 @@ public class Tarea extends PanacheEntityBase {
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     public Cliente cliente;
 
+    /** Código del cliente TAL COMO lo eligió el usuario (p. ej. helpdesk_client_id del catálogo).
+     *  Se conserva para las REUNIONES con un cliente que aún NO está registrado como {@link Cliente}
+     *  en FitDesk (sin equipo): así el cliente no se pierde y el picker (catálogo) hace round-trip. */
+    @Column(name = "cliente_codigo_raw")
+    public String clienteCodigoRaw;
+
+    /** Nombre del cliente elegido (para mostrar aunque no exista un {@link Cliente} registrado). */
+    @Column(name = "cliente_nombre")
+    public String clienteNombre;
+
     public String titulo;
     public String descripcion;
     public String prioridad = "media";
@@ -83,7 +93,7 @@ public class Tarea extends PanacheEntityBase {
     /** DESARROLLO_SOPORTE (default; las que tienen ticket) o REUNION. */
     @Column(nullable = false)
     public String tipo = "DESARROLLO_SOPORTE";
-    /** Solo reunión: CAPACITACION | PRESENTACION. */
+    /** Solo reunión: CAPACITACION | PRESENTACION | TRABAJO. */
     public String subtipo;
     /** Reunión: tema, link (opcional) y horario de inicio/fin (ISO local, texto). */
     @Column(columnDefinition = "text")
@@ -92,6 +102,9 @@ public class Tarea extends PanacheEntityBase {
     public String link;
     public String inicio;
     public String fin;
+    /** Reunión: minutos ANTES del inicio para el recordatorio (alerta en la app). Null = default (20). */
+    @Column(name = "recordatorio_min")
+    public Integer recordatorioMin;
 
     // ── Transferencia de un ticket sin tarea previa (V13) ──
     /** true = tarea creada al PEDIR una transferencia desde un ticket, aún NO aceptada:

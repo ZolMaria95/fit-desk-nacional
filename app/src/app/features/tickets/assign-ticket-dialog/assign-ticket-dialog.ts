@@ -60,7 +60,7 @@ export class AssignTicketDialog {
   async asignar(emp: HdUser): Promise<void> {
     if (this.busy()) return;
     this.busy.set(emp.id);
-    const ok = await this.hd.assignTicket(this.ticket.ticket, emp.id);
+    const ok = await this.hd.assignTicket(this.ticket.ticket, emp.id, this.ticket);
     this.busy.set(null);
     if (ok) {
       this.snack.open(`Ticket #${this.ticket.ticket} asignado a ${emp.name}`, 'OK', { duration: 3000 });

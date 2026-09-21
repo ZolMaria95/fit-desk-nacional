@@ -55,6 +55,9 @@ export class ReunionDialog {
   readonly tema = signal<string>(this.story?.tema || this.story?.title || '');
   readonly link = signal<string>(this.story?.link || '');
   readonly assignee = signal<string>('');
+  // Recordatorio: minutos antes del inicio para la alerta (default 20; 0 = sin recordatorio).
+  readonly recordatorioMin = signal<number>(this.story?.recordatorioMin ?? 20);
+  readonly recordatorioPresets = [0, 10, 15, 20, 30, 60];
   readonly clientId = signal<string>((this.story?.client as string) || '');
 
   // Fecha (Date, del calendario) + hora ("hh:mm", input time), por separado.
@@ -71,10 +74,18 @@ export class ReunionDialog {
     const list = this.hd.hdUsers();
     return t ? list.filter((u) => u.name.toLowerCase().includes(t)) : list;
   });
-  // Clientes del EQUIPO del creador (nombres del API), desde /perfil/me.
+  // Clientes que puede elegir, SCOPEADOS por alcance: GLOBAL → catálogo COMPLETO del HelpDesk;
+  // EQUIPO/REGIONAL → solo los de su alcance (`misClientes`, del backend). Fallback al catálogo si el
+  // alcance no trae clientes (equipo sin registrar, o backend viejo sin `esGlobal`) → nunca queda vacío.
+  private readonly clientesSource = computed(() => {
+    const scoped = this.perfil.misClientes();
+    return this.perfil.esGlobal() || scoped.length === 0
+      ? this.hd.clients().map((c) => ({ codigo: c.id, nombre: c.name }))
+      : scoped;
+  });
   readonly clientesF = computed(() => {
     const t = this.buscarCli().trim().toLowerCase();
-    const list = this.perfil.misClientes();
+    const list = this.clientesSource();
     return t ? list.filter((c) => c.nombre.toLowerCase().includes(t)) : list;
   });
 
@@ -85,12 +96,16 @@ export class ReunionDialog {
   });
   readonly clienteLabel = computed(() => {
     const cod = this.clientId();
-    return cod ? this.perfil.misClientes().find((c) => c.codigo === cod)?.nombre || cod : '';
+    if (!cod) return '';
+    // Nombre desde la fuente scopeada; si el código guardado no está (reunión vieja / otro alcance),
+    // el nombre que ya traía la tarea; en último caso, el propio código.
+    return this.clientesSource().find((c) => c.codigo === cod)?.nombre || this.story?.clientName || cod;
   });
 
   constructor() {
     wireDialogEsc(this.ref); // ESC cierra primero el datepicker/menú abierto, no el modal
-    this.perfil.cargarMiPerfil(); // clientes del equipo del creador
+    this.hd.getClients(); // catálogo del HelpDesk (para el alcance GLOBAL)
+    this.perfil.cargarMiPerfil(); // esGlobal + clientes del alcance (EQUIPO/REGIONAL)
     const pi = this.parseDT(this.story?.inicio);
     if (pi) { this.inicioFecha.set(pi.fecha); this.inicioHora.set(pi.hora); }
     const pf = this.parseDT(this.story?.fin);
@@ -107,7 +122,7 @@ export class ReunionDialog {
     return this.auth.session()?.name || 'Yo';
   }
 
-  guardar(): void {
+  async guardar(): Promise<void> {
     const tema = this.tema().trim();
     if (!tema) {
       this.snack.open('El tema es obligatorio.', 'OK', { duration: 3000 });
@@ -128,7 +143,7 @@ export class ReunionDialog {
     // El cliente se guarda por código, pero la tarjeta muestra el NOMBRE del API:
     // lo resolvemos aquí para que se pinte de inmediato (igual que las tareas con ticket).
     const clientId = this.clientId();
-    const cli = this.perfil.misClientes().find((c) => c.codigo === clientId);
+    const cli = this.clientesSource().find((c) => c.codigo === clientId);
     const patch: Partial<Story> = {
       title: tema,
       tipo: 'REUNION',
@@ -139,10 +154,17 @@ export class ReunionDialog {
       fin,
       assignee,
       client: clientId || null,
-      clientName: cli?.nombre || '',
+      clientName: cli?.nombre || this.story?.clientName || '',
+      recordatorioMin: Math.max(0, Math.round(this.recordatorioMin() || 0)), // 0 = sin recordatorio
     };
     if (this.isNew) {
-      this.data.addStory({ ...patch, status: 'todo', priority: 'media' });
+      // Guardado CONFIRMADO (no fire-and-forget): si falla, se avisa y el modal queda abierto.
+      try {
+        await this.data.addStory({ ...patch, status: 'todo', priority: 'media' });
+      } catch {
+        this.snack.open('No se pudo guardar la reunión. Revisa tu conexión e intenta de nuevo.', 'OK', { duration: 4000 });
+        return;
+      }
     } else {
       this.data.updateStoryReunion(this.story!.id, patch);
     }
@@ -151,6 +173,8 @@ export class ReunionDialog {
 
   eliminar(): void {
     if (!this.story) return;
+    // Defensa en profundidad: eliminar es potestad solo del Responsable de Equipo (o ADMIN).
+    if (!this.auth.puedeEliminarTarea()) return;
     this.data.deleteStory(this.story.id);
     this.ref.close(true);
   }

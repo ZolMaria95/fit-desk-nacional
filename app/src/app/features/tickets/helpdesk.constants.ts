@@ -1,24 +1,6 @@
 // Constantes del panel Helpdesk (port de js/helpdesk-panel.js).
 
 /** Clientes válidos para el sync y la tabla. Solo entran tickets de estos clientes. */
-export const CLIENTES_VALIDOS = new Set<string>([
-  'COOPERATIVA DE AHORRO Y CREDITO ERCO',
-  'COAC CAPCPE GUALAQUIZA',
-  'COAC LA DOLOROSA DURAN',
-  'PADRE JULIAN LORENTE',
-  'COAC CACEL',
-  'COAC 4 RIOS',
-  'LITARGMODE CIA LTDA',
-  'COAC COPAC AUSTRO LTDA',
-  'BANCO DEL AUSTRO',
-  'VAZCREDIT',
-  'COAC SENOR DE GIRON',
-  'COAC SEÑOR DE GIRON',
-  'FININVEST OVERSEAS INC. LTD.',
-  'SEGURA COOP',
-  'PUNTOPRESTAMO',
-]);
-
 /** Nombre del cliente en el API → id interno de Fit-Daily. */
 export const CLIENT_MAP: Record<string, string> = {
   'COOPERATIVA DE AHORRO Y CREDITO ERCO': 'erco',

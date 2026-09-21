@@ -70,14 +70,29 @@ public class PerfilResource {
             }
         }
         m.put("equipos", equipos);
-        // Clientes del/los equipo(s) del actor (nombres del API = cliente.nombre).
+        // Clientes que el actor puede elegir, scopeados por su ALCANCE (EQUIPO = su equipo, REGIONAL = su
+        // regional, GLOBAL = todos), INDEPENDIENTE del rol (un consultor regional también scopea bien). Son
+        // los clientes REGISTRADOS de su alcance. Si el actor es GLOBAL, el frontend ofrece además el
+        // catálogo completo del HelpDesk (`esGlobal`); si no, el selector se limita a estos.
+        boolean esGlobal = Actor.esAlcanceGlobal(actorHid);
+        Set<Long> alcanceIds = Actor.equiposEnAlcance(actorHid);
         List<Map<String, Object>> clientes = new ArrayList<>();
-        if (!ids.isEmpty()) {
-            for (Cliente c : Cliente.<Cliente>list("equipoResponsable.id in ?1 order by nombre", ids)) {
+        if (!alcanceIds.isEmpty()) {
+            for (Cliente c : Cliente.<Cliente>list("equipoResponsable.id in ?1 order by nombre", alcanceIds)) {
+                if (c.codigo == null) {
+                    continue;
+                }
                 clientes.add(Map.of("codigo", c.codigo, "nombre", c.nombre != null ? c.nombre : c.codigo));
             }
         }
         m.put("clientes", clientes);
+        m.put("esGlobal", esGlobal);
+        // Preferencia de tema del usuario (para aplicar dark/light al iniciar sesión). null/'light' = claro.
+        Usuario actor = Usuario.findByHelpdeskUserId(actorHid);
+        m.put("tema", actor != null ? actor.tema : null);
+        // Color identificativo elegido por el usuario. null = no eligió → el frontend le deriva uno
+        // estable a partir de su identidad (ver `core/colores.ts`).
+        m.put("color", actor != null ? actor.color : null);
         return m;
     }
 
@@ -97,8 +112,14 @@ public class PerfilResource {
             m.put("equipos", List.of());
             return m;
         }
+        // OJO: `ids` mezcla los equipos donde es MIEMBRO con aquellos donde es RESPONSABLE, y para
+        // algunas cosas (la alerta de novedades) NO es lo mismo: a un especialista de un equipo no le
+        // corresponden los avisos de ese equipo, solo al que lo dirige. Por eso cada equipo sale
+        // marcado con `esResponsable` y el consumidor decide. Campo ADITIVO: quien ya usaba la lista
+        // completa (la pestaña Equipo de Tickets) sigue igual.
+        Set<Long> comoResponsable = Actor.equiposComoResponsable(actorHid);
         LinkedHashSet<Long> ids = new LinkedHashSet<>(Actor.equiposComoMiembro(actorHid));
-        ids.addAll(Actor.equiposComoResponsable(actorHid));
+        ids.addAll(comoResponsable);
         List<Map<String, Object>> equipos = new ArrayList<>();
         for (Long id : ids) {
             Equipo eq = Equipo.findById(id);
@@ -110,6 +131,7 @@ public class PerfilResource {
             equipos.add(Map.of(
                 "codigo", eq.codigo,
                 "nombre", eq.nombre != null ? eq.nombre : eq.codigo,
+                "esResponsable", comoResponsable.contains(id),
                 "clientes", cls));
         }
         m.put("multiEquipo", equipos.size() > 1);
@@ -144,5 +166,85 @@ public class PerfilResource {
         }
         u.actualizadoEn = OffsetDateTime.now();
         return Response.ok(Map.of("ok", true, "hid", actorHid, "tieneFoto", u.foto != null)).build();
+    }
+
+    /** PUT /api/legacy/perfil/tema  body {tema: 'light'|'dark'|null} → preferencia de tema del actor.
+     *  Persiste 'dark' (o null/'light' = claro por defecto). Espejo de setFoto. */
+    @PUT
+    @Path("/tema")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Transactional
+    public Response setTema(Map<String, String> body, @HeaderParam("X-Actor-Hid") String actorHid) {
+        if (actorHid == null || actorHid.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "falta X-Actor-Hid")).build();
+        }
+        Usuario u = Usuario.findByHelpdeskUserId(actorHid);
+        if (u == null) {
+            return Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "usuario no encontrado: " + actorHid)).build();
+        }
+        String tema = body != null ? body.get("tema") : null;
+        if (tema != null && !tema.equals("light") && !tema.equals("dark")) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "tema debe ser 'light' o 'dark'")).build();
+        }
+        u.tema = "dark".equals(tema) ? "dark" : null; // solo persistimos 'dark'; null = claro (default)
+        u.actualizadoEn = OffsetDateTime.now();
+        return Response.ok(Map.of("ok", true, "hid", actorHid, "tema", u.tema != null ? u.tema : "light")).build();
+    }
+
+    /** Hexadecimal `#RRGGBB`. Se valida SIEMPRE: este valor acaba inyectado en un `style` del
+     *  frontend, y el precedente del proyecto (el color de cliente) se guarda sin comprobar nada. */
+    private static final java.util.regex.Pattern HEX = java.util.regex.Pattern.compile("^#[0-9a-fA-F]{6}$");
+
+    /**
+     * Colores RESERVADOS a una persona concreta: nadie más puede elegirlos. Excepción manual y
+     * deliberada a la regla general (los repetidos se avisan pero se permiten). Aquí es donde de
+     * verdad se impide; el frontend solo avisa antes de intentarlo.
+     */
+    private static final Map<String, String> RESERVADOS = Map.of("#DCBEFF", "KDLS001");
+
+    /**
+     * PUT /api/legacy/perfil/color  body {color: '#RRGGBB'|null} → color identificativo del actor.
+     * Espejo de setTema. `null`/vacío = quitar el color elegido; el frontend vuelve entonces a
+     * derivarle uno estable a partir de su identidad (no es obligatorio elegir).
+     *
+     * NO se comprueba que el color esté libre: dos personas pueden compartirlo si se empeñan (el
+     * selector avisa de quién lo usa ya). Impedirlo agotaría la paleta y no aporta nada aquí.
+     */
+    @PUT
+    @Path("/color")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Transactional
+    public Response setColor(Map<String, String> body, @HeaderParam("X-Actor-Hid") String actorHid) {
+        if (actorHid == null || actorHid.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "falta X-Actor-Hid")).build();
+        }
+        Usuario u = Usuario.findByHelpdeskUserId(actorHid);
+        if (u == null) {
+            return Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "usuario no encontrado: " + actorHid)).build();
+        }
+        String color = body != null ? body.get("color") : null;
+        if (color != null && !color.isBlank()) {
+            String c = color.trim();
+            if (!HEX.matcher(c).matches()) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "el color debe ser un hexadecimal #RRGGBB")).build();
+            }
+            String dueno = RESERVADOS.get(c.toUpperCase());
+            if (dueno != null && !dueno.equalsIgnoreCase(actorHid.trim())) {
+                Usuario d = Usuario.findByHelpdeskUserId(dueno);
+                return Response.status(Response.Status.CONFLICT)
+                        .entity(Map.of("error", "ese color está reservado para "
+                                + (d != null && d.nombre != null ? d.nombre : dueno))).build();
+            }
+            u.color = c.toUpperCase();
+        } else {
+            u.color = null; // vaciar = volver al color derivado
+        }
+        u.actualizadoEn = OffsetDateTime.now();
+        Map<String, Object> ok = new LinkedHashMap<>();
+        ok.put("ok", true);
+        ok.put("hid", actorHid);
+        ok.put("color", u.color);
+        return Response.ok(ok).build();
     }
 }

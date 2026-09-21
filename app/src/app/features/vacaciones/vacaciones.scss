@@ -1,4 +1,5 @@
-:host { display: block; }
+:host {
+  --mix-base: #fff; display: block; }
 
 .vac-toolbar {
   display: flex;
@@ -27,7 +28,7 @@
     color: var(--mat-sys-on-surface-variant);
     mat-icon { font-size: 17px; width: 17px; height: 17px; }
     & + button { border-left: 1px solid var(--mat-sys-outline-variant, #e0e0e0); }
-    &.on { background: color-mix(in srgb, var(--brand, #048abf) 12%, #fff); color: var(--brand-dark, #0390bc); }
+    &.on { background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff)); color: var(--brand-dark, #0390bc); }
   }
 }
 
@@ -60,6 +61,9 @@
   .dot { width: 10px; height: 10px; border-radius: 3px; }
   .dot-vac { background: #DBEAFE; box-shadow: inset 0 0 0 1px #1E40AF55; }
   .dot-perm { background: #FEF3C7; box-shadow: inset 0 0 0 1px #92400E55; }
+  // Permiso por horas: mismo tamaño de punto, pero con borde punteado (no relleno) — evita
+  // confundirlo con los otros dos, que sí son ausencias de día completo.
+  .dot-perm-horas { background: transparent; border: 1.5px dashed var(--mat-sys-on-surface-variant, #6b7280); }
 }
 .vac-loading { padding: 10px; text-align: center; font-size: 13px; color: var(--mat-sys-on-surface-variant); }
 
@@ -89,11 +93,17 @@
   .vac-cell-num { font-size: 12px; font-weight: 600; color: var(--mat-sys-on-surface); text-align: left; }
   .vac-cell-chips { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
   .vac-chip {
+    display: flex; align-items: center; gap: 2px;
     font-size: 10px; font-weight: 700; line-height: 1.4;
     padding: 0 5px; border-radius: 6px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     &.more { background: #e4e4ea; color: #4a4a6a; }
+    // Permiso por horas: mismo color de la persona (sigue siendo reconocible quién es), pero
+    // con borde punteado — "es esta persona, pero un permiso corto", no una ausencia de día
+    // completo (que se ve con un chip de borde sólido, igual que hoy).
+    &.horas { border: 1px dashed currentColor; }
   }
+  .vac-chip-ic { font-size: 10px; width: 10px; height: 10px; flex: none; }
 }
 
 // Feriado: día no laborable de la empresa. Tinte suave + pastilla ámbar con el nombre.
@@ -112,9 +122,9 @@
 .vac-mini-add {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; border: none; border-radius: 7px; cursor: pointer;
-  background: color-mix(in srgb, var(--brand, #048abf) 12%, #fff); color: var(--brand-dark, #0390bc);
+  background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff)); color: var(--brand-dark, #0390bc);
   mat-icon { font-size: 18px; width: 18px; height: 18px; }
-  &:hover { background: color-mix(in srgb, var(--brand, #048abf) 20%, #fff); }
+  &:hover { background: color-mix(in srgb, var(--brand, #048abf) 20%, var(--mix-base, #fff)); }
 }
 
 // Lista de feriados en el panel.
@@ -157,6 +167,17 @@
   mat-icon { font-size: 17px; width: 17px; height: 17px; }
   &:hover { background: rgba(0,0,0,0.06); color: var(--brand, #048abf); }
 }
+/* Fila del día clickeable (editar/eliminar): se ve como la fila normal pero es un botón. */
+button.vac-dayrow-edit {
+  width: 100%; font: inherit; text-align: left; cursor: pointer;
+  transition: box-shadow 0.12s, border-color 0.12s;
+  &:hover { box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12); border-color: var(--brand, #048abf); }
+  &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 1px; }
+}
+.vac-edit-ic {
+  flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-on-surface-variant);
+}
+button.vac-dayrow-edit:hover .vac-edit-ic { color: var(--brand, #048abf); }
 .vac-add-day { width: 100%; margin-top: 8px; mat-icon { font-size: 18px; width: 18px; height: 18px; } }
 
 .vac-leg-name { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -205,3 +226,32 @@
 .vac-lineamientos { margin: 0; padding-left: 18px; font-size: 12px; color: var(--mat-sys-on-surface); line-height: 1.5; li { margin-bottom: 5px; } }
 
 .vac-empty { padding: 12px; text-align: center; font-size: 12px; color: var(--mat-sys-on-surface-variant); }
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+  .vac-cell, .vac-viewseg button { background: #131a21; }
+  .vac-team { background: #1a222b; }
+  .vac-cell .vac-chip.more { background: #2c3742; color: #e3e9ef; }
+  // Feriado: el crema pasa a ámbar oscuro tintado.
+  .vac-cell.feriado { background: #2a2412; }
+  .vac-feriado { background: #3d2e12; color: #f0c070; }
+  .vac-legend-mini .dot-vac { background: #24405e; }
+}
+
+:host-context(html[data-theme='dark']) {
+  .vac-fer-ic { color: #f0c070; }
+  .vac-fer, .vac-fer-row, .vac-legrow, .vac-dayrow { background: #131a21; }
+  .vac-leg-name, .vac-fer-name { color: #e3e9ef; }
+  .vac-block { background: #161d25; }
+}
+
+// La fila del feriado es `.vac-ferrow` (sin guion) — confirmado inspeccionando el DOM,
+// no el .scss: ahí estaba el fondo blanco que dejaba el texto en contraste 1.22.
+:host-context(html[data-theme='dark']) {
+  .vac-ferrow { background: #131a21; }
+}
+
+:host-context(html[data-theme='dark']) {
+  .vac-legrow, .vac-dayrow, .vac-block { color: #e3e9ef; }
+}

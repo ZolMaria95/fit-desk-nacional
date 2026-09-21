@@ -105,6 +105,74 @@
 }
 .pf-val { flex: 1; min-width: 0; }
 
+// Fila con interruptor (Tema oscuro): label a la izquierda, toggle a la derecha.
+// Selector de color: paleta + hexadecimal. La etiqueta va arriba y el cuerpo ocupa el ancho,
+// porque 20 muestras no caben en la columna estrecha de las filas etiqueta/valor.
+.pf-row-color {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+
+  .pf-color-body { width: 100%; }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  .swatch {
+    position: relative;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 0 0 1px var(--mat-sys-outline-variant, #e0e0e0);
+
+    &.sel { border-color: var(--mat-sys-on-surface); box-shadow: 0 0 0 2px var(--mat-sys-surface) inset; }
+    &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 2px; }
+
+    // Muesca para los colores que ya usa otra persona: se pueden elegir igual, solo se avisa.
+    .swatch-dot {
+      position: absolute; right: -1px; top: -1px; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--mat-sys-surface); box-shadow: 0 0 0 1px var(--mat-sys-on-surface-variant);
+    }
+    &.custom { display: inline-flex; align-items: center; justify-content: center; overflow: hidden;
+      mat-icon { font-size: 16px; width: 16px; height: 16px; color: #fff; mix-blend-mode: difference; }
+      input[type='color'] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    }
+  }
+
+  .pf-color-hex {
+    display: flex; align-items: center; gap: 8px; margin-top: 8px;
+    input[type='text'] {
+      width: 96px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px;
+      padding: 5px 8px; border-radius: 6px; text-transform: uppercase;
+      border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+      background: var(--mat-sys-surface); color: var(--mat-sys-on-surface);
+      &:focus { outline: none; border-color: var(--mat-sys-primary, #048abf); }
+      &.invalido { border-color: #c0392b; }
+    }
+  }
+  .pf-hint-error { color: #c0392b; }
+}
+
+// Casilla con su explicación debajo (no es una fila etiqueta/valor: ocupa el ancho completo
+// y la nota va en una segunda línea, porque necesita explicar que solo dura esta sesión).
+.pf-row-check {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+
+  .mdc-form-field { font-size: 13px; }
+  .pf-hint { margin: 0 0 0 2px; }
+}
+
+.pf-row-toggle {
+  align-items: center;
+  justify-content: space-between;
+  .pf-label { width: auto; flex: 1; display: inline-flex; align-items: center; }
+}
+.pf-label-ic { font-size: 16px; width: 16px; height: 16px; margin-right: 4px; }
+
 // Lightbox de la foto completa
 .pf-lightbox {
   position: fixed;

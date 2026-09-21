@@ -1,0 +1,259 @@
+:host {
+  display: block;
+}
+
+.st-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    color: var(--mat-sys-on-surface);
+  }
+  .grow { flex: 1 1 auto; }
+
+  .st-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .st-period {
+    min-width: 130px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: capitalize;
+  }
+}
+
+// ── Layout: calendario + resumen ──
+.st-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .st-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// ── Calendario ──
+.st-calendar-wrap {
+  background: var(--mat-sys-surface-container-low, #f0f4f9);
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.st-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    text-transform: capitalize;
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.st-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--mat-sys-on-surface-variant);
+
+  .leg { display: inline-flex; align-items: center; gap: 4px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; }
+  .dot-current { box-shadow: inset 0 0 0 2px var(--brand, #048abf); }
+  .dot-mesa { background: #cdeafe; }
+  .dot-emerg { background: #ffd9c2; }
+}
+
+.st-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.st-dayname {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--mat-sys-on-surface-variant);
+  padding: 2px 0;
+}
+
+// A diferencia de Semanal, la celda YA NO tinta su fondo con el color del asignado — ahora hay 2
+// personas por semana (Mesa de Ayuda + Emergentes), así que el color vive solo en sus 2 chips.
+.st-cell {
+  position: relative;
+  min-height: 62px;
+  border: 1px solid var(--mat-sys-outline-variant, #e6e6ea);
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font: inherit;
+  transition: box-shadow 0.12s, transform 0.12s;
+
+  &:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
+  &.other { opacity: 0.4; }
+  &.today { border-color: var(--brand, #048abf); }
+  &.friday { border-left-width: 3px; }
+  &.current { box-shadow: inset 0 0 0 2px var(--brand, #048abf); }
+  &.cur-assigned { box-shadow: inset 0 0 0 2px var(--brand, #048abf); }
+
+  .st-cell-num {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface);
+  }
+  .st-cell-chips {
+    margin-top: auto;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .st-cell-chip {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 6px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// ── Resumen lateral ──
+.st-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.st-card,
+.st-block {
+  background: var(--mat-sys-surface-container-low, #f0f4f9);
+  border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.st-current {
+  border-left: 4px solid var(--mat-sys-outline);
+
+  .st-card-label { font-size: 11px; color: var(--mat-sys-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; }
+  .st-range { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+  .sm { width: 100%; margin-top: 8px; }
+}
+
+.st-role-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  padding: 3px 0;
+
+  .st-role-label { color: var(--mat-sys-on-surface-variant); font-weight: 600; }
+  .st-role-name { font-weight: 700; }
+  .st-role-name.empty { color: var(--mat-sys-on-surface-variant); font-weight: 500; }
+}
+
+.st-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+
+  .st-block-title { font-size: 13px; font-weight: 700; color: var(--mat-sys-on-surface); }
+  .st-count {
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--mat-sys-surface-container-high);
+    border-radius: 10px;
+    padding: 0 8px;
+  }
+}
+
+.st-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-week-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--mat-sys-outline-variant, #e6e6ea);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  &:hover { border-color: var(--brand, #048abf); }
+
+  .w-range { font-size: 12px; color: var(--mat-sys-on-surface-variant); flex: none; }
+  .w-roles { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+  .w-name { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+  .w-name.empty { color: var(--mat-sys-on-surface-variant); font-weight: 500; padding: 0; }
+}
+
+.st-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff;
+  border-left: 4px solid var(--mat-sys-outline);
+  border-radius: 6px;
+  padding: 6px 10px;
+
+  .s-name { font-size: 12.5px; font-weight: 600; }
+  .s-count { font-size: 12px; font-weight: 700; }
+}
+
+.st-empty {
+  padding: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  .st-cell, .st-week-item, .st-stat { background: #131a21; }
+  .st-legend {
+    .dot-mesa { background: #2a4a63; }
+    .dot-emerg { background: #5a3a26; }
+  }
+  .st-current, .st-block { background: #131a21; }
+  .st-card, .st-stat, .st-block, .st-current { color: #e3e9ef; }
+}

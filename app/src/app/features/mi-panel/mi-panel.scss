@@ -238,7 +238,7 @@
   height: 22px;
   padding: 0 6px;
   border-radius: 11px;
-  color: #fff;
+  /* la tinta la calcula avatarDe(): con un color claro el blanco fijo desaparecía */
   font-size: 10px;
   font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
@@ -279,4 +279,32 @@
   }
   .mp-note-actions { display: flex; gap: 6px; margin-top: 4px; }
   .sm { line-height: 30px; font-size: 12px; }
+}
+
+// ─── TEMA OSCURO ─── (`:host-context`: dentro del .scss de un componente, un
+// selector `html[data-theme]` recibe el atributo _ngcontent y nunca casa.)
+:host-context(html[data-theme='dark']) {
+  .mp-kpi, .mp-table, .mp-card { background: #131a21; }
+  .mp-card .mp-card-msg { background: #1a222b; }
+  .mp-note-saved { background: #2a2412; color: #e8d9a0; border-color: #5c4f22; }
+  .mp-note-link.add { border-color: #39434d; }
+  .muted { color: #aab6c2; }
+  .badge-days { background: #33280f; color: #f0c070; }
+  .badge-days.critical { background: #3a1e20; color: #f09a9a; }
+  .prio-pill {
+    &.prio-alta { color: #f09a9a; background: #3a1e20; }
+    &.prio-media { color: #f0c070; background: #33280f; }
+    &.prio-baja { color: #8fd98f; background: #1e3a22; }
+  }
+}
+
+:host-context(html[data-theme='dark']) {
+  // Avatar sin foto: gris claro + texto blanco → ilegible. Se oscurece el círculo.
+  .mp-avatar.empty { background: #2c3742; color: #e3e9ef; }
+}
+
+// Selector de equipo del encabezado (solo responsables regionales).
+.mp-equipo-sel {
+  width: 220px;
+  max-width: 100%;
 }

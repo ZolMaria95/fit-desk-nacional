@@ -1,13 +1,25 @@
 package com.fitdesk.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fitdesk.core.Board;
+import com.fitdesk.core.Cliente;
+import com.fitdesk.core.Tarea;
+import com.fitdesk.core.TicketEspejo;
+import com.fitdesk.core.Usuario;
+import com.fitdesk.core.WorkflowEstado;
 import com.fitdesk.legacy.LegacyWriteService;
+import com.fitdesk.overlay.TicketGuardado;
+import com.fitdesk.overlay.TicketPendiente;
 import com.fitdesk.sync.TicketEspejoStore;
 
 import jakarta.inject.Inject;
+import java.util.Map;
+
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.HeaderParam;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -48,12 +60,37 @@ public class LegacyWriteResource {
         return Response.ok().build();
     }
 
+    /**
+     * POST /stories/stories: crea una tarea con **id asignado por el servidor** (atómico). Evita que dos
+     * navegadores con vistas desactualizadas elijan el mismo TA-NNN y se pisen. Devuelve `{"id": "TA-NNN"}`.
+     */
+    @POST
+    @Path("/stories/stories")
+    public Response createStory(JsonNode fields) {
+        // Reintenta ante choque de codigo por creación concurrente (la restricción UNIQUE es la red de seguridad).
+        RuntimeException last = null;
+        for (int intento = 0; intento < 4; intento++) {
+            try {
+                String codigo = write.createStory(fields);
+                return Response.status(Response.Status.CREATED).entity(Map.of("id", codigo)).build();
+            } catch (RuntimeException ex) {
+                last = ex;
+            }
+        }
+        throw last;
+    }
+
     @DELETE
     @Path("/stories/stories/{id}")
-    public Response deleteStory(@PathParam("id") String id) {
-        return write.deleteStory(id)
-                ? Response.noContent().build()
-                : Response.status(Response.Status.NOT_FOUND).build();
+    public Response deleteStory(@PathParam("id") String id, @HeaderParam("X-Actor-Hid") String actorHid) {
+        return switch (write.deleteStory(id, actorHid)) {
+            case OK -> Response.noContent().build();
+            case NOT_FOUND -> Response.status(Response.Status.NOT_FOUND).build();
+            case HAS_TICKET -> Response.status(Response.Status.CONFLICT)
+                    .entity("{\"error\":\"Las tareas con ticket asociado no se pueden eliminar.\"}").build();
+            case FORBIDDEN -> Response.status(Response.Status.FORBIDDEN)
+                    .entity("{\"error\":\"Solo el Responsable de Equipo o un administrador pueden eliminar tareas.\"}").build();
+        };
     }
 
     // ── Sprints ──────────────────────────────────────────────────────────
@@ -84,6 +121,62 @@ public class LegacyWriteResource {
     public Response putHdPendientes(JsonNode node, @HeaderParam("X-Actor-Hid") String actorHid) {
         write.putHdPendientes(node, actorHid);
         return Response.ok().build();
+    }
+
+    // Crear/reemplazar UN pendiente, sin reconciliar el resto (ver comentario en putHdPendiente
+    // del service). Usado por crear/pausar/reanudar/postergar del frontend.
+    @PUT
+    @Path("/hdPendientes/{ticket}")
+    public Response putHdPendiente(@PathParam("ticket") String ticket, JsonNode p, @HeaderParam("X-Actor-Hid") String actorHid) {
+        return write.putHdPendiente(ticket, p, actorHid)
+                ? Response.ok().build()
+                : Response.status(Response.Status.FORBIDDEN).build();
+    }
+
+    // Borrado DIRIGIDO de un solo pendiente (a diferencia del PUT de arriba, que reconcilia
+    // el mapa completo del actor). Incidente 2026-09-17: eliminar un pendiente desde el front
+    // pasaba por "borrar la clave localmente y reenviar TODO el mapa" — si el mapa local del
+    // actor estaba incompleto en ese momento (front recién cargado, u otra pestaña vieja), el
+    // PUT reconciliador borraba TODOS sus pendientes reales, no solo el que se quería quitar.
+    // Mismo patrón ya usado por `toggleHdGuardado` (100% personal, nunca cruza de usuario).
+    @DELETE
+    @Path("/hdPendientes/{ticket}")
+    @Transactional
+    public Response deleteHdPendiente(@PathParam("ticket") String ticket, @HeaderParam("X-Actor-Hid") String actorHid) {
+        Usuario actor = Usuario.findByHelpdeskUserId(actorHid == null ? "" : actorHid.trim());
+        if (actor == null) {
+            return Response.status(Response.Status.FORBIDDEN).build();
+        }
+        TicketPendiente existente = TicketPendiente.findByTicketAndUsuario(ticket, actor);
+        if (existente != null) {
+            existente.delete();
+        }
+        return Response.noContent().build();
+    }
+
+    // Toggle idempotente (no reemplazo de mapa completo, a diferencia de hdActions/hdPendientes):
+    // si ya estaba guardado lo quita, si no lo crea. 100% personal — nunca cruza de usuario.
+    @PUT
+    @Path("/hdGuardados/{ticket}")
+    @Transactional
+    public Response toggleHdGuardado(@PathParam("ticket") String ticket, @HeaderParam("X-Actor-Hid") String actorHid) {
+        Usuario actor = Usuario.findByHelpdeskUserId(actorHid == null ? "" : actorHid.trim());
+        if (actor == null) {
+            return Response.status(Response.Status.FORBIDDEN).build();
+        }
+        TicketGuardado existente = TicketGuardado.findByTicketAndUsuario(ticket, actor);
+        boolean guardado;
+        if (existente != null) {
+            existente.delete();
+            guardado = false;
+        } else {
+            TicketGuardado g = new TicketGuardado();
+            g.helpdeskTicketId = ticket;
+            g.usuario = actor;
+            g.persist();
+            guardado = true;
+        }
+        return Response.ok(Map.of("guardado", guardado)).build();
     }
 
     @PUT
@@ -127,5 +220,105 @@ public class LegacyWriteResource {
         JsonNode v = body != null ? body.get("assigned_user_id") : null;
         espejo.upsertAssignee(id, v != null && !v.isNull() ? v.asText() : null);
         return Response.ok().build();
+    }
+
+    /**
+     * Crea la Tarea de un ticket que se acaba de asignar (desde FitDesk) y aún no la tenía.
+     * Lo llama el frontend justo después de confirmar la asignación al HelpDesk (mismo momento
+     * que {@code putTicketEspejoAssignee}), con los datos del ticket que ya tiene a mano.
+     * Tablero destino: el equipo responsable del CLIENTE del ticket si está registrado
+     * ({@link Cliente#equipoResponsable}); si no, el equipo del propio actor (quien asignó).
+     * Idempotente: si el ticket ya tiene tarea, no crea otra.
+     * Body: {"ticket","clienteCodigo","clienteNombre","titulo","asignadoHid","asignadoNombre"}.
+     */
+    @POST
+    @Path("/stories/desde-ticket-asignado")
+    @Transactional
+    public Response crearTareaDesdeTicketAsignado(JsonNode body, @HeaderParam("X-Actor-Hid") String actorHid) {
+        String ticket = text(body, "ticket");
+        if (ticket == null) {
+            return bad("falta el número de ticket");
+        }
+        TicketEspejo esp = TicketEspejo.findByHelpdeskTicketId(ticket);
+        if (esp == null) {
+            esp = new TicketEspejo();
+            esp.helpdeskTicketId = ticket;
+            esp.persist();
+        }
+        // Idempotente: si el ticket ya tiene tarea (cualquier board), no se crea otra.
+        Tarea existente = Tarea.find("ticketEspejo = ?1", esp).firstResult();
+        if (existente != null) {
+            return Response.ok(Map.of("creada", false, "tareaCodigo", existente.codigo)).build();
+        }
+
+        String titulo = text(body, "titulo");
+        if (titulo != null) {
+            esp.asunto = titulo;
+        }
+        String asignadoHid = text(body, "asignadoHid");
+        if (asignadoHid != null) {
+            esp.asignadoHd = asignadoHid.toUpperCase();
+        }
+
+        // El front manda el `client_id` del HelpDesk (el ticket no conoce el "código" interno de
+        // FitDesk): probar por codigo (slug) y, como respaldo, por helpdesk_client_id — mismo
+        // patrón que ya usa LegacyWriteService.clienteBy() al crear una tarea a mano.
+        String clienteCodigo = text(body, "clienteCodigo");
+        Cliente cliente = null;
+        if (clienteCodigo != null) {
+            cliente = Cliente.findByCodigo(clienteCodigo);
+            if (cliente == null) {
+                cliente = Cliente.find("helpdeskClientId", clienteCodigo).firstResult();
+            }
+        }
+        Board board = null;
+        if (cliente != null && cliente.equipoResponsable != null) {
+            board = Board.<Board>find("equipo.id = ?1 and activo = true order by id", cliente.equipoResponsable.id).firstResult();
+        }
+        if (board == null) {
+            // Sin cliente registrado (o sin equipo responsable): cae al equipo del actor —
+            // primero como MIEMBRO (el caso normal); si no pertenece a ninguno, como RESPONSABLE.
+            Long equipoId = Actor.equiposComoMiembro(actorHid).stream().min(Long::compareTo)
+                    .orElseGet(() -> Actor.equiposComoResponsable(actorHid).stream().min(Long::compareTo).orElse(null));
+            if (equipoId != null) {
+                board = Board.<Board>find("equipo.id = ?1 and activo = true order by id", equipoId).firstResult();
+            }
+        }
+        if (board == null) {
+            // Ni el cliente ni el actor resuelven un equipo: no hay dónde crearla. La asignación
+            // al HelpDesk ya ocurrió igual; la tarea se puede crear a mano como hasta ahora.
+            return Response.ok(Map.of("creada", false, "motivo", "sin equipo")).build();
+        }
+
+        Tarea t = new Tarea();
+        t.codigo = TransferenciaResource.nuevoCodigoTarea();
+        t.board = board;
+        t.workflowEstado = WorkflowEstado.<WorkflowEstado>find("activo = true order by orden").firstResult();
+        t.ticketEspejo = esp;
+        if (titulo != null) {
+            t.titulo = titulo.length() > 500 ? titulo.substring(0, 500) : titulo;
+        }
+        if (cliente != null) {
+            t.cliente = cliente;
+        } else if (clienteCodigo != null) {
+            t.clienteCodigoRaw = clienteCodigo;
+            t.clienteNombre = text(body, "clienteNombre");
+        }
+        t.asignadoA = TransferenciaResource.usuarioBy(asignadoHid);
+        t.persist();
+        return Response.ok(Map.of("creada", true, "tareaCodigo", t.codigo, "board", board.codigo)).build();
+    }
+
+    private static String text(JsonNode n, String f) {
+        JsonNode v = n == null ? null : n.get(f);
+        if (v == null || v.isNull()) {
+            return null;
+        }
+        String s = v.asText();
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    private static Response bad(String msg) {
+        return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", msg)).build();
     }
 }

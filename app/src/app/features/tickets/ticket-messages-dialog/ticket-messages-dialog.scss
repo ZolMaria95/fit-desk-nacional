@@ -3,177 +3,250 @@
   // en el medio. Evita que un mensaje largo empuje el botón Enviar fuera de pantalla.
   display: flex;
   flex-direction: column;
-  // Piso de altura para que el área de lectura sea cómoda aun con pocos mensajes
-  // (se acota a la pantalla en viewports cortos). El techo es 88vh.
-  min-height: min(520px, 88vh);
-  max-height: 88vh;
-  max-height: 88dvh; // móvil: descuenta la barra dinámica del navegador
+  // `height` (no solo `max-height`): antes el diálogo se dimensionaba según su propio
+  // CONTENIDO (con una conversación corta quedaba chico, con mucho fondo oscuro
+  // arriba/abajo en una pantalla grande). El área de lectura debe verse grande y
+  // estable EN TODOS LOS DISPOSITIVOS, no solo escritorio — por eso esto no va detrás
+  // de ningún breakpoint. Con `height` fija, `.conv-body` (`flex: 1 1 0`, el único que
+  // crece) se lleva automáticamente todo el espacio que sobra.
+  // 100dvh/100vh: pedido explícito del equipo (confirmado de nuevo al aprobar este
+  // rediseño) — sin espacio muerto arriba/abajo, el diálogo ocupa TODA la pantalla. Este
+  // valor entra en la fórmula de `.composer` de más abajo: si se cambia, HAY QUE
+  // recalcularla ahí también.
+  height: 100vh;
+  height: 100dvh; // móvil: descuenta la barra dinámica del navegador
+  max-height: 100vh;
+  max-height: 100dvh;
   overflow: hidden;
+  font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  // Tope de alto de `.conv-header`, en una custom property (no un valor fijo en la regla
+  // misma) porque `.composer` —su HERMANO, no su descendiente— necesita el MISMO número para
+  // calcular su propio presupuesto de alto; una custom property desciende por el árbol desde
+  // acá (`:host`) a los dos por igual. Ver override en la media query de celular más abajo
+  // (`:host(.panel-open)`), para cuando el panel de badges/metadatos ocupa más que la franja
+  // compacta de escritorio.
+  --header-cap: 248px;
 }
 
-// ── Encabezado tipo "issue" (Jira/Linear): barra fina + N° grande + título +
-//    chips + fecha/creador. Móvil-first; el padding lateral crece en escritorio.
-.conv-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
+// ═══════════════════════════════════════════════════════════════════════════
+// Encabezado: 3 piezas apiladas — fila 1 (label pequeño + íconos, SIEMPRE visible,
+// incluso en lectura ampliada), título grande, y un panel colapsable (badges +
+// franja de metadatos) que en escritorio/tablet se ve siempre completo y en celular
+// arranca cerrado (`resumenExpandido`, toggle en la fila 1).
+//
+// Rígido (`flex: 0 0 auto`) con un tope FIJO en px: el contenido es predecible
+// (título a 1 línea con ellipsis en escritorio, panel con alto medido), así que un
+// valor fijo alcanza como red de seguridad — `overflow-y: auto` solo entra si un
+// ticket atípico lo supera. Este tope entra en la fórmula de `.composer` de más
+// abajo: si cambia, HAY QUE recalcular esa fórmula (y volver a medir con
+// `getBoundingClientRect`, no aproximar a ojo).
+// ═══════════════════════════════════════════════════════════════════════════
+.conv-header {
   flex: 0 0 auto;
-  padding: 12px 16px 0;
-
-  .conv-head-label {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--mat-sys-on-surface-variant);
-  }
-  .spacer {
-    flex: 1;
-  }
-}
-
-.conv-summary {
-  flex: 0 0 auto;
+  // `--header-cap` (248px por defecto): MEDIDO con Playwright tras el rediseño
+  // (`getBoundingClientRect`/`scrollHeight`) en varios tickets reales con los 7 metadatos +
+  // adjunto (fila 1 + título + badges + franja de meta = 231px de contenido real, consistente
+  // entre tickets porque los badges envuelven EN SU LUGAR sin cambiar el alto de fila) — se
+  // deja ~17px de margen sobre esos 231px. Entra en la fórmula de `.composer` de más abajo: si
+  // cambia, HAY que recalcular esa fórmula (la variable ya se comparte, pero el margen no).
+  max-height: var(--header-cap);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 4px 16px 12px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
-
-  // N° de ticket: el elemento más prominente. Completo, nunca truncado.
-  .conv-ticket-no {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-weight: 800;
-    font-size: 30px;
-    line-height: 1.05;
-    color: var(--mat-sys-primary);
-    white-space: nowrap;
-    word-break: keep-all;
-  }
-
-  // Título: ocupa el ancho, hasta 3 líneas antes de truncar.
-  .conv-title {
-    margin: 0;
-    font-size: 17px;
-    font-weight: 600;
-    line-height: 1.3;
-    color: var(--mat-sys-on-surface);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-}
-
-// Chips (Banco, Tipo, Estado, Prioridad): fila que envuelve, compacta.
-.conv-chips {
-  display: flex;
-  flex-wrap: wrap;
   gap: 8px;
-
-  .chip {
-    font-size: 12px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 12px;
-    white-space: nowrap;
-  }
-  .chip-cliente {
-    background: var(--mat-sys-surface-container-high);
-    color: var(--mat-sys-on-surface);
-  }
-  .chip-tipo {
-    border: 1px solid var(--mat-sys-outline-variant);
-    color: var(--mat-sys-on-surface-variant);
-  }
-  .chip-estatus {
-    font-weight: 700;
-  }
-  // Chip interactivo (cambiar estado): se ve como chip pero es botón con caret.
-  // Fondo/color por defecto (para "Sin estado"); el estilo inline lo sobreescribe
-  // cuando hay estado real (color por estatus).
-  .chip-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    border: none;
-    cursor: pointer;
-    font-family: inherit;
-    background: var(--mat-sys-surface-container-high);
-    color: var(--mat-sys-on-surface);
-
-    &:disabled { cursor: default; opacity: 0.7; }
-
-    .chip-caret {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-      margin-right: -4px;
-    }
-  }
-  // Prioridad #N: mismo color por severidad que el board.
-  .chip-prio {
-    color: #fff;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-
-    &.prio-alta { background: #e74c3c; }
-    &.prio-media { background: #f2811d; }
-    &.prio-baja { background: rgba(43, 43, 58, 0.45); }
-  }
+  margin: 0; // `mat-dialog-title` trae márgenes por defecto del tema; se anulan
+  padding: 14px 20px 12px;
+  background: var(--mat-sys-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
 }
 
-// Fecha + creador: una fila con iconos, mínimo alto.
-.conv-byline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  font-size: 12px;
-  color: var(--mat-sys-on-surface-variant);
-
-  .bl-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-
-    mat-icon {
-      font-size: 15px;
-      width: 15px;
-      height: 15px;
-    }
-  }
-}
-
-.conv-assignee {
+.conv-header-row1 {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--mat-sys-on-surface-variant);
+  gap: 8px;
+}
 
-  .bl-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+.conv-header-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 
-    mat-icon {
-      font-size: 15px;
-      width: 15px;
-      height: 15px;
-    }
+.conv-header-label-ic {
+  flex: none;
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  color: var(--brand, #048abf);
+}
+
+// Label pequeño del ticket (reemplaza al viejo N° "hero" que dominaba la cabecera).
+.conv-ticket-no {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--brand, #048abf);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conv-header-icons {
+  flex: none;
+  display: flex;
+  align-items: center;
+  // Empuja los íconos a la derecha por sí solo (no depende de ningún hermano
+  // `flex:1 1 auto`): en lectura ampliada el título/panel se ocultan (ver
+  // `:host(.reader-expanded)` más abajo) y sin esto los íconos se irían a la
+  // izquierda.
+  margin-left: auto;
+
+  .mat-mdc-icon-button {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    line-height: 32px;
+
+    mat-icon { font-size: 20px; width: 20px; height: 20px; }
   }
+}
 
-  .assignee-edit {
-    width: 30px;
-    height: 30px;
-    line-height: 30px;
+// Toggle "ver más/menos" del panel colapsable: solo aparece en celular (ver media
+// query al pie del archivo) — en escritorio/tablet el panel siempre está completo.
+.summary-toggle {
+  display: none;
+}
 
-    mat-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
-    }
+// Título: grande (antes 15px/600, ahora 21px/700). En escritorio se mantiene a UNA
+// sola línea con ellipsis — imprescindible para que `.conv-header` tenga un alto
+// predecible (ver comentario de `.composer` más abajo); el texto completo queda
+// disponible por `matTooltip`. En celular sí se permiten hasta 2 líneas (ver media
+// query), porque 2 líneas siguen siendo un máximo acotado y medible.
+.conv-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--mat-sys-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  // Clickeable: abre el asunto completo en un popup (el `matTooltip` no sirve en celular, sin
+  // hover) — siempre clickeable, no solo cuando trunca de verdad (un título corto solo vuelve a
+  // mostrarse igual de corto en el popup, sin efecto negativo).
+  cursor: pointer;
+  &:hover { text-decoration: underline; text-decoration-color: var(--mat-sys-outline-variant); }
+}
+
+// Panel colapsable: badges (fila) + franja de metadatos (fila). En escritorio/tablet
+// siempre expandido por CSS (ver media query); en celular obedece `.collapsed`.
+.conv-header-panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conv-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.chip-cliente,
+.chip-tipo {
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.chip-estatus {
+  font-weight: 700;
+}
+// Chip interactivo (cambiar estado): se ve como pill pero es botón con caret.
+// Fondo/color por defecto (para "Sin estado" — acento suave); el estilo inline lo
+// sobreescribe cuando hay estado real (color por estatus, vía `estadoStyle()`).
+.chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mat-sys-surface));
+  color: var(--brand, #048abf);
+
+  &:disabled { cursor: default; opacity: 0.7; }
+
+  .chip-caret {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    margin-right: -4px;
+  }
+}
+// Prioridad #N: mismo color por severidad que el board — se conserva a propósito
+// (es información real), solo cambia de tamaño/forma a la pill compacta nueva.
+.chip-prio {
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+
+  &.prio-alta { background: #e74c3c; }
+  &.prio-media { background: #f2811d; }
+  &.prio-baja { background: rgba(43, 43, 58, 0.45); }
+}
+
+// Franja de metadatos: fondo/bordes propios, separada visualmente de los badges.
+.conv-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 0 -20px;
+  padding: 10px 20px;
+  background: var(--mat-sys-surface-container-low);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  .spacer { flex: 1 1 auto; min-width: 8px; }
+}
+
+.bl-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+
+  mat-icon {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+  }
+}
+
+.assignee-edit {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+
+  mat-icon {
+    font-size: 17px;
+    width: 17px;
+    height: 17px;
   }
 }
 
@@ -182,7 +255,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px 16px;
+  padding: 14px 20px;
   border-top: 1px solid var(--mat-sys-outline-variant);
   color: var(--mat-sys-on-surface-variant);
   font-size: 13px;
@@ -197,12 +270,21 @@
 }
 
 // ── Lectura ampliada ──────────────────────────────────────────────────
-// El botón "Ampliar lectura" del composer hace que la conversación (`.conv-body`,
-// ya `flex: 1 1 auto`) ocupe TODO el modal: se ocultan el resumen y el composer
-// (por CSS, sin quitarlos del DOM → no se pierde el borrador ni la edición en curso).
-// El botón "Volver al modal" del encabezado la desactiva.
+// El botón "Ampliar lectura" (dentro de la fila "Aa" del compositor) hace que la
+// conversación (`.conv-body`, ya `flex: 1 1 auto`) ocupe CASI TODO el modal: se
+// ocultan el título y el panel de badges/metadatos, y el composer entero (por CSS,
+// sin quitarlos del DOM → no se pierde el borrador ni la edición en curso). El
+// botón "Volver al modal" la desactiva.
+//
+// ⚠️ Ocultar TODO `.conv-header` se llevaría puesto también `.conv-header-icons`
+// —el botón "Volver al modal" vive ahí— y dejaría al usuario sin forma de salir de
+// la lectura ampliada (en celular no hay ESC físico; en escritorio sí funciona por
+// `wireDialogEsc`, pero tampoco debería ser la única salida). Por eso acá se ocultan
+// solo `.conv-title` y `.conv-header-panel`, dejando `.conv-header-row1` (label +
+// íconos: Volver/Descargar/Cerrar) siempre visible.
 :host(.reader-expanded) {
-  .conv-summary,
+  .conv-title,
+  .conv-header-panel,
   .composer,
   .composer-readonly {
     display: none;
@@ -218,30 +300,64 @@
   display: block;
 }
 
+// Adjuntos del ticket: UN solo ítem `inline-flex` (icono de clip + miniaturas/botón de
+// descarga), empujado a la derecha de la franja de metadatos por el `.spacer` de al lado.
 .ticket-attach {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 
-  .ticket-attach-label {
-    font-size: 12px;
-    font-weight: 600;
+  .ticket-attach-ic {
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
     color: var(--mat-sys-on-surface-variant);
+  }
+
+  // Preview del adjunto del ticket: miniatura cuadrada 26×26 (`object-fit: cover`) en vez
+  // del ícono de clip — pedido explícito de la especificación. El preview grande (220×160)
+  // queda para los adjuntos de mensaje, que van en el cuerpo scrolleable.
+  .conv-thumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .conv-thumb-btn {
+    width: 26px;
+    height: 26px;
+  }
+  .conv-thumb-img {
+    width: 26px;
+    height: 26px;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;
+  }
+  .conv-thumb-dl {
+    position: static;
+    top: auto;
+    right: auto;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    color: var(--mat-sys-on-surface-variant);
+    opacity: 1;
+    &:hover { background: rgba(0, 0, 0, 0.06); color: var(--brand, #048abf); }
   }
 
   // Botón de descarga compacto, al ancho natural.
   .mat-mdc-outlined-button {
-    --mdc-outlined-button-container-height: 30px;
-    min-height: 30px;
-    line-height: 30px;
-    padding: 0 12px;
-    font-size: 12px;
+    --mdc-outlined-button-container-height: 26px;
+    min-height: 26px;
+    line-height: 26px;
+    padding: 0 10px;
+    font-size: 11.5px;
 
     mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
+      font-size: 14px;
+      width: 14px;
+      height: 14px;
       margin-right: 4px;
     }
   }
@@ -250,12 +366,17 @@
 .conv-body {
   // Único elemento que crece/encoge y scrollea. min-height: 0 permite que encoja
   // por debajo de su contenido (y por tanto scrollee) en pantallas cortas, en vez
-  // de empujar el composer fuera del diálogo y cortarlo.
-  flex: 1 1 auto;
+  // de empujar el composer fuera del diálogo y cortarlo. `flex-basis: 0` (el "0" de
+  // `flex: 1 1 0`) en vez de `auto`: con `auto` este elemento entra en un reparto
+  // PROPORCIONAL de encogimiento junto al composer, resultado no predecible; con
+  // base `0` arranca en cero y CRECE con lo que sobra — si de verdad no alcanza,
+  // aporta 0 y deja que sea el composer quien ceda.
+  box-sizing: border-box;
+  flex: 1 1 0;
   min-height: 0;
   max-height: none;
-  background: #f4f6f9;
-  padding: 12px;
+  background: var(--mat-sys-surface-container-low, #f4f6f9);
+  padding: 20px;
 }
 
 .conv-loading,
@@ -268,8 +389,8 @@
 
 .conv-msg {
   max-width: 80%;
-  margin: 8px 0;
-  padding: 8px 12px;
+  margin: 10px 0;
+  padding: 10px 14px;
   border-radius: 10px;
   font-size: 13px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
@@ -281,7 +402,7 @@
   }
   &.conv-cli {
     margin-right: auto;
-    background: #fff;
+    background: var(--mat-sys-surface);
     border: 1px solid var(--mat-sys-outline-variant);
   }
   &.conv-sys {
@@ -300,12 +421,27 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   font-size: 11px;
 
+  // Avatar circular de iniciales — color identificativo real (`ColoresService.avatar(hid)`,
+  // el mismo que usan Board/Vacaciones/Semanal) para empleados; gris neutro (mismo helper,
+  // `hid` vacío) para cliente/Sistema.
+  .conv-avatar {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
   .conv-user {
     font-weight: 700;
     font-family: inherit; // nombre completo del usuario: se lee mejor en fuente normal
+    font-size: 14px;
   }
   .conv-date {
     color: var(--mat-sys-on-surface-variant);
@@ -330,17 +466,51 @@
       height: 15px;
     }
     &:hover:not(:disabled) {
-      color: var(--mat-sys-primary, #048abf);
+      color: var(--brand, #048abf);
     }
     &:disabled {
       cursor: default;
       opacity: 0.5;
     }
   }
+
+  // Botón "copiar mensaje": inline y compacto, en TODOS los mensajes. Sutil en reposo,
+  // se realza al pasar el mouse o al enfocar por teclado (accesible).
+  .conv-copy {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    padding: 2px;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--mat-sys-on-surface-variant);
+    opacity: 0.6;
+    transition: opacity 0.12s, color 0.12s;
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+    }
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+      color: var(--brand, #048abf);
+    }
+  }
+}
+
+// El botón de copiar se ve completo al pasar el mouse por el mensaje (descubrible sin saturar).
+.conv-msg:hover .conv-copy {
+  opacity: 1;
 }
 
 .conv-text {
-  line-height: 1.4;
+  font-size: 15.5px;
+  line-height: 1.7;
+  max-width: 760px; // longitud de línea legible, aunque el modal sea más ancho
   overflow-wrap: anywhere; // el texto (incluidas palabras/URLs largas) siempre envuelve
   word-break: break-word;
   overflow-x: auto; // red de seguridad: contenido rígido (tablas) scrollea, no desborda
@@ -357,7 +527,7 @@
     border-radius: 6px;
     padding: 8px 10px;
     margin: 6px 0;
-    font-size: 12px;
+    font-size: 13px;
   }
   :where(code) {
     background: rgba(0, 0, 0, 0.06);
@@ -389,13 +559,13 @@
     float: none !important; // evita íconos embebidos flotando fuera del globo
   }
   :where(a) {
-    color: var(--mat-sys-primary);
+    color: var(--brand, #048abf);
     word-break: break-all;
   }
   :where(table) {
     max-width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 13px;
   }
   :where(td, th) {
     border: 1px solid var(--mat-sys-outline-variant);
@@ -405,11 +575,7 @@
 
   // Párrafos, encabezados y citas del contenido pegado (ChatGPT/web): compactos.
   :where(p) { margin: 4px 0; }
-  :where(h1, h2, h3, h4, h5, h6) { margin: 8px 0 4px; line-height: 1.25; font-weight: 700; }
-  :where(h1) { font-size: 1.25em; }
-  :where(h2) { font-size: 1.15em; }
-  :where(h3) { font-size: 1.08em; }
-  :where(h4, h5, h6) { font-size: 1em; }
+  :where(h1, h2, h3, h4, h5, h6) { margin: 8px 0 4px; line-height: 1.25; font-weight: 700; font-size: 15.5px; }
   :where(blockquote) {
     margin: 6px 0;
     padding: 2px 0 2px 10px;
@@ -441,26 +607,86 @@
     height: 15px;
   }
   &:hover {
-    border-color: var(--mat-sys-primary);
+    border-color: var(--brand, #048abf);
   }
 }
 
-// ── Composer ── (fijo al pie del diálogo, siempre visible)
+// ── Adjuntos IMAGEN: preview inline (thumbnail) + botón de descarga superpuesto ──
+.conv-thumb {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  line-height: 0;
+}
+.conv-thumb-btn {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--mat-sys-surface-container-low, #f0f4f9);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  &:hover { border-color: var(--brand, #048abf); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16); }
+  &:focus-visible { outline: 2px solid var(--brand, #048abf); outline-offset: 1px; }
+}
+.conv-thumb-img {
+  display: block;
+  max-width: 220px;
+  max-height: 160px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.conv-thumb-dl {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+  transition: opacity 0.12s, background 0.12s;
+  &:hover { opacity: 1; background: rgba(0, 0, 0, 0.72); }
+  mat-icon { font-size: 16px; width: 16px; height: 16px; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Composer: pastilla de una sola fila (adjuntar + input + "Aa" + Enviar) con una
+// fila de formato colapsable arriba (negrita/cursiva/subrayado/código/limpiar +
+// Ampliar lectura/Abrir editor ampliado). Fijo al pie del diálogo, SIEMPRE visible.
+// ═══════════════════════════════════════════════════════════════════════════
 .composer {
   position: relative;
-  // Flex column que puede encoger, pero NO por debajo de su contenido (barra +
-  // texto mínimo + fila Enviar): por eso NO lleva `min-height: 0` — con él, el
-  // reparto de flex lo encogía bajo su contenido y la fila de Enviar se recortaba
-  // contra el borde del diálogo. La conversación (`.conv-body`, con `min-height: 0`)
-  // es la que absorbe la falta de espacio y scrollea. El tope 55vh evita que un
-  // mensaje largo acapare toda la altura (el área de texto scrollea dentro).
-  flex: 0 1 auto;
+  // RÍGIDO a propósito (`flex: 0 0 auto`, sin encoger) — ver razonamiento histórico
+  // sobre por qué NO se usa `flex-shrink` acá abajo, en el cálculo del tope:
+  //   100dvh (:host) − `--header-cap` (tope FIJO de .conv-header, la MISMA variable — así
+  //   este cálculo se ajusta solo si `--header-cap` cambia, p. ej. en celular con el panel
+  //   expandido, ver media query al pie) − 40px (piso de `.conv-body`, su padding — con
+  //   `min-height:0` un `overflow:auto` puede encoger su CONTENIDO a 0, pero no su padding,
+  //   ahora 20px arriba + 20px abajo).
+  // ⚠️ El 40px está MEDIDO con Playwright tras el rediseño (ver docs/decisiones.md) — si el
+  // padding de `.conv-body` vuelve a cambiar, HAY que remedir, no aproximar a ojo.
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  max-height: 55vh;
-  max-height: 55dvh; // móvil: descuenta la barra dinámica del navegador
+  gap: 6px;
+  // `box-sizing: border-box`: el cálculo de arriba asume que `max-height` es el alto
+  // TOTAL que este elemento le suma al diálogo — sin esto (default content-box), el
+  // padding se agrega POR FUERA y el resultado real termina más alto que lo calculado.
+  box-sizing: border-box;
+  max-height: calc(100vh - var(--header-cap) - 40px);
+  max-height: calc(100dvh - var(--header-cap) - 40px); // móvil: descuenta la barra dinámica del navegador
   border-top: 1px solid var(--mat-sys-outline-variant);
-  padding: 8px 16px 12px;
+  background: var(--mat-sys-surface);
+  padding: 10px 20px 14px;
 
   // Arrastrando archivos encima: resalta y muestra la pista de "soltar aquí".
   &.drag-over {
@@ -481,10 +707,10 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 2px dashed var(--mat-sys-primary, #048abf);
+  border: 2px dashed var(--brand, #048abf);
   border-radius: 14px;
   background: rgba(244, 246, 249, 0.92);
-  color: var(--mat-sys-primary, #048abf);
+  color: var(--brand, #048abf);
   font-size: 13px;
   font-weight: 600;
   pointer-events: none; // que los eventos de drag lleguen al contenedor
@@ -496,17 +722,16 @@
   }
 }
 
-// Banner de edición: aparece sobre la barra mientras se edita un mensaje propio.
+// Banner de edición: aparece sobre la fila principal mientras se edita un mensaje propio.
 .composer-editing {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 6px;
   padding: 4px 10px;
   border-radius: 10px;
   background: rgba(4, 138, 191, 0.08);
-  color: var(--mat-sys-primary, #048abf);
+  color: var(--brand, #048abf);
   font-size: 12px;
   font-weight: 600;
 
@@ -520,47 +745,142 @@
   }
 }
 
-.composer-toolbar {
+// Fila de formato colapsable (toggle: botón "Aa" de `.composer-main`).
+.composer-format-row {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 2px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
 
   .spacer {
     flex: 1;
   }
 }
 
-// Editor de respuesta con formato (contenteditable). Pegar/escribir aquí
-// conserva el formato porque viaja como HTML (negrita/cursiva/subrayado,
-// colores, etc.). Burbuja redondeada como el chat input del Helpdesk; arranca
-// compacta (44px) y CRECE con el texto para escribir cómodo, con scroll al tope.
+// Chips de archivos adjuntados, en su propia fila arriba de la fila principal.
+.composer-files-row {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+// Fila principal: adjuntar (círculo) + pastilla de texto (crece) + "Aa" + Enviar (círculo).
+.composer-main {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 0;
+}
+
+.attach-label {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--mat-sys-on-surface-variant);
+  transition: background 0.12s;
+
+  &:hover { background: var(--mat-sys-surface-container-high); }
+}
+
+// "Aa": toggle circular de la fila de formato — mismo tamaño que adjuntar.
+.format-toggle {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mat-sys-on-surface-variant);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+
+  &:hover { background: var(--mat-sys-surface-container-high); }
+  &.active {
+    background: color-mix(in srgb, var(--brand, #048abf) 14%, var(--mat-sys-surface));
+    color: var(--brand, #048abf);
+  }
+}
+
+// Enviar: circular, acento — reemplaza al botón de texto. `aria-label`/`matTooltip`
+// llevan "Enviar"/"Guardar cambios" para lectores de pantalla (el ícono no lo dice).
+// ⚠️ Este botón NUNCA debe quedar oculto — es el único disparador de envío/guardado.
+.send-btn {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: var(--brand, #048abf);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.12s;
+
+  mat-icon { font-size: 20px; width: 20px; height: 20px; }
+
+  &:hover:not(:disabled) { opacity: 0.9; }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+
+.send-status {
+  align-self: center;
+  font-size: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  white-space: nowrap;
+}
+
+// Editor de respuesta con formato (contenteditable), ahora en pastilla dentro de la
+// fila principal: pegar/escribir aquí conserva el formato porque viaja como HTML
+// (negrita/cursiva/subrayado, colores, etc.). Arranca compacta (36px) y CRECE con
+// el texto para escribir cómodo, con scroll al tope.
 .composer-input {
-  flex: 0 1 auto; // dentro del composer flex: encoge y scrollea cuando falta espacio
+  // Único hijo encogible de `.composer-main` (adjuntar/Aa/Enviar son rígidos,
+  // `flex: none`): absorbe la diferencia cuando el hueco no alcanza.
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  min-height: 44px;
-  // Techo propio del área de texto: con mucho texto NO crece sin límite (empujaba
-  // "Enviar" fuera de pantalla); a partir de aquí scrollea internamente y la fila de
-  // acciones (Enviar/adjuntos) siempre queda visible dentro del composer.
+  // 36px: en el caso más extremo (ventana muy baja + resumen ya en su propio tope),
+  // el piso absoluto de `.composer` entra completo dentro de su tope calculado.
+  min-height: 36px;
+  // Techo propio del área de texto: con mucho texto NO crece sin límite en
+  // pantallas altas — a partir de acá scrollea internamente. En pantallas bajas,
+  // el tope real lo impone antes el propio `.composer` (encogiendo este input
+  // hasta su `min-height`), no este valor.
   max-height: 30vh;
   max-height: 30dvh;
   overflow-y: auto;
   font: inherit;
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.4;
-  border: 1px solid #d4d6db;
-  border-radius: 18px;
-  padding: 10px 14px;
-  background: #fff;
+  border: none;
+  border-radius: 22px;
+  padding: 9px 16px;
+  background: var(--mat-sys-surface-container-high, #f5f4ed);
   color: var(--mat-sys-on-surface);
   outline: none;
   overflow-wrap: anywhere;
   white-space: pre-wrap; // conserva espacios y saltos del contenido pegado
 
   &:focus {
-    border-color: var(--mat-sys-primary, #048abf);
-    box-shadow: 0 0 0 2px rgba(4, 138, 191, 0.15);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand, #048abf) 30%, transparent);
   }
 
   &:empty::before {
@@ -613,24 +933,7 @@
   :where(th) { background: rgba(0, 0, 0, 0.04); font-weight: 700; }
 }
 
-.composer-actions {
-  flex: 0 0 auto; // Enviar/adjuntos siempre visibles al pie del composer
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-
-  .attach-label {
-    display: inline-flex;
-    cursor: pointer;
-    color: var(--mat-sys-on-surface-variant);
-  }
-  .files {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    min-width: 0;
-  }
+.files {
   .file-chip {
     display: inline-flex;
     align-items: center;
@@ -689,13 +992,6 @@
       }
     }
   }
-  .spacer {
-    flex: 1;
-  }
-  .send-status {
-    font-size: 12px;
-    color: var(--mat-sys-on-surface-variant);
-  }
 }
 
 // ── Lightbox ──
@@ -731,6 +1027,10 @@
   display: flex;
   justify-content: center;
   padding: 2px 0 10px;
+
+  button {
+    border-radius: 20px;
+  }
 }
 
 .conv-expired {
@@ -751,14 +1051,117 @@
   p { margin: 0; max-width: 320px; }
 }
 
-// ── Escritorio (≥600px): paddings laterales amplios y N° un poco mayor. En móvil
-//    (base, 360–430px) el layout va compacto para aprovechar el ancho. ──
+// ── Escritorio (≥600px): panel de badges/metadatos siempre expandido, toggle
+//    oculto — el rediseño ya deja todo compacto en una franja, no hace falta
+//    colapsar nada en pantallas grandes. ──
 @media (min-width: 600px) {
-  .conv-head { padding: 16px 24px 0; }
-  .conv-summary {
-    padding: 4px 24px 14px;
-    .conv-ticket-no { font-size: 34px; }
+  .conv-header-panel.collapsed {
+    display: flex; // ignora `.collapsed` en escritorio/tablet: siempre completo
   }
-  .conv-body { padding: 16px; }
-  .composer { padding: 8px 24px 16px; }
+}
+
+// ── Celular (<600px): título hasta 2 líneas (no 1, como en escritorio) y el panel
+//    de badges/metadatos arranca colapsado — el toggle de la fila 1 lo despliega.
+//    Reduce además el padding lateral (16px en vez de 20/32px). ──
+@media (max-width: 599px) {
+  .conv-header {
+    padding: 12px 16px 10px;
+  }
+  .conv-header-meta {
+    margin: 0 -16px;
+    padding: 10px 16px;
+  }
+  .conv-body {
+    padding: 16px;
+  }
+  .composer {
+    padding: 8px 16px 12px;
+  }
+
+  .summary-toggle {
+    display: inline-flex;
+  }
+
+  // Título: hasta 2 líneas sin truncar (la especificación lo pide explícito en
+  // celular; en escritorio se mantiene a 1 línea por el presupuesto de alto fijo).
+  .conv-title {
+    white-space: normal;
+    // `overflow: hidden` es OBLIGATORIO para que `-webkit-line-clamp` recorte de verdad —
+    // con `visible` (probado y descartado) el texto de la 3ª línea se seguía viendo,
+    // superpuesto sobre los badges de abajo.
+    overflow: hidden;
+    text-overflow: clip;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    font-size: 18px;
+  }
+
+  // Panel colapsable: animado (alto) para que abrir/cerrar no sea un salto brusco.
+  .conv-header-panel {
+    overflow: hidden;
+    max-height: 400px;
+    transition: max-height 0.2s ease, opacity 0.2s ease;
+    opacity: 1;
+
+    &.collapsed {
+      max-height: 0;
+      opacity: 0;
+    }
+  }
+}
+
+// Con el panel abierto en celular, el contenido de `.conv-header` (fila 1 + título de hasta 2
+// líneas + badges/metadatos APILADOS, no en una sola franja como escritorio) mide ~353px
+// medido con Playwright — bastante más que los 248px que alcanzan para la franja compacta de
+// escritorio. `--header-cap` sube acá (con margen, cubriendo también un título de 2 líneas) EN
+// `:host` (no en `.conv-header-panel`: tiene que llegar también a `.composer`, su HERMANO, no
+// su descendiente) — al ser la MISMA variable que usa `.composer` para su propio tope, los dos
+// se recalculan juntos: nunca hay que tocar `.composer` por separado para que "Enviar" se siga
+// viendo con el panel abierto.
+@media (max-width: 599px) {
+  :host(.panel-open) {
+    --header-cap: 392px;
+  }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  .conv-body { background: #0f151b; }
+  // Burbujas de la conversación: empleado (azul claro) y cliente (blanco).
+  .conv-msg.conv-emp { background: #16202e; }
+  .conv-msg.conv-cli { background: #1a222b; }
+  // El área de escritura tenía `background: #fff` fijo y el color de fuente SÍ sigue al tema
+  // (--mat-sys-on-surface, claro en oscuro): fondo blanco + letra blanca = no se veía lo que
+  // se escribía. El fondo tiene que venir aquí también, no solo el borde.
+  .composer-input {
+    background: #1a222b;
+    // Los recuadros de código usan un velo NEGRO (rgba(0,0,0,.05)) que sobre un fondo oscuro
+    // desaparece; en oscuro el velo va en blanco para que se sigan distinguiendo.
+    :where(pre) { background: rgba(255, 255, 255, 0.06); }
+    :where(code) { background: rgba(255, 255, 255, 0.08); }
+    :where(pre code) { background: none; }
+  }
+
+  // ⭐ Los mensajes traen COLORES EN LÍNEA y casi siempre son negro literal
+  // (`style="color: rgb(0,0,0)"`): el HelpDesk guarda así lo que se pega desde Word/Outlook, y
+  // `serializePasted` los conserva a propósito al pegar aquí. Sobre la burbuja oscura eso es
+  // texto negro sobre fondo oscuro —contraste medido 1.28— y el mensaje NO SE VE.
+  //
+  // Se neutraliza el color en línea del cuerpo para que herede el del tema (contraste 7.95).
+  // Se hace con `*` y no con `[style*="color"]` porque el color puede venir también de un
+  // `<font color>` heredado, y porque `[style*="color"]` casaría además con `background-color`.
+  // Los enlaces conservan el suyo.
+  //
+  // Efecto secundario asumido: en oscuro se pierde el color intencionado (alguien que resaltó
+  // algo en rojo lo verá en el color del tema). Un mensaje ilegible es peor que un resalte
+  // perdido, y en el tema claro no se toca nada.
+  // ⚠️ `::ng-deep` es IMPRESCINDIBLE aquí: el cuerpo del mensaje entra por `[innerHTML]`, así que
+  // sus nodos NO llevan el atributo `_ngcontent-*` del componente y una regla normal —por muy
+  // específica que sea— nunca les alcanza. Verificado en el DOM: el contenedor tiene
+  // `_ngcontent-ng-c…` y el hijo insertado solo `style`.
+  ::ng-deep .conv-text *:not(a),
+  ::ng-deep .composer-input *:not(a) {
+    color: inherit !important;
+  }
 }

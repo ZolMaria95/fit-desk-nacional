@@ -1,0 +1,140 @@
+<div class="rp">
+  <div class="rp-head">
+    <h2 class="rp-title"><mat-icon>summarize</mat-icon> Reporte de vacaciones</h2>
+    <div class="rp-seg" role="radiogroup" aria-label="Hoja">
+      <button type="button" role="radio" [attr.aria-checked]="vista() === 'tabla'" [class.on]="vista() === 'tabla'" (click)="setVista('tabla')">
+        <mat-icon>table_rows</mat-icon> Tabla
+      </button>
+      <button type="button" role="radio" [attr.aria-checked]="vista() === 'calendario'" [class.on]="vista() === 'calendario'" (click)="setVista('calendario')">
+        <mat-icon>calendar_month</mat-icon> Calendario
+      </button>
+    </div>
+  </div>
+
+  <div class="rp-controls">
+    @if (vista() === 'tabla') {
+      <label class="rp-f">
+        <span>Desde</span>
+        <input type="date" [ngModel]="desde()" (ngModelChange)="desde.set($event)" />
+      </label>
+      <label class="rp-f">
+        <span>Hasta</span>
+        <input type="date" [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" />
+      </label>
+    } @else {
+      <div class="rp-f rp-note-inline"><span>Período</span><em>Del mes actual a fin de año</em></div>
+    }
+    <label class="rp-f">
+      <span>Alcance</span>
+      <select [ngModel]="alcance()" (ngModelChange)="alcance.set($event)">
+        <option [ngValue]="null">Nacional (todos)</option>
+        @for (e of equipos; track e.id) { <option [ngValue]="e.id">{{ e.nombre }}</option> }
+      </select>
+    </label>
+    <label class="rp-f">
+      <span>Tipo</span>
+      <select [ngModel]="tipo()" (ngModelChange)="tipo.set($event)">
+        <option value="todas">Todas</option>
+        <option value="VACACIONES">Vacaciones</option>
+        <option value="PERMISO">Permisos c/cargo</option>
+        <option value="PERMISO_HORAS">Permisos x horas</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- ── Hoja TABLA ── -->
+  @if (vista() === 'tabla') {
+    @if (rangoInvalido()) {
+      <p class="rp-warn"><mat-icon inline>error_outline</mat-icon> La fecha “Hasta” no puede ser anterior a “Desde”.</p>
+    }
+
+    <div class="rp-summary">
+      <span class="chip"><b>{{ totales().periodos }}</b> períodos</span>
+      <span class="chip"><b>{{ totales().empleados }}</b> empleados</span>
+      <span class="chip vac"><b>{{ totales().diasVac }}</b> días vacaciones</span>
+      <span class="chip perm"><b>{{ totales().diasPerm }}</b> días permiso</span>
+      <span class="chip perm-horas"><b>{{ totales().horasPerm }}</b> horas permiso</span>
+    </div>
+
+    <div class="rp-tablewrap">
+      @if (filas().length) {
+        <table class="rp-table">
+          <thead>
+            <tr>
+              <th>Empleado</th><th>Equipo</th><th>Tipo</th><th>Desde</th><th>Hasta</th>
+              <th class="n">Laborables</th><th class="n">Días</th><th class="n">Horas</th><th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of filas(); track $index) {
+              <tr>
+                <td>{{ f.empleado }}</td>
+                <td>{{ f.equipo }}</td>
+                <td><span class="tp" [class.perm]="f.tipo === 'PERMISO'" [class.perm-horas]="f.tipo === 'PERMISO_HORAS'">{{ f.tipoLabel }}</span></td>
+                <td>{{ fmt(f.desde) }}</td>
+                <td>{{ fmt(f.hasta) }}</td>
+                <td class="n">{{ f.diasLaborables }}</td>
+                <td class="n">{{ f.diasVacacion }}</td>
+                <td class="n">{{ f.horas ?? '—' }}</td>
+                <td>{{ f.estado }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else if (!rangoInvalido()) {
+        <p class="rp-empty">No hay vacaciones ni permisos en el rango seleccionado.</p>
+      }
+    </div>
+  }
+
+  <!-- ── Hoja CALENDARIO (mes actual → fin de año) ── -->
+  @if (vista() === 'calendario') {
+    @if (leyendaCal().length) {
+      <div class="rp-legend">
+        @for (p of leyendaCal(); track p.name) {
+          <span class="rp-leg"><span class="rp-legdot" [style.background]="p.color.bg" [style.border-color]="p.color.fg"></span>{{ p.name }}</span>
+        }
+      </div>
+    }
+    <div class="rp-calwrap">
+      @if (leyendaCal().length) {
+        <div class="rp-months">
+          @for (mes of meses(); track mes.label) {
+            <section class="rp-month">
+              <h4>{{ mes.label }}</h4>
+              <div class="rp-grid">
+                @for (d of DIAS_MINI; track $index) { <span class="rp-dow">{{ d }}</span> }
+                @for (c of mes.cells; track $index) {
+                  <div class="rp-cell" [class.other]="c.other" [class.today]="c.today" [class.has]="c.has"
+                       [matTooltip]="c.dots.length ? c.dots[0].name : ''" matTooltipPosition="above">
+                    <span class="rp-num">{{ c.day }}</span>
+                    @if (c.dots.length) {
+                      <span class="rp-dots">
+                        @for (dot of c.dots; track $index) { <span class="rp-dot" [style.background]="dot.color.fg"></span> }
+                        @if (c.more) { <span class="rp-dotmore">+{{ c.more }}</span> }
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+            </section>
+          }
+        </div>
+      } @else {
+        <p class="rp-empty">No hay vacaciones registradas para este alcance.</p>
+      }
+    </div>
+  }
+
+  <!-- Pie fijo (regla de oro: acciones siempre visibles) -->
+  <div class="rp-actions">
+    <button mat-button type="button" (click)="cerrar()">Cerrar</button>
+    <span class="grow"></span>
+    <button mat-stroked-button type="button" [disabled]="!filas().length" (click)="descargarCsv()">
+      <mat-icon>table_view</mat-icon> CSV
+    </button>
+    <button mat-flat-button color="primary" type="button" [disabled]="!filas().length" (click)="descargarPdf()">
+      <mat-icon>picture_as_pdf</mat-icon> PDF
+    </button>
+  </div>
+</div>

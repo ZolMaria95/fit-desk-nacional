@@ -1,5 +1,6 @@
 package com.fitdesk.api;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -17,7 +18,9 @@ import com.fitdesk.core.TicketEspejo;
 import com.fitdesk.core.Transferencia;
 import com.fitdesk.core.Usuario;
 import com.fitdesk.core.WorkflowEstado;
+import com.fitdesk.notificaciones.NotificacionService;
 
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -39,6 +42,9 @@ import jakarta.ws.rs.core.Response;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class TransferenciaResource {
+
+    @Inject
+    NotificacionService notificaciones;
 
     // ── Crear (equipo origen → equipo destino) ───────────────────────────
     @POST
@@ -104,6 +110,7 @@ public class TransferenciaResource {
         t.estado = "PENDIENTE";
         t.motivo = text(in, "motivo");
         t.persist();
+        notificaciones.transferenciaPendiente(t);
         return Response.status(Response.Status.CREATED).entity(describir(t)).build();
     }
 
@@ -212,6 +219,42 @@ public class TransferenciaResource {
         return Response.ok(describir(t)).build();
     }
 
+    /**
+     * Cancela un envío PROPIO mientras sigue PENDIENTE. La autoriza quien gobierna el equipo
+     * ORIGEN (el mismo chequeo que exige {@code crear} para poder enviarla) — no el destino, que
+     * sigue teniendo su propio camino en {@code rechazar}. Estado distinto de RECHAZADA a
+     * propósito: el destino no debe ver "rechazaste tú" cuando en realidad el emisor se arrepintió.
+     */
+    @POST
+    @Path("/{id}/cancelar")
+    @Transactional
+    public Response cancelar(@PathParam("id") Long id, JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid) {
+        Transferencia t = Transferencia.findById(id);
+        if (t == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        if (!"PENDIENTE".equals(t.estado)) {
+            return bad("la transferencia ya fue resuelta (" + t.estado + ")");
+        }
+        if (t.equipoOrigen == null || !Actor.gobierna(actorHid, t.equipoOrigen.id)) {
+            return forbidden("solo el Responsable del equipo origen (o un ADMIN) puede cancelar su envío");
+        }
+        // Misma regla que rechazar: la tarea que nació SOLO para esta transferencia (ticket sin
+        // tarea previa) se descarta entera, sin dejar rastro.
+        if (t.tarea != null && t.tarea.pendienteTransferencia) {
+            Tarea oculta = t.tarea;
+            t.delete();
+            oculta.delete();
+            return Response.ok(Map.of("ok", true, "descartada", true)).build();
+        }
+        t.estado = "CANCELADA";
+        if (in != null && text(in, "motivo") != null) {
+            t.motivo = text(in, "motivo");
+        }
+        t.resueltoEn = OffsetDateTime.now();
+        return Response.ok(describir(t)).build();
+    }
+
     // ── Trabajo entrante YA aceptado de mis equipos (para que el RE lo rastree) ──
     // Transferencias COMPLETADAS dirigidas a mis equipos: qué tarea (de otro equipo) lleva
     // ahora alguien de mi equipo. Responde "¿qué trabajo foráneo tiene mi gente?".
@@ -255,16 +298,47 @@ public class TransferenciaResource {
         return out;
     }
 
-    // ── Miembros de un equipo (para el picker "asignar a" al aceptar) ────
-    // Membresía = usuarios con Asignación vigente de alcance EQUIPO = ese equipo
-    // (no hay FK usuario→equipo; se deriva de las Asignaciones).
+    /**
+     * Miembros elegibles para el picker "asignar a" al aceptar una transferencia hacia este
+     * equipo. Quien acepta (RE de equipo o REGIONAL) puede repartir la tarea entre CUALQUIER
+     * consultor de su alcance, sin importar rol: no solo quien tiene Asignación EQUIPO sobre
+     * este equipo exacto, sino también los de los equipos HERMANOS de la misma Regional, quien
+     * tenga Asignación REGIONAL sobre esa Regional (cubre toda ella, cualquier equipo), y
+     * cualquiera de alcance GLOBAL (cubre cualquier equipo/regional). Antes solo miraba
+     * EQUIPO=este equipo, y un responsable REGIONAL sin la Asignación EQUIPO redundante ni
+     * siquiera se veía a sí mismo en su propio picker.
+     */
     @GET
     @Path("/equipo/{equipoId}/miembros")
     public List<Map<String, Object>> miembros(@PathParam("equipoId") Long equipoId) {
         List<Map<String, Object>> out = new ArrayList<>();
+        Equipo eq = Equipo.findById(equipoId);
+        if (eq == null) {
+            return out;
+        }
+        LocalDate hoy = LocalDate.now();
+        List<Asignacion> candidatos = new ArrayList<>();
+        if (eq.regional != null) {
+            Set<Long> equiposDeLaRegional = new java.util.HashSet<>();
+            for (Equipo e : Equipo.<Equipo>list("regional = ?1", eq.regional)) {
+                equiposDeLaRegional.add(e.id);
+            }
+            candidatos.addAll(Asignacion.<Asignacion>list(
+                    "alcanceTipo = 'EQUIPO' and alcanceEquipo.id in ?1 and activo = true", equiposDeLaRegional));
+            candidatos.addAll(Asignacion.<Asignacion>list(
+                    "alcanceTipo = 'REGIONAL' and alcanceRegional = ?1 and activo = true", eq.regional));
+        } else {
+            // Equipo sin regional asignada (dato legacy/incompleto): al menos su propio alcance EQUIPO.
+            candidatos.addAll(Asignacion.<Asignacion>list(
+                    "alcanceTipo = 'EQUIPO' and alcanceEquipo.id = ?1 and activo = true", equipoId));
+        }
+        candidatos.addAll(Asignacion.<Asignacion>list("alcanceTipo = 'GLOBAL' and activo = true"));
+
         Set<Long> vistos = new java.util.HashSet<>();
-        for (Asignacion a : Asignacion.<Asignacion>list(
-                "alcanceTipo = 'EQUIPO' and alcanceEquipo.id = ?1 and activo = true", equipoId)) {
+        for (Asignacion a : candidatos) {
+            if (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy)) {
+                continue;
+            }
             Usuario u = a.usuario;
             if (u == null || !vistos.add(u.id)) {
                 continue;
@@ -275,6 +349,7 @@ public class TransferenciaResource {
             m.put("nombre", u.nombre);
             out.add(m);
         }
+        out.sort(java.util.Comparator.comparing(m -> String.valueOf(m.get("nombre"))));
         return out;
     }
 
