@@ -114,7 +114,8 @@
   &:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); }
   &.other { opacity: 0.4; }
   &.today { border-color: var(--brand, #048abf); }
-  &.friday { border-left-width: 3px; }
+  &.monday { border-left-width: 3px; }
+  &.weekend { cursor: default; opacity: 0.55; background: var(--mat-sys-surface-container-low, #f0f4f9); &:hover { box-shadow: none; } }
   &.current { box-shadow: inset 0 0 0 2px var(--brand, #048abf); }
   &.cur-assigned { box-shadow: inset 0 0 0 2px var(--brand, #048abf); }
 

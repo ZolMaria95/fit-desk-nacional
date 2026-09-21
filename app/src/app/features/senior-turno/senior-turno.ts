@@ -28,7 +28,8 @@ interface STCell {
   dayNum: number;
   isOther: boolean;
   isToday: boolean;
-  isFri: boolean;
+  isMon: boolean;
+  isWeekend: boolean;
   weekKey: string;
   isCurrentWeek: boolean;
   assigned: boolean;
@@ -36,19 +37,25 @@ interface STCell {
   emergentes: { name: string; color: Color } | null;
 }
 
-// ── Utilidades de fecha (semanas de soporte Vie → Jue, relevo el viernes) — idénticas a Semanal ──
+// ── Utilidades de fecha. A diferencia de Semanal (Vie→Jue), el turno de Senior va de LUNES a VIERNES;
+//    sábado y domingo no pertenecen a ninguna semana de turno. La clave de la semana es el LUNES. ──
 function today(): Date { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }
 function addDays(date: Date, n: number): Date { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
 function isoKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function getWeekFriday(date: Date): Date { return addDays(date, -((date.getDay() - 5 + 7) % 7)); }
+function isWeekend(d: Date): boolean { return d.getDay() === 0 || d.getDay() === 6; }
+/** Lunes de la semana de turno de `date` (Lun–Vie). Sáb/Dom → el lunes SIGUIENTE (próximo turno). */
+function getWeekMonday(date: Date): Date {
+  const dow = date.getDay();
+  return addDays(date, dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow);
+}
 function parseISO(key: string): Date { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d); }
 function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 function formatShort(d: Date): string { return `${DAYS_SHORT_ES[d.getDay()]} ${d.getDate()} ${MONTHS_SHORT_ES[d.getMonth()]}`; }
-function formatRange(fri: Date): string { return `${formatShort(fri)} → ${formatShort(addDays(fri, 7))}`; }
+function formatRange(mon: Date): string { return `${formatShort(mon)} → ${formatShort(addDays(mon, 4))}`; }
 
 /**
  * Senior de Turno: rotación de 2 roles por semana (Mesa de Ayuda + Emergentes), por equipo,
@@ -125,20 +132,22 @@ export class SeniorTurno {
     const first = new Date(vm.getFullYear(), vm.getMonth(), 1);
     const gridStart = addDays(first, -first.getDay());
     const t = today();
-    const curKey = isoKey(getWeekFriday(t));
+    const curKey = isoKey(getWeekMonday(t));
     const assigns = this.data.getTurnoSenior();
     const cells: STCell[] = [];
     for (let i = 0; i < 42; i++) {
       const date = addDays(gridStart, i);
-      const weekKey = isoKey(getWeekFriday(date));
-      const assign = assigns[weekKey];
+      const weekend = isWeekend(date);
+      const weekKey = weekend ? '' : isoKey(getWeekMonday(date));
+      const assign = weekend ? null : assigns[weekKey];
       cells.push({
         dayNum: date.getDate(),
         isOther: date.getMonth() !== vm.getMonth(),
         isToday: sameDay(date, t),
-        isFri: date.getDay() === 5,
+        isMon: date.getDay() === 1,
+        isWeekend: weekend,
         weekKey,
-        isCurrentWeek: weekKey === curKey,
+        isCurrentWeek: !weekend && weekKey === curKey,
         assigned: !!(assign && (assign.mesaAyuda || assign.emergentes)),
         mesaAyuda: assign ? this.roleInfo(assign.mesaAyuda) : null,
         emergentes: assign ? this.roleInfo(assign.emergentes) : null,
@@ -149,7 +158,7 @@ export class SeniorTurno {
 
   readonly currentWeek = computed(() => {
     this.rev();
-    const fri = getWeekFriday(today());
+    const fri = getWeekMonday(today());
     const key = isoKey(fri);
     const assign = this.data.getTurnoSeniorAssignment(key);
     return {
@@ -162,15 +171,15 @@ export class SeniorTurno {
 
   readonly nextWeeks = computed(() => {
     this.rev();
-    const fri = getWeekFriday(today());
+    const fri = getWeekMonday(today());
     const arr = [];
     for (let i = 0; i < 8; i++) {
-      const wkFri = addDays(fri, i * 7);
-      const key = isoKey(wkFri);
+      const wkMon = addDays(fri, i * 7);
+      const key = isoKey(wkMon);
       const assign = this.data.getTurnoSeniorAssignment(key);
       arr.push({
         key,
-        range: formatRange(wkFri),
+        range: formatRange(wkMon),
         assigned: !!(assign && (assign.mesaAyuda || assign.emergentes)),
         mesaAyuda: assign ? this.roleInfo(assign.mesaAyuda) : null,
         emergentes: assign ? this.roleInfo(assign.emergentes) : null,
@@ -201,6 +210,7 @@ export class SeniorTurno {
   goToday(): void { const t = today(); this.viewMonth.set(new Date(t.getFullYear(), t.getMonth(), 1)); }
 
   onCellClick(cell: STCell): void {
+    if (cell.isWeekend) return;
     this.openAssign(cell.weekKey);
   }
 

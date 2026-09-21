@@ -40,13 +40,15 @@
           class="st-cell"
           [class.other]="c.isOther"
           [class.today]="c.isToday"
-          [class.friday]="c.isFri"
+          [class.monday]="c.isMon"
+          [class.weekend]="c.isWeekend"
+          [disabled]="c.isWeekend"
           [class.current]="c.isCurrentWeek && !c.assigned"
           [class.cur-assigned]="c.isCurrentWeek && c.assigned"
           (click)="onCellClick(c)"
         >
           <span class="st-cell-num">{{ c.dayNum }}</span>
-          @if (c.isFri && (c.mesaAyuda || c.emergentes)) {
+          @if (c.isMon && (c.mesaAyuda || c.emergentes)) {
             <span class="st-cell-chips">
               @if (c.mesaAyuda) {
                 <span class="st-cell-chip" [style.background]="c.mesaAyuda.color.bg" [style.color]="c.mesaAyuda.color.fg" [title]="'Mesa de Ayuda: ' + c.mesaAyuda.name">{{ c.mesaAyuda.name }}</span>

@@ -48,10 +48,10 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - **⚠️ `turnoSenior` (PENDIENTE — el frontend ya lo consume, el backend `fit-desk-api` todavía NO lo
   implementa; hoy responde 404, manejado con try/catch en `DataService`, sin romper la UI)**:
   - `GET/PUT /api/legacy/turnoSenior?equipo=<codigo>` — mismo patrón que `weeklySupport?equipo=`
-    (rotación semanal por equipo, clave = fecha ISO del viernes de esa semana), pero con **2 roles**
+    (rotación semanal por equipo), pero con **2 roles** y semana **LUNES→VIERNES** (clave = fecha ISO del **lunes**; sáb/dom no pertenecen a ninguna semana de turno)
     en vez de 1 y **sin** el log de tickets que sí tiene `weeklySupport` (no aplica a esta pantalla):
     ```json
-    { "weeks": { "<YYYY-MM-DD del viernes>": {
+    { "weeks": { "<YYYY-MM-DD del lunes>": {
         "mesaAyuda": "<hid o ''>", "emergentes": "<hid o ''>",
         "notes": "", "updatedAt": "ISO"
     } } }

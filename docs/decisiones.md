@@ -74,6 +74,8 @@ semanas"; tema oscuro revisado visualmente; los 2 endpoints nuevos dan 404 pero 
 confirmada en "15 de 1129". `npx tsc --noEmit` y `ng build -c quarkus` limpios (mismo warning
 preexistente de `card-detail-dialog.html`, no relacionado).
 
+**Semana (corrección posterior, pedido de la dueña):** la semana de Senior de Turno va de **lunes a viernes** (Semanal sigue Vie→Jue). Clave de semana = lunes; sáb/dom no pertenecen a ningún turno (celdas deshabilitadas); el chip de cada semana se pinta en el lunes; en fin de semana "Semana actual" muestra el próximo lunes. El backend (`turnoSenior`) debe indexar por lunes.
+
 **Pendiente de desplegar** (regla del proyecto) — y "Senior de Turno" además pendiente de que
 `fit-desk-api` implemente los 2 endpoints nuevos antes de tener datos reales en producción.
 
