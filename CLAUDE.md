@@ -45,3 +45,14 @@ Cada vez que en una sesión se **aprenda, decida o descubra** algo nuevo sobre e
 3. **Un cambio en el modelo o la estrategia** → actualizar el `.md` de `docs/knowledge/` correspondiente.
 
 No esperar a que el usuario lo pida. El objetivo es que el conocimiento del proyecto viva en estos archivos y sobreviva entre sesiones y entre equipos.
+
+## ⛔ Deploy del frontend a AWS — GUARDIA OBLIGATORIA (incidente 2026-09-21: login roto, 405)
+Un `docker build` directo de `app/` del monorepo **rompe producción**: su `nginx.conf` no proxya `/api/`
+y el env `quarkus` apunta a `http://localhost:8080`. Producción corre la imagen del clon de deploy.
+**Antes de `docker save`/`scp`/`docker load` es OBLIGATORIO:**
+1. Correr `scripts/verificar-imagen-front.sh <imagen>` (desde la raíz del monorepo). Si sale != 0 → **NO desplegar**.
+   Comprueba: nginx con `location /api/` → `proxy_pass http://backend:8080` y bundle sin `localhost:8080`.
+2. Tras el deploy: probar `curl -X POST https://fitdesk.fit-bank.com/api/...` sin 405 y un **login real** en el navegador.
+3. Rollback inmediato si algo falla: la imagen anterior queda dangling en el servidor
+   (`docker images -a` → `docker tag <id> fitdesk-frontend:latest` → `docker compose up -d frontend`).
+Nunca declarar "desplegado" sin haber pasado 1 y 2.

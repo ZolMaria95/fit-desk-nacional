@@ -63,3 +63,14 @@ Cambios que crucen la frontera (endpoints, DTOs, headers) van reflejados en
 
 El agente especialista de este repo está en
 [`.claude/agents/fit-desk-front.md`](.claude/agents/fit-desk-front.md).
+
+## ⛔ Deploy del frontend a AWS — GUARDIA OBLIGATORIA (incidente 2026-09-21: login roto, 405)
+Un `docker build` directo de `app/` del monorepo **rompe producción**: su `nginx.conf` no proxya `/api/`
+y el env `quarkus` apunta a `http://localhost:8080`. Producción corre la imagen del clon de deploy.
+**Antes de `docker save`/`scp`/`docker load` es OBLIGATORIO:**
+1. Correr `scripts/verificar-imagen-front.sh <imagen>` (desde la raíz del monorepo). Si sale != 0 → **NO desplegar**.
+   Comprueba: nginx con `location /api/` → `proxy_pass http://backend:8080` y bundle sin `localhost:8080`.
+2. Tras el deploy: probar `curl -X POST https://fitdesk.fit-bank.com/api/...` sin 405 y un **login real** en el navegador.
+3. Rollback inmediato si algo falla: la imagen anterior queda dangling en el servidor
+   (`docker images -a` → `docker tag <id> fitdesk-frontend:latest` → `docker compose up -d frontend`).
+Nunca declarar "desplegado" sin haber pasado 1 y 2.
