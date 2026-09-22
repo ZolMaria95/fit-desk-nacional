@@ -216,12 +216,18 @@ export class VacacionDialog {
     if (!ini || !fin || fin < ini) return 0;
     return Math.round((parseISO(fin).getTime() - parseISO(ini).getTime()) / 86400000) + 1;
   });
-  /** Fecha fin efectiva: en VACACIONES es la elegida; en PERMISO se deriva de los días; en
-   *  PERMISO_HORAS es la misma fecha de inicio (es un permiso de un solo día). */
+  /** Fecha fin efectiva: en VACACIONES es la elegida; en PERMISO se deriva de los días
+   *  REALMENTE solicitados (`diasLaborables`, NO `diasVac()`); en PERMISO_HORAS es la misma
+   *  fecha de inicio (es un permiso de un solo día).
+   *
+   *  Antes usaba `diasVac()` (el cargo ×1,36) para la fecha de fin, así que el calendario pintaba
+   *  más días de los que la persona realmente iba a estar ausente (2 días solicitados → cargo de
+   *  3 días → se pintaban 3 días). El cargo (`diasVac()`) sigue siendo ×1,36 para el saldo; solo
+   *  el RANGO que se guarda/pinta ahora refleja los días pedidos. Ver docs/decisiones.md. */
   readonly fechaFinEfectiva = computed(() => {
     if (this.esPermisoHoras()) return this.fechaInicio();
     if (!this.esPermiso()) return this.fechaFin();
-    const ini = this.fechaInicio(); const n = this.diasVac();
+    const ini = this.fechaInicio(); const n = this.diasLaborables();
     return ini && n > 0 ? addDays(ini, n - 1) : '';
   });
 

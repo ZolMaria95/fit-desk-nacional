@@ -6,6 +6,80 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-22] Fix: modal de ticket — el asunto se aplastaba y quedaba espacio muerto arriba
+
+**Contexto:** la dueña reportó (con captura) que en el modal de conversación de ticket el asunto
+quedaba escondido — solo se veía la burbuja del `matTooltip` flotando sobre los badges —, el label
+"TICKET #NNNNN" se veía muy chico, y había espacio en blanco sin usar arriba del todo.
+
+**Causa raíz** (encontrada reproduciendo el bug en Chrome real con Playwright, con
+`getBoundingClientRect`/`getComputedStyle`, no a ojo):
+1. `.conv-header` es `display:flex; flex-direction:column;` con `max-height: var(--header-cap)` y
+   `overflow-y:auto`. Sus 3 hijos son `.conv-header-row1`, `<h2 class="conv-title">` y
+   `.conv-header-panel`. Los dos primeros tenían `flex: none` (protegidos), pero **`.conv-title` no
+   fijaba `flex`**, así que heredaba el default `flex-shrink:1`. Cuando el contenido superaba el
+   presupuesto de alto, flexbox **aplastaba el título** (de 26px a ~7px) ANTES de que el scroll
+   llegara a activarse — el texto seguía ahí (por eso el `matTooltip` funcionaba) pero visualmente
+   solo se veía una astilla de 1-2px pegada contra los badges.
+2. `.conv-header` conserva las clases de Angular Material `mat-mdc-dialog-title`, que le agregan un
+   `::before` invisible (`content:""`, ~40-60px) para alinear a una baseline tipográfica — pensado
+   para texto normal, no para un contenedor flex. En un flex container, ese `::before` se vuelve un
+   **hijo flex real**, apareciendo como una fila en blanco antes de "TICKET #NNNNN" en TODO ticket
+   (el "espacio en blanco arriba" reportado) y compitiendo por el presupuesto de `--header-cap`.
+3. El label "TICKET #NNNNN" nunca cambió de tamaño (12.5px, intacto) — se veía chico solo por
+   percepción, al lado del título aplastado y el hueco de arriba.
+
+**Fix** (`ticket-messages-dialog.scss`):
+- `.conv-title { flex: none; }` — ahora, si el contenido no entra en `--header-cap`, es el
+  `overflow-y:auto` de `.conv-header` el que entra en juego (scroll real), no el aplastamiento.
+- `.conv-header::before { display: none; }` — neutraliza el `::before` de Material (esa baseline no
+  se usa para nada acá).
+- **Presupuesto de alto REMEDIDO** con Playwright tras el fix (no reusado a ojo): `--header-cap`
+  bajó de 248px a 224px en escritorio (contenido real bajó de 231px a 208px, consistente en varios
+  tickets) y de 392px a 384px en celular con el panel expandido (contenido real 345-383px según el
+  ticket). `.composer` recalcula solo porque usa la misma variable.
+- Re-verificado el checklist completo: las 5 combinaciones obligatorias de `getBoundingClientRect`
+  del botón "Enviar" con 25 líneas inyectadas (`fullyInside:true` en las 5) y la ruta de escape de
+  "lectura ampliada" (Volver al modal) en escritorio y celular.
+
+**Estado:** implementado y verificado en Chrome real. `tsc`/`ng build` limpios. **Pendiente de
+desplegar** (regla del proyecto).
+
+---
+
+### [2026-09-21] Fix: Vacaciones pintaba en el calendario los días de CARGO (×1,36), no los solicitados
+
+**Contexto:** en un permiso "con cargo a vacación" (`tipo=PERMISO`), la regla de la empresa es
+descontar `round(díasLaborables × 1,36)` días del saldo — eso está bien y no cambia. El problema:
+ese mismo número YA multiplicado se usaba también para calcular la fecha de fin del permiso, así que
+el calendario (pantalla principal, reporte y PDF) pintaba más días de los que la persona
+realmente iba a estar ausente. Ejemplo: pedir 2 días laborables carga 3 días al saldo (correcto),
+pero el calendario resaltaba 3 días en vez de los 2 realmente solicitados. Reportado por la dueña.
+
+**Causa raíz:** `vacacion-dialog.ts`, `fechaFinEfectiva()` (rama `PERMISO`) derivaba la fecha de fin
+desde `diasVac()` (el cargo, ya ×1,36) en vez de desde `diasLaborables()` (el número que el usuario
+tipeó). Ese valor se guarda tal cual en `fechaFin` — el backend no lo recalcula — así que el error
+quedaba fijado en cada fila. Como el backend ya tenía `diasVacacion` (el cargo) como campo separado
+del rango de fechas desde el diseño original (`V15__vacacion.sql`, 2026-08-03), no hizo falta tocar
+el modelo de datos: fue un fix de una sola línea en el frontend.
+
+**Fix:**
+- `fechaFinEfectiva()` ahora usa `diasLaborables()` en vez de `diasVac()`. `diasVac()` (el cargo
+  ×1,36) no cambia — sigue siendo lo que se muestra como "Días de vacaciones" y lo que descuenta del
+  saldo. Arregla automáticamente los 3 lugares que solo leen `fechaInicio`/`fechaFin` para pintar
+  (calendario principal, mini-calendario del reporte, PDF) sin tocarlos.
+- **Backfill** (`backend/src/main/resources/db/migration/V25__fix_permiso_fecha_fin.sql`): como este
+  comportamiento venía del diseño original, todo permiso con cargo ya guardado tenía el rango
+  inflado. Se corrigió con `fecha_fin = fecha_inicio + (dias_laborables - 1)` para `tipo='PERMISO'`
+  — `dias_laborables` y `dias_vacacion` (el cargo) no se tocan, solo el largo del rango. Decisión
+  confirmada con la dueña (alternativa descartada: dejar el historial como estaba).
+- `docs/contrato-api.md` (ambos repos) actualizado: aclara que `fechaFin` en `PERMISO` refleja
+  `diasLaborables`, no `diasVacacion`, y de paso se puso al día con `PERMISO_HORAS`/`horas`
+  (feature de 2026-09-16 que nunca se documentó ahí).
+
+**Estado:** implementado, `tsc`/`ng build` limpios. **Pendiente de desplegar** (regla del proyecto)
+— la migración V25 solo se aplica al arrancar el contenedor del backend.
+
 ### [2026-09-21] Nueva pantalla "Senior de Turno" + título colapsable en ticket + tickets/página
 
 **Contexto:** tres pedidos puntuales de la dueña. (1) Una pantalla nueva "Senior de Turno",

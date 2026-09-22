@@ -25,7 +25,10 @@
   // acá (`:host`) a los dos por igual. Ver override en la media query de celular más abajo
   // (`:host(.panel-open)`), para cuando el panel de badges/metadatos ocupa más que la franja
   // compacta de escritorio.
-  --header-cap: 248px;
+  // 224px (antes 248px): REMEDIDO con Playwright el 2026-09-22 tras 2 fixes al header (ver
+  // comentarios en `.conv-header`/`.conv-header::before`) que liberaron espacio — el contenido
+  // real bajó de 231px a 208px en varios tickets reales, se deja el mismo margen (~16px).
+  --header-cap: 224px;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -43,12 +46,12 @@
 // ═══════════════════════════════════════════════════════════════════════════
 .conv-header {
   flex: 0 0 auto;
-  // `--header-cap` (248px por defecto): MEDIDO con Playwright tras el rediseño
-  // (`getBoundingClientRect`/`scrollHeight`) en varios tickets reales con los 7 metadatos +
-  // adjunto (fila 1 + título + badges + franja de meta = 231px de contenido real, consistente
-  // entre tickets porque los badges envuelven EN SU LUGAR sin cambiar el alto de fila) — se
-  // deja ~17px de margen sobre esos 231px. Entra en la fórmula de `.composer` de más abajo: si
-  // cambia, HAY que recalcular esa fórmula (la variable ya se comparte, pero el margen no).
+  // `--header-cap` (224px por defecto): REMEDIDO con Playwright (`getBoundingClientRect`/
+  // `scrollHeight`) en varios tickets reales con metadatos + adjunto (fila 1 + título + badges +
+  // franja de meta = 208px de contenido real, consistente entre tickets porque los badges
+  // envuelven EN SU LUGAR sin cambiar el alto de fila) — se deja ~16px de margen. Entra en la
+  // fórmula de `.composer` de más abajo: si cambia, HAY que recalcular esa fórmula (la variable
+  // ya se comparte, pero el margen no).
   max-height: var(--header-cap);
   overflow-y: auto;
   display: flex;
@@ -58,6 +61,18 @@
   padding: 14px 20px 12px;
   background: var(--mat-sys-surface);
   border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  // Angular Material le agrega a todo `mat-dialog-title` (que es lo que es este `<div>`, vía la
+  // directiva `mat-dialog-title` del template) un `::before` invisible (`content:""`, alto ~40px)
+  // para alinear el título a una baseline tipográfica — pensado para un título de texto normal,
+  // no para un contenedor `display:flex`. En un flex container cualquier `::before`/`::after` con
+  // `content` se vuelve un HIJO FLEX REAL: acá aparecía como una fila en blanco de ~40-60px antes
+  // de "TICKET #NNNNN" (el "espacio en blanco arriba" reportado), y encima competía por el
+  // presupuesto de `--header-cap`, empujando al resto del contenido a necesitar más espacio del
+  // que en verdad hace falta. Se anula por completo: acá no se usa esa baseline para nada.
+  &::before {
+    display: none;
+  }
 }
 
 .conv-header-row1 {
@@ -127,7 +142,15 @@
 // query), porque 2 líneas siguen siendo un máximo acotado y medible.
 .conv-title {
   margin: 0;
-  font-size: 21px;
+  // `flex: none` (= `flex-shrink: 0`), igual que sus hermanos `.conv-header-row1`/
+  // `.conv-header-panel`: SIN esto, cuando el contenido del header supera `--header-cap`,
+  // flexbox aplasta este `<h2>` (es el único de los 3 hijos que se puede achicar) ANTES de que
+  // el `overflow-y: auto` de `.conv-header` llegue a activarse — el título quedaba reducido a
+  // una astilla de ~7px con `overflow: hidden`, invisible pero con el `matTooltip` intacto
+  // (por eso la burbuja del tooltip aparecía "flotando" sobre los badges, sin título visible
+  // debajo). Con `flex: none`, si el contenido no entra, ahora sí scrollea de verdad.
+  flex: none;
+  font-size: 19px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--mat-sys-on-surface);
@@ -422,7 +445,7 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
-  font-size: 11px;
+  font-size: 9px;
 
   // Avatar circular de iniciales — color identificativo real (`ColoresService.avatar(hid)`,
   // el mismo que usan Board/Vacaciones/Semanal) para empleados; gris neutro (mismo helper,
@@ -441,9 +464,10 @@
   .conv-user {
     font-weight: 700;
     font-family: inherit; // nombre completo del usuario: se lee mejor en fuente normal
-    font-size: 14px;
+    font-size: 12px;
   }
   .conv-date {
+    font-size: 11px;
     color: var(--mat-sys-on-surface-variant);
     margin-left: auto; // empuja fecha + botón editar al extremo derecho, agrupados
   }
@@ -508,7 +532,7 @@
 }
 
 .conv-text {
-  font-size: 15.5px;
+  font-size: 13.5px;
   line-height: 1.7;
   max-width: 760px; // longitud de línea legible, aunque el modal sea más ancho
   overflow-wrap: anywhere; // el texto (incluidas palabras/URLs largas) siempre envuelve
@@ -1112,16 +1136,17 @@
 }
 
 // Con el panel abierto en celular, el contenido de `.conv-header` (fila 1 + título de hasta 2
-// líneas + badges/metadatos APILADOS, no en una sola franja como escritorio) mide ~353px
-// medido con Playwright — bastante más que los 248px que alcanzan para la franja compacta de
-// escritorio. `--header-cap` sube acá (con margen, cubriendo también un título de 2 líneas) EN
-// `:host` (no en `.conv-header-panel`: tiene que llegar también a `.composer`, su HERMANO, no
-// su descendiente) — al ser la MISMA variable que usa `.composer` para su propio tope, los dos
+// líneas + badges/metadatos APILADOS, no en una sola franja como escritorio) mide ~345px
+// REMEDIDO con Playwright el 2026-09-22 (antes 353px, bajó tras liberar el `::before` fugado de
+// Material) — bastante más que los 224px que alcanzan para la franja compacta de escritorio.
+// `--header-cap` sube acá (con margen, cubriendo también un título de 2 líneas) EN `:host` (no
+// en `.conv-header-panel`: tiene que llegar también a `.composer`, su HERMANO, no su
+// descendiente) — al ser la MISMA variable que usa `.composer` para su propio tope, los dos
 // se recalculan juntos: nunca hay que tocar `.composer` por separado para que "Enviar" se siga
 // viendo con el panel abierto.
 @media (max-width: 599px) {
   :host(.panel-open) {
-    --header-cap: 392px;
+    --header-cap: 384px;
   }
 }
 

@@ -74,9 +74,17 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
   `GET` (sin filtro = nacional; `?equipo={id}` = un equipo) — **lectura abierta a cualquier actor**;
   `POST`, `PUT /{id}`, `DELETE /{id}` — escritura autorizada: **cada empleado las SUYAS**, el
   Responsable las de su equipo, el ADMIN cualquiera (si no → 403). DTO: `{ id, usuarioHid, empleado,
-  equipoId, equipo, regional, fechaInicio, fechaFin, diasLaborables, diasVacacion, tipo
-  (VACACIONES|PERMISO), estado, nota, registradoPor, creadoEn }`. El backend recalcula
-  `diasVacacion = round(diasLaborables × 1,36)`. El "saldo" NO se lleva aquí (va en el formato).
+  equipoId, equipo, regional, fechaInicio, fechaFin, diasLaborables, diasVacacion, horas, tipo
+  (VACACIONES|PERMISO|PERMISO_HORAS), estado, nota, registradoPor, creadoEn }`. El backend recalcula
+  `diasVacacion` según `tipo`: `VACACIONES` = días de calendario del rango (`fechaFin-fechaInicio+1`);
+  `PERMISO` = `round(diasLaborables × 1,36)` (el CARGO al saldo — campo separado del rango de
+  fechas); `PERMISO_HORAS` = `0` (no descuenta, usa `horas` aparte, un solo día). El "saldo" NO se
+  lleva aquí (va en el formato).
+  - **`fechaFin` en `PERMISO` refleja `diasLaborables`** (los días realmente solicitados/ausentes),
+    **NO** `diasVacacion` (el cargo ×1,36) — son dos cosas distintas: el rango que se pinta en el
+    calendario vs. el monto que se descuenta del saldo. Antes del **2026-09-21** el frontend calculaba
+    mal `fechaFin` a partir de `diasVacacion`, inflando el rango pintado (ver `docs/decisiones.md`);
+    se corrigió ahí y con un backfill (`V25__fix_permiso_fecha_fin.sql`) para los registros previos.
 - **Feriados** `/api/feriados` (días no laborables de la empresa, nacionales, para el calendario de
   Vacaciones): `GET` (lista, **lectura abierta**); `POST`, `DELETE /{id}` — **solo ADMIN** (si no → 403).
   DTO: `{ id, nombre, fechaInicio, fechaFin, registradoPor, creadoEn }`. Puede ser un día o un rango.
