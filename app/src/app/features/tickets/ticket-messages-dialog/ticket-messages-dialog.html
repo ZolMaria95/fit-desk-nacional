@@ -53,11 +53,14 @@
       @if (header().fechaMod) { <span class="bl-item" matTooltip="Última modificación"><mat-icon>update</mat-icon>{{ header().fechaMod }}</span> }
       @if (header().creador) { <span class="bl-item" matTooltip="Creador"><mat-icon>person</mat-icon>{{ header().creador }}</span> }
       <span class="bl-item conv-assignee-item" matTooltip="Asignado"><mat-icon>assignment_ind</mat-icon>{{ header().asignado || 'Sin asignar' }}</span>
-      <button mat-icon-button class="assignee-edit" (click)="cambiarAsignado()"
-              [disabled]="soloLectura() || asignando() || sessionExpired()"
-              matTooltip="Cambiar asignado" aria-label="Cambiar asignado">
-        <mat-icon>person_add</mat-icon>
-      </button>
+      <!-- Reasignar: solo rol Helpdesk (en el alcance del cliente) o ADMIN. -->
+      @if (puedeReasignar()) {
+        <button mat-icon-button class="assignee-edit" (click)="cambiarAsignado()"
+                [disabled]="soloLectura() || asignando() || sessionExpired()"
+                matTooltip="Cambiar asignado" aria-label="Cambiar asignado">
+          <mat-icon>person_add</mat-icon>
+        </button>
+      }
 
       <span class="spacer"></span>
 
@@ -97,7 +100,7 @@
   </mat-menu>
 </div>
 
-<mat-dialog-content class="conv-body" (click)="onConvClick($event)">
+<mat-dialog-content #convBody class="conv-body" (click)="onConvClick($event)" (scroll)="onConvScroll()">
   @if (sessionExpired()) {
     <div class="conv-expired">
       <mat-icon>lock</mat-icon>
@@ -112,7 +115,7 @@
   } @else {
     @if (hasOlder()) {
       <div class="conv-older">
-        <button mat-stroked-button (click)="loadOlder()" [disabled]="loadingOlder()">
+        <button mat-stroked-button (click)="verAnteriores()" [disabled]="loadingOlder()">
           <mat-icon>expand_less</mat-icon> Ver mensajes anteriores
         </button>
       </div>

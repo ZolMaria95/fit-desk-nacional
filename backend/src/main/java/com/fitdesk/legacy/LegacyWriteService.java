@@ -69,7 +69,7 @@ public class LegacyWriteService {
         if (t == null) {
             return false;
         }
-        applyFields(t, fields);
+        applyFields(t, fields, false);
         return true;
     }
 
@@ -95,10 +95,14 @@ public class LegacyWriteService {
                 }
                 ObjectNode single = mapper.createObjectNode();
                 single.set(parts[1], e.getValue());
-                applyFields(t, single);
+                applyFields(t, single, false);
             } else {
+                // Distingue creación de actualización ANTES del upsert: el board-por-cliente
+                // (abajo, en applyFields) solo debe aplicarse al crear, nunca a un PATCH sobre
+                // una tarea que ya vivía en un tablero (aunque ese PATCH reenvíe 'client'/'ticket').
+                boolean esNueva = Tarea.findByCodigo(key) == null;
                 Tarea t = upsertTarea(key);
-                applyFields(t, e.getValue());
+                applyFields(t, e.getValue(), esNueva);
             }
         }
     }
@@ -154,7 +158,7 @@ public class LegacyWriteService {
         t.workflowEstado = workflowByStatus(null);
         // Fuerza el INSERT ya: si el codigo choca por creación concurrente, falla AQUÍ y el resource reintenta.
         t.persistAndFlush();
-        applyFields(t, fields);
+        applyFields(t, fields, true);
         return t.codigo;
     }
 
@@ -170,8 +174,10 @@ public class LegacyWriteService {
         return t;
     }
 
-    /** Aplica los campos presentes de una story (legacy) sobre la fila tarea. */
-    private void applyFields(Tarea t, JsonNode f) {
+    /** Aplica los campos presentes de una story (legacy) sobre la fila tarea.
+     *  {@code creando}: true solo en el momento de CREAR la tarea (nunca en un PATCH posterior) —
+     *  gobierna si el equipo responsable del cliente puede mandar sobre el tablero, ver abajo. */
+    private void applyFields(Tarea t, JsonNode f, boolean creando) {
         if (f == null || !f.isObject()) {
             return;
         }
@@ -185,8 +191,22 @@ public class LegacyWriteService {
         if (f.has("status")) {
             t.workflowEstado = workflowByStatus(text(f, "status"));
         }
+        // El cliente se resuelve ANTES que el board: al CREAR una tarea con ticket, el equipo
+        // responsable del cliente (si está registrado) manda sobre el 'board' que mande el
+        // frontend — que solo refleja el tablero que el actor tenía abierto en pantalla, no el
+        // dueño real del cliente (mismo criterio que /stories/desde-ticket-asignado; ver
+        // docs/decisiones.md). En un PATCH sobre una tarea YA EXISTENTE (creando=false) nunca se
+        // reasigna de tablero solo por tocar estos campos.
+        Cliente clienteResuelto = f.has("client") ? clienteBy(text(f, "client")) : null;
+        Board boardPorCliente = null;
+        if (creando && text(f, "ticket") != null && clienteResuelto != null && clienteResuelto.equipoResponsable != null) {
+            boardPorCliente = Board.<Board>find("equipo.id = ?1 and activo = true order by id",
+                    clienteResuelto.equipoResponsable.id).firstResult();
+        }
         // El board debe resolverse ANTES que el sprint (el sprint es único por board).
-        if (f.has("board")) {
+        if (boardPorCliente != null) {
+            t.board = boardPorCliente;
+        } else if (f.has("board")) {
             Board b = boardByCodigo(text(f, "board"));
             if (b != null) {
                 t.board = b;
@@ -200,7 +220,7 @@ public class LegacyWriteService {
         }
         if (f.has("client")) {
             String raw = text(f, "client");
-            t.cliente = clienteBy(raw); // FK si el cliente está registrado; null si no
+            t.cliente = clienteResuelto; // ya resuelto arriba (FK si el cliente está registrado; null si no)
             // Conserva el código crudo (p. ej. helpdesk_client_id del catálogo) para no perder
             // un cliente NO registrado (reunión con cualquier cliente del HelpDesk).
             t.clienteCodigoRaw = raw != null && !raw.isBlank() ? raw : null;

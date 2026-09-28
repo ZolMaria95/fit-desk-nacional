@@ -379,6 +379,10 @@
   &.on { color: #c0392b; }
   &.pend.on { color: #9c27b0; }
   &.save.on { color: var(--brand, #048abf); }
+  // Editar / Eliminar ticket (solo rol Helpdesk o ADMIN): siempre visibles, como en el HelpDesk.
+  &.edit { color: var(--brand, #048abf); }
+  &.del { color: #c0392b; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; &:hover { background: transparent; } }
 }
 
 .tc-ver {
@@ -429,6 +433,14 @@
     flex: none;
     width: 32px;
     padding: 4px;
+  }
+  // Con Editar/Eliminar (rol Helpdesk/ADMIN) el pie suma dos íconos: el nombre del asignado cede
+  // ancho (se recorta con …, el tooltip conserva el nombre completo) para que todo quepa en una fila.
+  .tc-foot.con-gestion {
+    gap: 2px;
+    padding: 8px 8px;
+    .tc-assignee { max-width: 96px; }
+    .tc-flag { width: 24px; }
   }
 }
 
@@ -502,5 +514,7 @@
     &.on { color: #f08a7a; }
     &.pend.on { color: #d08ae0; }
     &.save.on { color: #4fb8e0; }
+    &.edit { color: #4fb8e0; }
+    &.del { color: #f08a7a; }
   }
 }

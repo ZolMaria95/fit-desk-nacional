@@ -80,6 +80,56 @@ public class LegacyWriteResource {
         throw last;
     }
 
+    @Inject
+    TicketGestion gestionTickets;
+
+    /**
+     * DELETE /api/legacy/tickets/{id}: elimina un ticket del HelpDesk. SOLO rol HELPDESK (en el alcance
+     * del cliente del ticket) o ADMIN. Orden: autoriza → DELETE al HelpDesk con el Authorization del
+     * usuario → SOLO si el HelpDesk confirma (2xx) se borra la tarea espejo y los overlays del ticket
+     * (única excepción a "tareas con ticket no se eliminan"). Si el HelpDesk falla, no se toca nada local
+     * y se devuelve su respuesta tal cual. El proxy /api/v1 bloquea el DELETE directo de tickets.
+     */
+    @DELETE
+    @Path("/tickets/{id}")
+    public Response deleteTicket(@PathParam("id") String id, @HeaderParam("X-Actor-Hid") String actorHid,
+            @HeaderParam("Authorization") String authorization) {
+        if (id == null || !id.matches("\\d+")) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"error\":{\"message\":\"Número de ticket inválido.\"}}").build();
+        }
+        try {
+            TicketGestion.ClienteDelTicket c = gestionTickets.clienteDelTicket(id, authorization);
+            if (c.status() < 200 || c.status() >= 300) {
+                return Response.status(c.status())
+                        .entity("{\"error\":{\"message\":\"No se pudo leer el ticket en el HelpDesk.\"}}").build();
+            }
+            if (!Actor.puedeGestionarTicket(actorHid, c.clientId())) {
+                return Response.status(Response.Status.FORBIDDEN)
+                        .entity("{\"error\":{\"message\":\"Solo el rol Helpdesk (en su alcance) o un administrador pueden eliminar este ticket.\"}}")
+                        .build();
+            }
+            java.net.http.HttpResponse<byte[]> r = gestionTickets.borrarEnHelpdesk(id, authorization);
+            if (r.statusCode() < 200 || r.statusCode() >= 300) {
+                return Response.status(r.statusCode()).entity(r.body()).build();
+            }
+            java.util.List<String> tareas = gestionTickets.limpiarLocal(id);
+            String msg = "Ticket eliminado correctamente.";
+            try {
+                com.fasterxml.jackson.databind.JsonNode n = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r.body());
+                if (n != null && n.hasNonNull("message")) {
+                    msg = n.get("message").asText();
+                }
+            } catch (Exception ignored) {
+                // el HelpDesk no devolvió JSON: se usa el mensaje por defecto
+            }
+            return Response.ok(Map.of("ok", true, "message", msg, "tareasEliminadas", tareas)).build();
+        } catch (Exception ex) {
+            return Response.status(Response.Status.BAD_GATEWAY)
+                    .entity("{\"error\":{\"message\":\"No se pudo contactar al HelpDesk.\"}}").build();
+        }
+    }
+
     @DELETE
     @Path("/stories/stories/{id}")
     public Response deleteStory(@PathParam("id") String id, @HeaderParam("X-Actor-Hid") String actorHid) {

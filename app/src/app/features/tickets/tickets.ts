@@ -26,6 +26,7 @@ import { EnviarEquipoDialog } from '../board/transferir/enviar-equipo-dialog';
 import { EscalarDialog } from '../board/transferir/escalar-dialog';
 import { TicketMessagesDialog } from './ticket-messages-dialog/ticket-messages-dialog';
 import { AssignTicketDialog } from './assign-ticket-dialog/assign-ticket-dialog';
+import { abrirEditarTicket, eliminarTicket } from './ticket-acciones';
 import { PendienteDateDialog, PendienteDateResult } from '../pendientes/pendiente-date-dialog/pendiente-date-dialog';
 import { TicketCard } from './ticket-card/ticket-card';
 import { TIPO_NOMBRE } from './helpdesk.constants';
@@ -146,6 +147,21 @@ export class Tickets implements OnDestroy {
     afterNextRender(() => {
       this.shell.setFilters(this.filtersTpl() ?? null);
       this.shell.setSort(this.sortTpl() ?? null);
+    });
+    // La búsqueda por N° muestra un resultado APARTE (`remoteResult`), fuera del pool que parchea
+    // HelpdeskService: cuando se confirma un cambio de ESE ticket (editar, estado, reasignar) se
+    // vuelve a traer; si se eliminó, desaparece. `untracked` evita re-ejecuciones por lo que escribe.
+    effect(() => {
+      const m = this.hd.ticketMutado();
+      if (!m) return;
+      untracked(() => {
+        const r = this.remoteResult();
+        if (!r || r.ticket !== m.ticket) return;
+        if (m.eliminado) { this.remoteResult.set(null); return; }
+        void this.hd.searchTicketRemote(m.ticket).then((t) => {
+          if (t && this.remoteResult()?.ticket === t.ticket) this.remoteResult.set(t);
+        });
+      });
     });
     // Espera los catálogos de clientes Y estados (para mapear válidos→client_id y
     // no-finalizados→ticket_status_id) y luego consulta fresca. Así Pendientes filtra
@@ -687,6 +703,17 @@ export class Tickets implements OnDestroy {
 
   openAssign(t: Ticket): void {
     this.dialog.open(AssignTicketDialog, { data: { ticket: t }, width: '440px', maxWidth: '95vw' });
+  }
+
+  /** Editar / eliminar / reasignar: rol HELPDESK en el alcance del cliente, o ADMIN. */
+  puedeGestionar(t: Ticket): boolean {
+    return this.auth.puedeGestionarTicket(t.clientId);
+  }
+  editarTicket(t: Ticket): void {
+    void abrirEditarTicket(this.dialog, t);
+  }
+  eliminarTicket(t: Ticket): void {
+    void eliminarTicket(this.dialog, this.hd, this.snack, t);
   }
 
   async changeStatus(t: Ticket, estado: string): Promise<void> {

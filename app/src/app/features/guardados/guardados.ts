@@ -1,6 +1,8 @@
 import { Component, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { abrirEditarTicket, eliminarTicket } from '../tickets/ticket-acciones';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
@@ -24,6 +26,7 @@ export class Guardados {
   private readonly auth = inject(AuthService);
   private readonly hd = inject(HelpdeskService);
   private readonly dialog = inject(MatDialog);
+  private readonly snack = inject(MatSnackBar);
 
   readonly loading = signal(true);
   readonly tickets = signal<Ticket[]>([]);
@@ -71,5 +74,20 @@ export class Guardados {
   }
   openConversation(t: Ticket): void {
     this.dialog.open(TicketMessagesDialog, { data: { ticketId: t.ticket }, width: '920px', maxWidth: '92vw' });
+  }
+  /** Editar / eliminar: rol HELPDESK en el alcance del cliente, o ADMIN. */
+  puedeGestionar(t: Ticket): boolean {
+    return this.auth.puedeGestionarTicket(t.clientId);
+  }
+  /** Guardados tiene su propia lista (no el pool de Tickets): tras guardar se recarga ese ticket. */
+  async editarTicket(t: Ticket): Promise<void> {
+    if (!(await abrirEditarTicket(this.dialog, t))) return;
+    const fresco = await this.hd.searchTicketRemote(t.ticket);
+    if (fresco) this.tickets.set(this.tickets().map((x) => (x.ticket === t.ticket ? fresco : x)));
+  }
+  async eliminarTicket(t: Ticket): Promise<void> {
+    if (await eliminarTicket(this.dialog, this.hd, this.snack, t)) {
+      this.tickets.set(this.tickets().filter((x) => x.ticket !== t.ticket));
+    }
   }
 }

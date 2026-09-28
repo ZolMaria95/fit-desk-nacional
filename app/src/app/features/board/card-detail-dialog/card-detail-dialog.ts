@@ -465,9 +465,11 @@ export class CardDetailDialog {
         this.snack.open('No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.', 'OK', { duration: 4000 });
         return;
       }
-      // Al CREAR siempre se empuja la asignación al API (sin omitir por coincidir
-      // con el prefill): garantiza que el ticket quede asignado al técnico elegido.
-      this.maybeAssignHd(ticket, assignee);
+      // Al CREAR se empuja la asignación al API solo si el asignado elegido DIFIERE del que ya
+      // tiene el ticket: si coincide no hay nada que reasignar (y así crear una tarea desde un
+      // ticket sigue funcionando para quien no tiene el rol Helpdesk).
+      const asignadoTicket = String(this.input.prefill?.assignee || '').trim().toUpperCase();
+      this.maybeAssignHd(ticket, assignee, asignadoTicket || null);
       this.ref.close(true);
       return;
     }
@@ -508,9 +510,20 @@ export class CardDetailDialog {
     this.ref.close(true);
   }
 
+  /**
+   * Tarea CON ticket: el asignado ES el del ticket, y reasignar un ticket es potestad del rol
+   * HELPDESK (en el alcance del cliente) o ADMIN. Para el resto el campo queda de solo lectura
+   * (el backend además rechaza la reasignación). Tareas sin ticket: sin cambios.
+   */
+  asignadoBloqueado(): boolean {
+    return !!this.ticket.trim() && !this.auth.puedeGestionarTicket(this.clientId);
+  }
+
   /** Asigna el ticket asociado al empleado en el API (si hay ticket y cambió el asignado). */
   private maybeAssignHd(ticket: string, assignee: string | null, prev?: string | null): void {
     if (!ticket || !assignee || assignee === prev) return;
+    // Sin permiso de reasignar no se intenta (el backend lo rechazaría con 403).
+    if (!this.auth.puedeGestionarTicket(this.clientId)) return;
     this.helpdesk.assignTicket(ticket, assignee).then((ok) => {
       if (ok) this.snack.open(`Ticket #${ticket} asignado a ${assignee} en el Helpdesk.`, '', { duration: 2500 });
       else this.snack.open(`No se pudo asignar el ticket #${ticket} en el Helpdesk.`, 'OK', { duration: 4000 });

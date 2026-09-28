@@ -43,8 +43,16 @@ export const helpdeskAuthInterceptor: HttpInterceptorFn = (req, next) => {
   const isAuthCall = req.url.includes('/auth/');
   const safe = req.context.get(HD_SAFE);
 
-  const withAuth = (t: string | null) =>
-    isProxy && t ? req.clone({ setHeaders: { Authorization: `Bearer ${t}` } }) : req;
+  // Las escrituras al HelpDesk llevan también QUIÉN las hace: el backend autoriza con eso lo que
+  // exige rol HELPDESK (editar/reasignar tickets). Misma postura que el resto del API propio.
+  const esEscritura = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+  const actorHid = auth.session()?.id;
+  const withAuth = (t: string | null) => {
+    if (!isProxy || !t) return req;
+    const headers: Record<string, string> = { Authorization: `Bearer ${t}` };
+    if (isHelpdeskProxy && esEscritura && actorHid) headers['X-Actor-Hid'] = String(actorHid);
+    return req.clone({ setHeaders: headers });
+  };
 
   // Cierra todos los popups y manda al login. Idempotente ante 401 concurrentes
   // (el guard de `router.url` evita re-navegar; tras clearSession, las requests

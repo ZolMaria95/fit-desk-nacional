@@ -67,7 +67,7 @@
     }
   </div>
 
-  <div class="tc-foot">
+  <div class="tc-foot" [class.con-gestion]="puedeGestionar()">
     <span class="tc-assignee" [class.unassigned]="!avatar().asignado" [matTooltip]="asignadoLabel()">
       <span class="tc-assignee-dot" [style.background]="avatar().color"></span>
       <span class="tc-assignee-name">{{ avatar().nombre }}</span>
@@ -87,6 +87,16 @@
       <mat-icon>alarm</mat-icon>
     </button>
     <span class="tc-foot-spacer"></span>
+    @if (puedeGestionar()) {
+      <button class="tc-flag edit" [disabled]="soloLectura()" (click)="$event.stopPropagation(); editar.emit()"
+              [matTooltip]="soloLectura() ? 'Ticket cerrado — no se puede editar' : 'Editar ticket'" aria-label="Editar ticket">
+        <mat-icon>edit</mat-icon>
+      </button>
+      <button class="tc-flag del" (click)="$event.stopPropagation(); eliminar.emit()"
+              matTooltip="Eliminar ticket" aria-label="Eliminar ticket">
+        <mat-icon>delete</mat-icon>
+      </button>
+    }
     <button class="tc-ver" (click)="$event.stopPropagation(); verConversacion.emit()" matTooltip="Ver conversación">
       <mat-icon>chat</mat-icon><span class="tc-ver-txt">Ver</span>
     </button>
@@ -97,8 +107,9 @@
 </div>
 
 <mat-menu #menu="matMenu">
-  <button mat-menu-item [disabled]="soloLectura()" (click)="asignar.emit()"
-          [matTooltip]="soloLectura() ? 'Ticket cerrado — no se puede reasignar' : ''">
+  <button mat-menu-item [disabled]="soloLectura() || !puedeGestionar()" (click)="asignar.emit()"
+          [matTooltip]="soloLectura() ? 'Ticket cerrado — no se puede reasignar'
+            : !puedeGestionar() ? 'La reasignación la hace el rol Helpdesk' : ''">
     <mat-icon>person_add</mat-icon> Asignar / reasignar
   </button>
   <button mat-menu-item [matMenuTriggerFor]="estadoMenu"

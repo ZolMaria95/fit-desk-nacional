@@ -95,6 +95,20 @@ export class AuthService {
   readonly puedeAsignarAdmin = computed(() => this.esAdminPlataforma());
   /** Gerencia: visibilidad global de SOLO LECTURA (no opera). */
   readonly esGerencia = computed(() => this._rolesPlataforma().includes('GERENCIA'));
+  /**
+   * Helpdesk: EDITA, ELIMINA y REASIGNA tickets del HelpDesk dentro del alcance de su Asignación
+   * (cambiar el estado sigue abierto a todos). Es un rol de PLATAFORMA — no confundir con el
+   * `role_description` del HelpDesk ni con `esSupervisor()`. La autorización real la hace el backend.
+   */
+  readonly esHelpdesk = computed(() => this._rolesPlataforma().includes('HELPDESK'));
+  /** Alcance del rol HELPDESK: `global` o la lista de client_id (HelpDesk) que cubre. */
+  private readonly _ticketsGestionables = signal<{ global: boolean; clientes: string[] }>({ global: false, clientes: [] });
+  private readonly clientesGestionables = computed(() => new Set(this._ticketsGestionables().clientes));
+  /** ¿Puede editar/eliminar/reasignar un ticket de este cliente? ADMIN siempre. */
+  puedeGestionarTicket(clientId: string | null | undefined): boolean {
+    if (this.esAdminPlataforma() || this._ticketsGestionables().global) return true;
+    return !!clientId && this.clientesGestionables().has(String(clientId).trim());
+  }
 
   /**
    * "Descargar la conversación SIN anonimizar", para responsables. El PDF sale con los nombres
@@ -233,12 +247,33 @@ export class AuthService {
 
   private async cargarRolesPlataforma(): Promise<void> {
     const hid = this._session()?.id;
-    if (!hid || environment.dataBackend !== 'quarkus') { this._rolesPlataforma.set([]); return; }
+    if (!hid || environment.dataBackend !== 'quarkus') {
+      this._rolesPlataforma.set([]);
+      this._ticketsGestionables.set({ global: false, clientes: [] });
+      return;
+    }
     try {
       const r = await fetch(`${environment.quarkusApiUrl}/api/admin/mis-roles/${encodeURIComponent(hid)}`);
       this._rolesPlataforma.set(r.ok ? await r.json() : []);
     } catch {
       this._rolesPlataforma.set([]);
+    }
+    await this.cargarTicketsGestionables(hid);
+  }
+
+  /** Alcance del rol HELPDESK (clientes cuyos tickets puede editar/eliminar/reasignar). */
+  private async cargarTicketsGestionables(hid: string): Promise<void> {
+    try {
+      const r = await fetch(`${environment.quarkusApiUrl}/api/legacy/perfil/tickets-gestionables`, {
+        headers: { 'X-Actor-Hid': String(hid) },
+      });
+      const d = r.ok ? await r.json() : null;
+      this._ticketsGestionables.set({
+        global: !!d?.global,
+        clientes: Array.isArray(d?.clientes) ? d.clientes.map((c: unknown) => String(c)) : [],
+      });
+    } catch {
+      this._ticketsGestionables.set({ global: false, clientes: [] });
     }
   }
 
@@ -258,6 +293,7 @@ export class AuthService {
     this.refreshTimer = null;
     localStorage.removeItem(SESSION_KEY);
     this._session.set(null);
+    this._ticketsGestionables.set({ global: false, clientes: [] });
     this._rolesPlataforma.set([]);
     this.rolesPromise = null;
     this.pdfSinAnonimizar.set(false); // la excepción de privacidad no sobrevive a la sesión

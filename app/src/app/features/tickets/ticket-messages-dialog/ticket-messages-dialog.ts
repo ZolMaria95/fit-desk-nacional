@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, Injector, OnDestroy, afterNextRender, computed, inject, signal, viewChild } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { wireDialogEsc } from '../../../core/dialog-esc';
 import { clearDraft, loadDraft, saveDraft } from '../../../core/draft-store';
@@ -153,6 +153,19 @@ export class TicketMessagesDialog implements OnDestroy {
   // Editor de respuesta con formato (contenteditable): escribir/pegar/dar
   // formato aquí ya viaja como HTML, así el mensaje conserva el formato.
   readonly composerInput = viewChild.required<ElementRef<HTMLElement>>('composerInput');
+
+  // ── Scroll de la conversación: abre mostrando el ÚLTIMO mensaje ──
+  // Los mensajes van de viejo (arriba) a nuevo (abajo); antes el modal quedaba arriba y había que
+  // bajar a mano. `pegadoAlFondo` mantiene la vista abajo mientras cargan imágenes tarde, pero se
+  // suelta en cuanto el usuario sube a leer (no se lo vuelve a bajar a la fuerza).
+  private readonly convBody = viewChild<ElementRef<HTMLElement>>('convBody');
+  private readonly injector = inject(Injector);
+  private pegadoAlFondo = true;
+  private escuchaCargas: HTMLElement | null = null;
+  private readonly onMediaCargada = () => {
+    if (this.anclaLectura) this.reubicarAncla();
+    else if (this.pegadoAlFondo) this.scrollAlFinalYa();
+  };
   composerFiles: File[] = [];
   readonly sending = signal(false);
   readonly sendStatus = signal('');
@@ -208,6 +221,7 @@ export class TicketMessagesDialog implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.draftTimer) clearTimeout(this.draftTimer);
+    this.escuchaCargas?.removeEventListener('load', this.onMediaCargada, true);
     this.revokeAttachBlobs(); // libera los blob URLs de los adjuntos
     // Cierre sin envío: conserva el borrador 90 s DESDE el cierre (re-estampa la marca).
     // Solo texto: los adjuntos (File) no se pueden serializar. Tras un envío exitoso
@@ -284,6 +298,10 @@ export class TicketMessagesDialog implements OnDestroy {
     this.loading.set(false);
     // Muestra el bloque más reciente; los anteriores se cargan bajo demanda.
     await this.loadOlder();
+    // Abre (o reabre tras enviar/editar, que vuelven a llamar a load) mostrando el último mensaje.
+    this.pegadoAlFondo = true;
+    this.anclaLectura = null;
+    this.scrollAlFinal();
     // Adjunto a nivel ticket (no de un mensaje) → thumbnail si es imagen, si no botón de descarga.
     if (this.ticketObj) this.hd.ticketAttachmentIds(this.ticketObj).then((ids) => {
       this.ticketAttachments.set(ids);
@@ -307,6 +325,86 @@ export class TicketMessagesDialog implements OnDestroy {
     // Resuelve (progresivo) los adjuntos del bloque recién cargado → los que sean imagen se pintan
     // como thumbnail; los demás siguen como chip. No bloquea el render.
     for (const msg of procesados) for (const a of msg.adjuntos) void this.resolverAdjunto(a.id);
+  }
+
+  /** Botón "Ver mensajes anteriores": antepone el bloque previo SIN mover lo que el usuario está
+   *  leyendo (compensa el alto agregado arriba). */
+  async verAnteriores(): Promise<void> {
+    const el = this.convBody()?.nativeElement;
+    if (!el) { await this.loadOlder(); return; }
+    // Ancla: el primer mensaje visible hoy. Tras anteponer el bloque (y mientras sus imágenes
+    // terminan de cargar y lo hacen crecer) se lo mantiene en el mismo lugar de la pantalla.
+    const antes = this.mensajesDom(el);
+    const ancla = antes[0];
+    const offset = ancla ? ancla.getBoundingClientRect().top - el.getBoundingClientRect().top : 0;
+    const previos = antes.length;
+    this.pegadoAlFondo = false;
+    await this.loadOlder();
+    afterNextRender(() => {
+      this.escucharCargasDeMedia();
+      // `track $index`: los nodos se reusan por posición, así que el mensaje que era el primero
+      // ahora está en el índice (total nuevo − total previo).
+      const idx = this.mensajesDom(el).length - previos;
+      this.anclaLectura = { idx, offset, hasta: Date.now() + 5000 };
+      this.reubicarAncla();
+    }, { injector: this.injector });
+  }
+
+  private anclaLectura: { idx: number; offset: number; hasta: number } | null = null;
+
+  private mensajesDom(el: HTMLElement): HTMLElement[] {
+    return Array.from(el.querySelectorAll<HTMLElement>('.conv-msg'));
+  }
+
+  /** Mantiene el mensaje anclado en la misma posición (tras anteponer mensajes / cargar imágenes). */
+  private reubicarAncla(): void {
+    const el = this.convBody()?.nativeElement;
+    const a = this.anclaLectura;
+    if (!el || !a) return;
+    if (Date.now() > a.hasta) { this.anclaLectura = null; return; }
+    const msg = this.mensajesDom(el)[a.idx];
+    if (!msg) return;
+    const actual = msg.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    el.scrollTop += actual - a.offset;
+  }
+
+  /** Scroll del usuario: si se aleja del fondo, se deja de "pegar"; si vuelve abajo, se re-pega. */
+  onConvScroll(): void {
+    const el = this.convBody()?.nativeElement;
+    if (!el) return;
+    this.pegadoAlFondo = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    // Si el usuario se desplazó por su cuenta, se suelta el ancla (nuestro propio reubicado deja
+    // el ancla exactamente en su lugar, así que no la cancela).
+    const a = this.anclaLectura;
+    const msg = a ? this.mensajesDom(el)[a.idx] : null;
+    if (a && msg && Math.abs(msg.getBoundingClientRect().top - el.getBoundingClientRect().top - a.offset) > 4) {
+      this.anclaLectura = null;
+    }
+  }
+
+  /** Baja al último mensaje tras el próximo render (componente zoneless: el DOM de los mensajes
+   *  recién seteados todavía no existe en este tick). */
+  private scrollAlFinal(): void {
+    afterNextRender(() => {
+      this.escucharCargasDeMedia();
+      this.scrollAlFinalYa();
+    }, { injector: this.injector });
+  }
+
+  private scrollAlFinalYa(): void {
+    const el = this.convBody()?.nativeElement;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  /** Las imágenes (thumbnails de adjuntos, imágenes embebidas) cargan DESPUÉS del primer render y
+   *  hacen crecer la conversación: el evento `load` no burbujea, pero se captura en fase de captura
+   *  sobre el contenedor. Mientras siga "pegado al fondo", cada carga lo vuelve a bajar. */
+  private escucharCargasDeMedia(): void {
+    const el = this.convBody()?.nativeElement ?? null;
+    if (!el || el === this.escuchaCargas) return;
+    this.escuchaCargas?.removeEventListener('load', this.onMediaCargada, true);
+    el.addEventListener('load', this.onMediaCargada, true);
+    this.escuchaCargas = el;
   }
 
   /** Cierra la conversación y va al login (sesión expirada). */
@@ -333,9 +431,15 @@ export class TicketMessagesDialog implements OnDestroy {
     }
   }
 
+  /** Reasignar el ticket: rol HELPDESK en el alcance del cliente, o ADMIN (el backend lo re-exige). */
+  puedeReasignar(): boolean {
+    this.header(); // dependencia reactiva: `ticketObj` se completa junto con el header al cargar
+    return this.auth.puedeGestionarTicket(this.ticketObj?.clientId);
+  }
+
   /** Abre el modal de asignación (reusa AssignTicketDialog) y refresca el header al asignar. */
   async cambiarAsignado(): Promise<void> {
-    if (this.soloLectura() || this.asignando() || !this.ticketObj) return;
+    if (this.soloLectura() || this.asignando() || !this.ticketObj || !this.puedeReasignar()) return;
     this.asignando.set(true);
     const ok = await firstValueFrom(
       this.dialog

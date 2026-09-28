@@ -67,7 +67,7 @@ erDiagram
 
 ## Roles y permisos
 
-**5 roles** (se eliminó `DESPACHADOR` — 2026-07-06; ver [decisiones.md](../decisiones.md) y
+**6 roles** (se agregó `HELPDESK` — 2026-09-27, ver nota abajo; se eliminó `DESPACHADOR` — 2026-07-06; ver [decisiones.md](../decisiones.md) y
 [12-roles-y-responsabilidades.md](12-roles-y-responsabilidades.md)). Los roles se definen **en la
 plataforma** (Asignaciones), no por el `role_description` del HelpDesk.
 
@@ -80,6 +80,14 @@ plataforma** (Asignaciones), no por el `role_description` del HelpDesk.
 | Gestionar Sprint/Board | — | sus boards | — | — | ✔ |
 | Ver (visibilidad) | sus Tareas | su equipo + sus clientes (nacional) | sus Tareas | Global (R) | Global |
 | Administración | — | — | — | — | ✔ |
+
+> **Helpdesk (nuevo, 2026-09-27):** 6.º rol de plataforma. Sobre los **tickets del HelpDesk** de los
+> clientes que cubre su alcance (EQUIPO / REGIONAL / CLIENTE / GLOBAL) puede **editar** (módulo, tipo,
+> orden, N° de incidencia, asunto, adjunto), **eliminar** (ticket + su tarea espejo) y **reasignar**.
+> ADMIN también puede, siempre. **Cambiar el estado** de un ticket sigue abierto a todos. Reasignar un
+> ticket pasa a ser **exclusivo** de HELPDESK/ADMIN (antes lo hacía cualquiera). El gating vive en el
+> backend (proxy `/api/v1` + `DELETE /api/legacy/tickets/{id}`). No confundir con el `role_description`
+> del HelpDesk ni con el antiguo "Despachador (HelpDesk)" eliminado en 2026-07-06.
 
 > **Especialista (redefinido):** ejecutor **nacional acotado** — solo trabaja/crea lo suyo; para
 > reasignar o transferir **envía una solicitud** (con explicación) al **Responsable de Equipo**, que

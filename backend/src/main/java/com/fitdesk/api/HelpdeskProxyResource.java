@@ -3,6 +3,7 @@ package com.fitdesk.api;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -10,12 +11,16 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import com.fitdesk.http.HttpRetry;
 
+import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -75,6 +80,11 @@ public class HelpdeskProxyResource {
     @DELETE
     @Path("/{path:.*}")
     public Response delete(@PathParam("path") String path, @Context UriInfo uriInfo, @Context HttpHeaders headers) {
+        // Borrar un ticket NO pasa por el relay: se hace por DELETE /api/legacy/tickets/{id}, que
+        // autoriza (rol HELPDESK/ADMIN en alcance) y además limpia la tarea espejo en la misma operación.
+        if (TICKET_PATH.matcher(path == null ? "" : path).matches()) {
+            return denegar("Para eliminar un ticket usa la acción Eliminar de FitDesk.");
+        }
         return forward("DELETE", path, uriInfo, headers, new byte[0]);
     }
 
@@ -89,7 +99,80 @@ public class HelpdeskProxyResource {
     @Path("/{path:.*}")
     public Response put(@PathParam("path") String path, @Context UriInfo uriInfo, @Context HttpHeaders headers,
             InputStream body) throws IOException {
-        return forward("PUT", path, uriInfo, headers, readAll(body));
+        byte[] bytes = readAll(body);
+        Response denegado = guardaEdicionTicket(path, headers, bytes);
+        if (denegado != null) {
+            return denegado;
+        }
+        return forward("PUT", path, uriInfo, headers, bytes);
+    }
+
+    // ── Gating del rol HELPDESK sobre escrituras de tickets ─────────────────────────────
+    // Cambiar SOLO el estado (`ticket_status_id`) sigue abierto a todos. Cualquier otro campo
+    // (reasignar `assigned_user_id`, asunto, módulo, tipo, orden, incidencia, adjunto…) exige
+    // HELPDESK (en su alcance) o ADMIN. Es server-side a propósito: ocultar botones en Angular no
+    // alcanza (un bundle PWA viejo seguiría llamando — incidentes TA-224/TA-230). El actor llega en
+    // X-Actor-Hid, misma postura que el resto del sistema (ver Actor).
+
+    private static final Pattern TICKET_PATH = Pattern.compile("^tickets/tickets/(\\d+)/?$");
+
+    private static final Set<String> CAMPOS_LIBRES = Set.of("ticket_status_id");
+
+    @Inject
+    TicketGestion gestion;
+
+    private Response guardaEdicionTicket(String path, HttpHeaders headers, byte[] body) {
+        Matcher m = TICKET_PATH.matcher(path == null ? "" : path);
+        if (!m.matches()) {
+            return null;
+        }
+        if (soloCamposLibres(headers.getMediaType(), body)) {
+            return null;
+        }
+        String actor = headers.getHeaderString("X-Actor-Hid");
+        String ticketId = m.group(1);
+        try {
+            TicketGestion.ClienteDelTicket c = gestion.clienteDelTicket(ticketId, headers.getHeaderString("Authorization"));
+            if (c.status() < 200 || c.status() >= 300) {
+                return null; // el ticket no se pudo leer (401/404…): que responda el propio HelpDesk al PUT
+            }
+            if (Actor.puedeGestionarTicket(actor, c.clientId())) {
+                return null;
+            }
+        } catch (Exception ex) {
+            LOG.warnf("Guarda de edición de ticket %s: no se pudo leer el ticket (%s)", ticketId, ex.toString());
+            return Response.status(Response.Status.BAD_GATEWAY).type(MediaType.APPLICATION_JSON)
+                    .entity("{\"error\":{\"message\":\"No se pudo verificar el ticket en el HelpDesk.\"}}").build();
+        }
+        return denegar("Solo el rol Helpdesk (en su alcance) o un administrador pueden editar o reasignar este ticket.");
+    }
+
+    /** ¿El body del PUT toca SOLO campos abiertos a todos (hoy: el estado)? Multipart = no (trae archivo). */
+    private static boolean soloCamposLibres(MediaType type, byte[] body) {
+        if (body == null || body.length == 0) {
+            return true;
+        }
+        if (type == null || !MediaType.APPLICATION_FORM_URLENCODED_TYPE.isCompatible(type)) {
+            return false;
+        }
+        String raw = new String(body, StandardCharsets.UTF_8);
+        for (String par : raw.split("&")) {
+            if (par.isBlank()) {
+                continue;
+            }
+            int eq = par.indexOf('=');
+            String key = URLDecoder.decode(eq >= 0 ? par.substring(0, eq) : par, StandardCharsets.UTF_8).trim();
+            if (!CAMPOS_LIBRES.contains(key)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Response denegar(String msg) {
+        String safe = msg.replace("\"", "'");
+        return Response.status(Response.Status.FORBIDDEN).type(MediaType.APPLICATION_JSON)
+                .entity("{\"error\":{\"message\":\"" + safe + "\"},\"message\":\"" + safe + "\"}").build();
     }
 
     @PATCH

@@ -18,6 +18,7 @@ import { Ticket, equipoClientIdsDe } from '../tickets/ticket-utils';
 import { TicketCard } from '../tickets/ticket-card/ticket-card';
 import { TicketMessagesDialog } from '../tickets/ticket-messages-dialog/ticket-messages-dialog';
 import { AssignTicketDialog } from '../tickets/assign-ticket-dialog/assign-ticket-dialog';
+import { abrirEditarTicket, eliminarTicket } from '../tickets/ticket-acciones';
 import { PendienteDateDialog, PendienteDateResult } from '../pendientes/pendiente-date-dialog/pendiente-date-dialog';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -188,6 +189,16 @@ export class MiPanel {
   }
   openAssign(t: Ticket): void {
     this.dialog.open(AssignTicketDialog, { data: { ticket: t }, width: '440px', maxWidth: '95vw' });
+  }
+  /** Editar / eliminar / reasignar: rol HELPDESK en el alcance del cliente, o ADMIN. */
+  puedeGestionar(t: Ticket): boolean {
+    return this.auth.puedeGestionarTicket(t.clientId);
+  }
+  editarTicket(t: Ticket): void {
+    void abrirEditarTicket(this.dialog, t);
+  }
+  eliminarTicket(t: Ticket): void {
+    void eliminarTicket(this.dialog, this.hd, this.snack, t);
   }
   async changeStatus(t: Ticket, estado: string): Promise<void> {
     if (estado === t.estatus) return;

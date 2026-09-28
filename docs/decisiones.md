@@ -6,6 +6,153 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-27] Rol de plataforma HELPDESK: editar, eliminar y reasignar tickets desde FitDesk
+
+**Decisión:** nuevo rol **`HELPDESK`** (migración `V26__rol_helpdesk.sql`, 6.º rol). Solo **HELPDESK**
+(dentro del alcance de su Asignación: EQUIPO / REGIONAL / CLIENTE / GLOBAL) y **ADMIN** pueden
+**editar**, **eliminar** y **reasignar** tickets del HelpDesk desde FitDesk. **Cambiar el estado sigue
+abierto a todos.** "Crear ticket" queda para una entrega posterior (el `POST` sigue pasando 1:1).
+- **Enforcement en el backend** (lección TA-224/TA-230): `HelpdeskProxyResource` intercepta
+  `tickets/tickets/{id}` — un `PUT` con solo `ticket_status_id` pasa; cualquier otro campo exige
+  `Actor.puedeGestionarTicket(actor, client_id)`; el `DELETE` directo se bloquea siempre. El borrado va
+  por `DELETE /api/legacy/tickets/{id}` (`TicketGestion`), que borra en el HelpDesk y solo si éste
+  confirma borra la tarea espejo y los overlays del ticket (**única excepción** a "tareas con ticket no
+  se eliminan"). El frontend manda `X-Actor-Hid` en toda escritura a `/api/v1`.
+- **Frontend:** modal "Editar ticket" (`TicketFormDialog`, estructura lista para "crear"), íconos de
+  **lápiz y papelera visibles** en el pie de la tarjeta de ticket (como la tabla del HelpDesk original),
+  solo para HELPDESK/ADMIN; confirmación de borrado escribiendo el N° del ticket. "Asignar / reasignar"
+  (menú de la tarjeta, conversación del ticket) y el campo "Asignado a" de una tarea **con ticket** en
+  el Board quedan restringidos al mismo permiso. Crear tarea desde un ticket sigue funcionando para
+  todos (solo reasigna en el HelpDesk si el asignado elegido difiere del del ticket).
+- "Prioridad" se muestra como **"Orden"** (así la rotula el HelpDesk original), con ayuda "posición en la
+  lista de este cliente — no es un nivel de urgencia". El **Cliente** de un ticket no se edita.
+- **Adjunto** en "Editar": se envía como mensaje del ticket con el archivo (el HelpDesk no expone un
+  adjunto "del ticket" por separado).
+
+**Contexto:** la dueña pidió editar/eliminar tickets desde FitDesk (referencia: capturas del modal y de
+la tabla del HelpDesk original, y de sus `PUT`/`DELETE` en DevTools) y restringirlo a un rol propio.
+
+**Justificación:** mismo modelo Rol × Alcance × Vigencia del resto del sistema; el gating server-side
+evita que un bundle viejo o una llamada directa salten la regla.
+
+**Pendiente / abierto:** (1) con una cuenta SUPERVISOR del HelpDesk, el `PUT` ignora asunto, módulo,
+tipo y orden (ver `docs/aprendizajes.md` 2026-09-27) — falta confirmar con la dueña qué cuenta/rol del
+HelpDesk los permite; el modal avisa cuando un cambio no se aplicó. (2) Aprobar una **Solicitud de
+reasignación** sigue cambiando solo la tarea local (no el ticket del HelpDesk) — comportamiento
+anterior, no se tocó. (3) Crear ticket.
+
+**Estado:** implementado y verificado en local (backend Quarkus + Postgres local, contra el HelpDesk
+real, sobre tickets del cliente de prueba "COAC PRUEBAS HELPDESK"). Con una cuenta **ADMINISTRADOR**
+del HelpDesk se verificó de punta a punta: la edición aplica asunto/módulo (revertidos luego) y el
+**borrado** del ticket de prueba #12213 (HelpDesk 404 después; tarea TA-174 y espejo borrados). Un
+cambio de tipo rebotó con "La prioridad ya existe para este cliente y tipo." y el modal quedó abierto
+con el motivo (correcto). Fix extra: en Tickets, un ticket **buscado por N°** (`remoteResult`) no se
+refrescaba tras editar/eliminar — ahora escucha `hd.ticketMutado()`. Desplegado a AWS el 2026-09-28
+(la dueña dio luz verde: "continua y al terminar deploy"); commits en la entrada de despliegue.
+
+### [2026-09-27] Conversación del ticket: abre mostrando el último mensaje
+
+**Decisión:** `TicketMessagesDialog` baja al último mensaje al abrir (y tras enviar/editar), se mantiene
+abajo mientras cargan imágenes tarde (captura del evento `load` en el contenedor) salvo que el usuario
+haya subido a leer, y "Ver mensajes anteriores" conserva la posición del mensaje que se estaba leyendo
+(ancla que se suelta si el usuario se desplaza). Aplica a todos los lugares que abren la conversación.
+
+**Contexto:** pedido de la dueña — antes quedaba arriba del bloque y había que bajar a mano.
+
+**Estado:** implementado y verificado en Chrome (escritorio y 390×844). Desplegado 2026-09-28.
+
+### [2026-09-24] Fix: la creación manual de tareas ahora respeta el equipo responsable del cliente
+
+**Decisión:** en `LegacyWriteService.applyFields()` (backend Quarkus), cuando se CREA una tarea (nunca
+en un PATCH sobre una ya existente) y el body trae `ticket` (no vacío) más un `client` que resuelve un
+`Cliente` con `equipoResponsable` registrado, ese equipo determina el `board` — sin importar qué
+`board` haya mandado el frontend. Afecta `POST /stories/stories` (creación atómica) y el upsert de
+`PATCH /stories/stories` (fallback). El endpoint automático `POST /stories/desde-ticket-asignado` ya
+tenía este criterio desde antes; ahora los dos caminos de creación son consistentes. Contrato
+actualizado en ambos repos (`docs/contrato-api.md`).
+
+**Contexto:** el botón manual "Crear tarea" (Tickets/Mi Panel) enviaba siempre
+`this.currentBoard() || 'CUENCA'` como tablero — el que el actor tenía abierto en pantalla, no el del
+cliente del ticket. Así el ticket #33624 (COAC CAPCPE GUALAQUIZA, equipo Cuenca) terminó con su tarea
+en el tablero "PRUEBA". Ver `docs/aprendizajes.md` (2026-09-24).
+
+**Justificación:** el equipo dueño del cliente debe ver sus tareas en su propio tablero sin depender de
+que quien crea la tarea a mano tenga el tablero correcto abierto; el criterio ya existía y estaba
+probado para la creación automática, así que extenderlo a la creación manual es la corrección mínima y
+consistente. Se preservó explícitamente el comportamiento para tareas SIN ticket (reuniones/tareas
+locales de un cliente no registrado o de otro equipo) y para PATCH sobre tareas existentes, que NUNCA
+reasignan tablero por esta regla — evita mover de sitio una tarea ya triagueada por tocar campos no
+relacionados.
+
+**Verificación:** compilado (`mvnw compile`) y probado en Postgres local (Docker) con Quarkus en modo
+dev: (1) tarea nueva con ticket + cliente de Cuenca + `board` enviado "PRUEBAS" → quedó en CUENCA; (2)
+tarea nueva SIN ticket, mismo cliente, mismo `board` enviado → quedó en PRUEBAS (comportamiento legado
+intacto); (3) PATCH sobre una tarea existente agregándole ticket+client → NO cambió de tablero; (4)
+creación vía el upsert de PATCH masivo → también resuelve por cliente. **No desplegado** (regla vigente
+de no desplegar sin permiso explícito) — cambio implementado y verificado en local únicamente.
+
+**Corrección de datos aplicada en producción (dato, no despliegue):** la tarea TA-289 (ticket #33624)
+se movió manualmente de "PRUEBA" a "CUENCA" vía `PATCH /api/legacy/stories/stories/TA-289` desde el
+propio navegador autenticado, sin tocar el código desplegado.
+
+**Estado:** vigente, pendiente de despliegue (esperar luz verde de la dueña para subir el backend).
+
+### [2026-09-23] Presentación FIT-BANK: de "caso real de un cliente" a plantilla genérica con SLA
+### formal + logo real de Soft Warehouse S.A. + cifras ilustrativas (no perfectas)
+
+**Decisión:** se rediseñó la presentación comercial de FIT-BANK dejando de anclarla a un cliente real
+(COAC CAPCPE GUALAQUIZA) para convertirla en una plantilla reutilizable: (1) portada con el logo real
+de **Soft Warehouse S.A.** (la empresa dueña de FIT-BANK/FIT-DESK) en una tarjeta blanca sobre fondo
+navy; (2) las diapositivas de métricas (antes 8 y 9) se reconstruyeron alrededor de las categorías
+reales de un SLA formal (Emergencia/Alta/Media/Baja-Requerimiento, con los tiempos de respuesta en
+horas tomados de un acuerdo de SLA real usado como referencia) con **cifras ilustrativas explícitas**
+— no reales, pero "no perfectas" (una severidad, Media, queda en 92% de cumplimiento con una nota que
+explica el motivo, en vez de mostrar 100% en todo); (3) el mockup de ticket (slide Helpdesk) se
+genericizó (ticket y cliente ficticios, se agregó un campo "Severidad" de ejemplo); (4) cada
+diapositiva con cifras lleva un pie explícito "cifras ilustrativas — no corresponden a datos reales
+de un cliente". El caso de ejemplo narrativo (diapositiva "Ejemplo de atención") se mantiene como el
+caso real anonimizado del ticket de ERCO (certificación de TEA / auditoría SEPS) — es contenido
+cualitativo, no una estadística, y el usuario confirmó explícitamente mantenerlo.
+
+**Contexto:** la versión anterior usaba datos reales de COAC CAPCPE GUALAQUIZA extraídos en vivo del
+HelpDesk, pero el HelpDesk no tiene campo de severidad (ver aprendizaje del 2026-09-22), así que sus
+tiempos de respuesta no eran comparables contra un SLA formal. El usuario pidió explícitamente dejar
+de usar datos reales para las estadísticas y usar en su lugar datos ideales-pero-no-perfectos, además
+de incluir el logo real de Soft Warehouse en la portada — es decir, pasar de "reporte de un cliente
+real" a "plantilla de venta" que muestra cómo SE VERÍA el servicio bajo un SLA formal.
+
+**Justificación:** evita el problema de fondo (no se puede medir cumplimiento de SLA real sin campo
+de severidad) mostrando en su lugar un ejemplo honesto y explícitamente etiquetado como ilustrativo;
+y usar el logo real de la empresa (en vez de un cliente específico) es coherente con que la plantilla
+ya no está atada a los datos de ningún cliente en particular.
+
+**Estado:** vigente. Archivo final en `/Users/zolmaria/Documents/FIT-BANK-Modelo-Operacion-Mantenimiento.pptx`.
+Si más adelante se agrega el campo de severidad al HelpDesk, esta misma tabla de la diapositiva 7
+(SLA por severidad) podría poblarse con datos reales de un cliente específico.
+
+### [2026-09-22] Política: en material comercial de un cliente, un caso real de OTRO cliente va sin nombrarlo
+
+**Decisión:** al armar la presentación de FIT-BANK para COAC CAPCPE GUALAQUIZA, se propuso usar como
+caso de ejemplo (slide "Ejemplo de atención") el ticket #33819 de COOPERATIVA DE AHORRO Y CRÉDITO
+ERCO (client_id=5) — un caso real y muy ilustrativo (certificación técnica de la fórmula de TEA de
+cara a una auditoría de la SEPS). Se usó su contenido real, pero **sin nombrar a ERCO** en ningún
+punto del deck: el pie de la diapositiva dice "caso real anonimizado de otra institución financiera
+cliente de FIT-BANK", nunca su nombre. El resto de la presentación (portada, métricas de 6 meses)
+sigue siendo de COAC CAPCPE GUALAQUIZA, sin mezclarse con datos de ERCO.
+
+**Contexto:** un material dirigido al equipo técnico de un cliente no debe exponerle el nombre ni los
+detalles identificables de un incidente de OTRO cliente, aunque el caso sea real y valioso como
+ejemplo — es una cuestión de confidencialidad entre clientes del mismo Core, no solo de estética o
+coherencia del deck.
+
+**Justificación:** permite aprovechar el mejor caso real disponible para el mensaje de la
+presentación (conocimiento especializado + evolución normativa) sin comprometer la confidencialidad
+de un cliente distinto al destinatario del material.
+
+**Estado:** vigente — aplicar el mismo criterio a cualquier futuro material comercial o de reporte:
+usar casos reales de OTROS clientes solo de forma anónima (sin nombre de la institución), nunca el
+nombre real de un cliente que no sea el destinatario del documento.
+
 ### [2026-09-22] Fix: modal de ticket — el asunto se aplastaba y quedaba espacio muerto arriba
 
 **Contexto:** la dueña reportó (con captura) que en el modal de conversación de ticket el asunto

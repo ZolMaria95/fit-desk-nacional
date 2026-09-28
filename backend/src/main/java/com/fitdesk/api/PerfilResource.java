@@ -103,6 +103,21 @@ public class PerfilResource {
      * regional (GLOBAL = todos), así el frontend puede ofrecer un selector de equipo.
      * Forma: { multiEquipo: bool, equipos: [{codigo, nombre, clientes:[{codigo,nombre}]}] }.
      */
+    /**
+     * GET /api/legacy/perfil/tickets-gestionables: sobre qué tickets puede el actor EDITAR / ELIMINAR /
+     * REASIGNAR (rol HELPDESK en su alcance, o ADMIN). Forma: { global: bool, clientes: [client_id HD] }.
+     * Solo para mostrar/ocultar acciones en el front; la autorización real la hace el backend.
+     */
+    @GET
+    @Path("/tickets-gestionables")
+    public Map<String, Object> ticketsGestionables(@HeaderParam("X-Actor-Hid") String actorHid) {
+        Actor.TicketsGestionables g = Actor.ticketsGestionables(actorHid);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("global", g.global());
+        m.put("clientes", new ArrayList<>(g.clientes()));
+        return m;
+    }
+
     @GET
     @Path("/equipos-clientes")
     public Map<String, Object> equiposClientes(@HeaderParam("X-Actor-Hid") String actorHid) {

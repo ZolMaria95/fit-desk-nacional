@@ -65,6 +65,33 @@ export interface HdClient {
   name: string;
 }
 
+/** Ítem de un catálogo del HelpDesk (módulos = subsystems, tipos de ticket). */
+export interface CatalogoItem {
+  id: string;
+  nombre: string;
+}
+
+/** Campo del API del HelpDesk → campos del `Ticket` en memoria que lo reflejan. */
+const CAMPO_A_TICKET: Record<string, (keyof Ticket)[]> = {
+  subsystem_id: ['moduloId', 'modulo'],
+  ticket_type_id: ['tipoId', 'tipo'],
+  priority: ['orden'],
+  incidence: ['incidencia'],
+  subject: ['asunto'],
+};
+
+/** Mensaje real de un error de escritura (HelpDesk o backend propio), con respaldo legible. */
+function errorDelApi(e: any, porDefecto: string): string {
+  const body = e?.error;
+  const msg = body?.error?.message || body?.message || (typeof body === 'string' ? body : '');
+  if (msg) return String(msg);
+  const st = Number(e?.status ?? 0);
+  if (!st) return 'No se pudo conectar con el servidor.';
+  if (st === 401) return 'Tu sesión expiró. Vuelve a iniciar sesión.';
+  if (st === 403) return 'No tienes permiso para esta acción.';
+  return porDefecto;
+}
+
 /**
  * Mensaje de error a partir del ESTADO HTTP, no del texto. La regla anterior hacía
  * `/fetch|failed|network|0/.test(err.message)` y ese `0` casaba con CUALQUIER estado
@@ -148,6 +175,8 @@ export class HelpdeskService {
     estado?: string;
     asignadoId?: string;
     asignadoName?: string;
+    /** El ticket se ELIMINÓ del HelpDesk (y su tarea espejo): las vistas lo quitan. */
+    eliminado?: boolean;
     at: number;
   } | null>(null);
   readonly ticketMutado = this._ticketMutado.asReadonly();
@@ -896,6 +925,99 @@ export class HelpdeskService {
   private updateTicketAssignee(ticketId: string, userId: string): void {
     const u = this._users().find((x) => x.id === userId);
     this.patchTicket(ticketId, { usuarioAsignado: userId, nombreAsignado: u?.name || userId });
+  }
+
+  // ── Edición / eliminación de tickets (rol HELPDESK o ADMIN; el backend lo exige) ─────────
+
+  private catalogos: { modulos?: Promise<CatalogoItem[]>; tipos?: Promise<CatalogoItem[]> } = {};
+
+  /** Módulos del HelpDesk (`subsystem_id` → descripción), solo activos. Cacheado por sesión. */
+  getModulos(): Promise<CatalogoItem[]> {
+    return (this.catalogos.modulos ??= this.fetchCatalogo('subsystems/catalog', 'subsystem_id', 'subsystem_status'));
+  }
+
+  /** Tipos de ticket (`ticket_type_id` → descripción), solo activos. Cacheado por sesión. */
+  getTiposTicket(): Promise<CatalogoItem[]> {
+    return (this.catalogos.tipos ??= this.fetchCatalogo('ticket-types/catalog', 'ticket_type_id', 'ticket_type_status'));
+  }
+
+  private async fetchCatalogo(path: string, idKey: string, activoKey: string): Promise<CatalogoItem[]> {
+    try {
+      const data = await firstValueFrom(this.http.get<any[]>(`${this.base}/${path}`, {
+        context: new HttpContext().set(HD_SAFE, true),
+      }));
+      return (Array.isArray(data) ? data : [])
+        .filter((x) => x?.[activoKey] !== false)
+        .map((x) => ({ id: String(x[idKey]), nombre: String(x.description ?? x[idKey]).trim() }));
+    } catch {
+      // Sin catálogo no se rompe el modal: se reintenta la próxima vez que se abra.
+      if (path.startsWith('subsystems')) this.catalogos.modulos = undefined;
+      else this.catalogos.tipos = undefined;
+      return [];
+    }
+  }
+
+  /**
+   * Edita campos del ticket en el HelpDesk en UN solo PUT form-urlencoded (igual que el
+   * "Guardar cambios" del HelpDesk original). Claves del API: `subsystem_id`, `ticket_type_id`,
+   * `priority`, `incidence`, `subject`. El asignado y el estado NO van aquí: se reusan
+   * `assignTicket` / `setTicketStatus`, que ya traen sus efectos (espejo, pulso, auto-tarea).
+   * Síncrono: solo actualiza la memoria tras confirmar. Devuelve el motivo real si falla
+   * (p. ej. el 403 del backend cuando el actor no tiene rol HELPDESK en ese cliente).
+   */
+  async updateTicketFields(
+    ticketId: string,
+    campos: Record<string, string>,
+    patch: Partial<Ticket>,
+  ): Promise<{ ok: boolean; error?: string; ignorados?: string[] }> {
+    const keys = Object.keys(campos);
+    if (!ticketId || !keys.length) return { ok: true };
+    let body = new HttpParams({ encoder: FORM_CODEC });
+    for (const k of keys) body = body.set(k, campos[k]);
+    try {
+      const resp = await firstValueFrom(this.http.put<any>(`${this.base}/tickets/tickets/${ticketId}`, body, {
+        context: new HttpContext().set(HD_SAFE, true),
+      }));
+      // El HelpDesk responde 200 con el ticket COMPLETO aunque IGNORE campos que la cuenta no puede
+      // cambiar (verificado 2026-09-27: con una cuenta SUPERVISOR solo aplica `incidence`; asunto,
+      // módulo, tipo y orden vuelven sin cambios). Se compara lo pedido con lo devuelto para no
+      // anunciar un guardado que no ocurrió, y solo se refleja en memoria lo que sí quedó.
+      const ignorados = resp && typeof resp === 'object'
+        ? keys.filter((k) => k in resp && String(resp[k] ?? '').trim() !== String(campos[k] ?? '').trim())
+        : [];
+      const aplicado: Partial<Ticket> = { ...patch };
+      for (const k of ignorados) for (const f of CAMPO_A_TICKET[k] ?? []) delete aplicado[f];
+      if (Object.keys(aplicado).length) {
+        this.patchTicket(ticketId, aplicado);
+        this._ticketMutado.set({ ticket: ticketId, at: Date.now() });
+      }
+      return { ok: true, ignorados };
+    } catch (e: any) {
+      return { ok: false, error: errorDelApi(e, 'No se pudieron guardar los cambios del ticket.') };
+    }
+  }
+
+  /**
+   * Elimina el ticket del HelpDesk. Va por el endpoint PROPIO `DELETE /api/legacy/tickets/{id}`
+   * (el proxy bloquea el DELETE directo): autoriza (HELPDESK/ADMIN), borra en el HelpDesk y, solo
+   * si éste confirma, quita la tarea espejo del board. Síncrono.
+   */
+  async deleteTicket(ticketId: string): Promise<{ ok: boolean; message?: string; error?: string }> {
+    const hid = this.auth.session()?.id;
+    try {
+      const r = await firstValueFrom(this.http.delete<{ message?: string }>(
+        `${environment.quarkusApiUrl}/api/legacy/tickets/${encodeURIComponent(ticketId)}`,
+        { headers: hid ? { 'X-Actor-Hid': String(hid) } : {}, context: new HttpContext().set(HD_SAFE, true) },
+      ));
+      this._tickets.set(this._tickets().filter((t) => t.ticket !== ticketId));
+      this._total.set(Math.max(0, this._total() - 1));
+      // El backend ya borró la tarea espejo: se quita también del board en memoria (sin esperar sync).
+      this.data.stories.set(this.data.stories().filter((s) => String(s.ticket) !== String(ticketId)));
+      this._ticketMutado.set({ ticket: ticketId, eliminado: true, at: Date.now() });
+      return { ok: true, message: r?.message };
+    } catch (e: any) {
+      return { ok: false, error: errorDelApi(e, 'No se pudo eliminar el ticket.') };
+    }
   }
 
   /** Aplica un patch a un ticket (por nº) en el pool en memoria. */

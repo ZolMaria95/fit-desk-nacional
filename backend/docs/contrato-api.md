@@ -31,7 +31,24 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /users/me`
 - Catálogos: `GET /users/catalog`, `GET /clients/catalog`, `GET /ticket-statuses/catalog`
 - Tickets: `GET /tickets/tickets` (paginado, filtros, `?..._order=`), `GET /tickets/tickets/search`,
-  `GET /tickets/tickets/{id}`, `PUT /tickets/tickets/{id}` (asignar/estado, `x-www-form-urlencoded`)
+  `GET /tickets/tickets/{id}`, `PUT /tickets/tickets/{id}` (`x-www-form-urlencoded`)
+- **Guardas del rol HELPDESK sobre el proxy (2026-09-27)** — el relay deja de ser 1:1 SOLO para
+  `tickets/tickets/{id}` (el resto sigue intacto):
+  - `PUT` con **solo** `ticket_status_id` → pasa (cambiar estado sigue abierto a todos).
+  - `PUT` con cualquier otro campo (`assigned_user_id`, `subject`, `subsystem_id`, `ticket_type_id`,
+    `priority`, `incidence`…) → exige rol **HELPDESK** en el alcance del cliente del ticket, o
+    **ADMIN**; si no, **403** `{"error":{"message":"…"},"message":"…"}`. El actor llega en
+    **`X-Actor-Hid`**, que el frontend ahora manda en toda escritura a `/api/v1` (sin header → 403).
+    El `client_id` se lee del propio HelpDesk (`GET` con el `Authorization` del usuario).
+  - `DELETE tickets/tickets/{id}` → **403 siempre**: el borrado va por `DELETE /api/legacy/tickets/{id}`.
+  - `POST tickets/tickets` (crear ticket) → sin cambios por ahora (pendiente, "crear" se hará después).
+  - Catálogos usados por "Editar ticket": `GET /subsystems/catalog` (módulos: `subsystem_id`,
+    `description`) y `GET /ticket-types/catalog` (`ticket_type_id`, `description`).
+  - **Ojo (verificado 2026-09-27):** el HelpDesk responde **200 con el ticket completo** pero **ignora
+    en silencio** los campos que la cuenta no puede cambiar. Con una cuenta SUPERVISOR solo aplica
+    `incidence` (y asignado/estado); `subject`, `subsystem_id`, `ticket_type_id` y `priority` vuelven
+    sin cambios (probado con form-urlencoded, multipart y JSON). El front compara lo pedido con la
+    respuesta y avisa qué no se aplicó.
 - Conversación: `GET /tickets/{id}/messages`, `POST /tickets/{id}/messages` (multipart con adjuntos),
   `PATCH /tickets/{id}/messages/{msgId}`
 - Adjuntos: `GET /attachments/{id}` (blob; nombre en `Content-Disposition`)
@@ -48,7 +65,27 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
     clienteCodigo, clienteNombre, titulo, asignadoHid, asignadoNombre }` + `X-Actor-Hid`. Idempotente
     (si ya hay tarea, no-op). Tablero: `Cliente.equipoResponsable` del cliente del ticket; si no resuelve,
     el equipo del actor (miembro, o responsable); si ninguno resuelve, no crea nada.
-- **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `PUT /foto`.
+  - **`POST /stories/stories` y el upsert de `PATCH /stories/stories` (creación manual, "Crear tarea"):**
+    desde 2026-09-24 aplican el MISMO criterio — si el body trae `ticket` (no vacío) y `client` resuelve
+    un `Cliente` con `equipoResponsable` registrado, ESE equipo manda sobre el `board` que mande el
+    frontend (que hasta entonces solo reflejaba el tablero que el actor tenía abierto en pantalla —
+    causa real de tareas de un cliente de un equipo apareciendo en el tablero de otro, p. ej. "PRUEBA").
+    Si no hay `ticket` o el cliente no resuelve equipo, se respeta el `board` enviado (sin cambios, para
+    no romper tareas locales/reuniones sin cliente registrado). **Un PATCH sobre una tarea YA EXISTENTE
+    nunca reasigna el tablero** por esta regla, aunque el body incluya `ticket`/`client` — solo aplica en
+    el momento de crear. Ver `docs/decisiones.md` (2026-09-24) y `LegacyWriteService.applyFields()`.
+- **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `GET /tickets-gestionables`, `PUT /foto`.
+  - `GET /tickets-gestionables` (+ `X-Actor-Hid`) → `{ global: bool, clientes: [..] }`: sobre qué tickets
+    puede el actor editar/eliminar/reasignar (rol HELPDESK en su alcance; ADMIN = `global`). `clientes`
+    trae el `client_id` del HelpDesk **y** el código (slug) FitDesk de cada cliente cubierto (los tickets
+    usan el primero, las tareas el segundo). Solo para mostrar/ocultar acciones; autoriza el backend.
+- **Eliminar ticket** `DELETE /api/legacy/tickets/{id}` (+ `X-Actor-Hid` + `Authorization` del usuario):
+  rol HELPDESK en el alcance del cliente del ticket, o ADMIN (si no, 403). Borra en el HelpDesk
+  (`DELETE /tickets/tickets/{id}`, sin body) y **solo si éste responde 2xx** borra la tarea espejo
+  (con sus mensajes/transferencias/solicitudes), los overlays del ticket (notas, acciones,
+  recordatorios, guardados) y el `TicketEspejo` — única excepción a "tareas con ticket no se
+  eliminan". Respuesta `{ ok, message, tareasEliminadas: [TA-…] }`; si el HelpDesk falla, su status y
+  cuerpo tal cual, sin tocar nada local.
 - **Transferencias** `/api/transferencias`: `POST` (crear), `GET`, `GET /entrantes`, `GET /salientes`,
   `GET /aceptadas`, `POST /{id}/aceptar`, `POST /{id}/rechazar`, `POST /{id}/cancelar`,
   `GET /mi-equipo/miembros`, `GET /equipo/{equipoId}/miembros`.

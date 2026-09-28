@@ -82,8 +82,11 @@
     <mat-form-field appearance="outline" subscriptSizing="dynamic" class="full">
       <mat-label>Asignado a</mat-label>
       <input matInput [matAutocomplete]="autoAssignee" [ngModel]="assigneeModel"
-             (ngModelChange)="onAssigneeInput($event)" placeholder="Buscar por nombre…" autocomplete="off" />
-      <mat-icon matSuffix>search</mat-icon>
+             (ngModelChange)="onAssigneeInput($event)" placeholder="Buscar por nombre…" autocomplete="off"
+             [disabled]="asignadoBloqueado()" />
+      <mat-icon matSuffix [matTooltip]="asignadoBloqueado() ? 'La reasignación del ticket la hace el rol Helpdesk' : ''">
+        {{ asignadoBloqueado() ? 'lock' : 'search' }}
+      </mat-icon>
       <mat-autocomplete #autoAssignee="matAutocomplete" [displayWith]="displayAssignee" (optionSelected)="onAssigneePicked($event.option.value)">
         <mat-option [value]="null">— Sin asignar —</mat-option>
         @for (m of filteredAssignees(); track m.id) {

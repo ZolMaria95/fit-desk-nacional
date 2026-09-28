@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import com.fitdesk.core.Asignacion;
+import com.fitdesk.core.Cliente;
 import com.fitdesk.core.Equipo;
 import com.fitdesk.core.Usuario;
 
@@ -32,6 +33,85 @@ public final class Actor {
 
     public static boolean tieneRol(String hid, String rolCodigo) {
         return rolCodigo != null && MisRolesResource.rolesVigentes(hid).contains(rolCodigo);
+    }
+
+    /**
+     * Clientes del HelpDesk (por {@code helpdesk_client_id}) sobre cuyos tickets el actor puede
+     * EDITAR / ELIMINAR / REASIGNAR: rol de plataforma HELPDESK dentro del alcance de su Asignación
+     * (GLOBAL = todos; CLIENTE = ese cliente; EQUIPO = clientes cuyo equipo responsable es ese;
+     * REGIONAL = clientes de equipos de esa regional). ADMIN (incl. MSC001 bootstrap) = todos.
+     * Un cliente NO registrado en FitDesk solo lo cubre {@code global} (HELPDESK GLOBAL o ADMIN).
+     * Cambiar el ESTADO de un ticket NO pasa por aquí (sigue abierto a todos).
+     */
+    public record TicketsGestionables(boolean global, Set<String> clientes) {
+    }
+
+    public static TicketsGestionables ticketsGestionables(String hid) {
+        if (esAdmin(hid)) {
+            return new TicketsGestionables(true, Set.of());
+        }
+        Usuario u = usuario(hid);
+        if (u == null) {
+            return new TicketsGestionables(false, Set.of());
+        }
+        Set<String> clientes = new HashSet<>();
+        LocalDate hoy = LocalDate.now();
+        for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
+            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+                continue;
+            }
+            if (a.rol == null || !"HELPDESK".equals(a.rol.codigo)) {
+                continue;
+            }
+            switch (a.alcanceTipo == null ? "" : a.alcanceTipo) {
+                case "GLOBAL" -> {
+                    return new TicketsGestionables(true, Set.of());
+                }
+                case "CLIENTE" -> {
+                    if (a.alcanceCliente != null) {
+                        agregarHdId(clientes, a.alcanceCliente);
+                    }
+                }
+                case "EQUIPO" -> {
+                    if (a.alcanceEquipo != null) {
+                        for (Cliente c : Cliente.<Cliente>list("equipoResponsable = ?1", a.alcanceEquipo)) {
+                            agregarHdId(clientes, c);
+                        }
+                    }
+                }
+                case "REGIONAL" -> {
+                    if (a.alcanceRegional != null) {
+                        for (Cliente c : Cliente.<Cliente>list("equipoResponsable.regional = ?1", a.alcanceRegional)) {
+                            agregarHdId(clientes, c);
+                        }
+                    }
+                }
+                default -> {
+                    /* sin alcance reconocido: no otorga nada (default deny) */
+                }
+            }
+        }
+        return new TicketsGestionables(false, clientes);
+    }
+
+    /** ¿Puede el actor editar/eliminar/reasignar un ticket de este cliente (client_id del HelpDesk)? */
+    public static boolean puedeGestionarTicket(String hid, String hdClientId) {
+        TicketsGestionables g = ticketsGestionables(hid);
+        if (g.global()) {
+            return true;
+        }
+        return hdClientId != null && g.clientes().contains(hdClientId.trim());
+    }
+
+    /** Agrega el client_id del HelpDesk y, además, el código (slug) de FitDesk del cliente: las
+     *  TAREAS del board guardan el código, los TICKETS el id del HelpDesk — así sirve para ambos. */
+    private static void agregarHdId(Set<String> ids, Cliente c) {
+        if (c.helpdeskClientId != null && !c.helpdeskClientId.isBlank()) {
+            ids.add(c.helpdeskClientId.trim());
+        }
+        if (c.codigo != null && !c.codigo.isBlank()) {
+            ids.add(c.codigo.trim());
+        }
     }
 
     public static Usuario usuario(String hid) {

@@ -15,6 +15,10 @@ export interface Ticket {
   estatus: string;
   asunto: string;
   modulo: string;
+  /** `subsystem_id` del HelpDesk (el id del módulo; `modulo` es su descripción). */
+  moduloId: string;
+  /** Número de incidencia (`incidence` del HelpDesk); '' si no tiene. */
+  incidencia: string;
   fechaAsignacion: string;
   fechaIngreso: string;
   fechaMod: string;
@@ -561,6 +565,8 @@ export function mapTicket(t: any): Ticket {
     estatus: t.estado || '',
     asunto: t.subject || '',
     modulo: t.modulo || '',
+    moduloId: String(t.subsystem_id ?? '').trim(),
+    incidencia: t.incidence == null ? '' : String(t.incidence).trim(),
     fechaAsignacion: t.assigned_date || '',
     fechaIngreso: t.entry_date || '',
     fechaMod: t.modified_date || '',

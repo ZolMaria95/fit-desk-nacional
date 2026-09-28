@@ -6,6 +6,103 @@ Hechos descubiertos sobre el código real, el HelpDesk, Firebase y el negocio. *
 
 ---
 
+### [2026-09-27] El `PUT /tickets/tickets/{id}` del HelpDesk ignora en silencio lo que la cuenta no
+### puede cambiar — y existen catálogos de módulos y tipos
+
+**Fuente:** pruebas directas contra el HelpDesk real (vía el proxy local) sobre el ticket #12213 del
+cliente de prueba "COAC PRUEBAS HELPDESK", con la cuenta MSC001 (rol SUPERVISOR en el HelpDesk):
+- El `PUT` responde **200 con el ticket completo** incluso cuando **no aplica** el cambio. Solo aplicó
+  `incidence` (además de `assigned_user_id` y `ticket_status_id`, ya conocidos). `subject`,
+  `subsystem_id`, `ticket_type_id` y `priority` volvieron sin cambios, probando form-urlencoded,
+  multipart y JSON, y otras claves (`asunto`, `title`, `titulo`, `description`).
+- Mandar `incidence=` vacío tampoco la borra (se ignora): el #12213 quedó con incidencia `1234567`
+  de la prueba y **no se pudo revertir** con esta cuenta.
+- El "Módulo" del ticket es `subsystem_id` (p. ej. `02` = PERSONAS) — no texto libre. Catálogos de
+  lectura: `GET /subsystems/catalog` y `GET /ticket-types/catalog` (200 para SUPERVISOR); sus
+  versiones sin `/catalog` exigen rol administrador del HelpDesk (403 "Requiere rol administrador").
+- `DELETE /tickets/tickets/{id}` existe: sin body, `200 {"message":"Ticket eliminado correctamente."}`
+  (captura de la dueña sobre #27731).
+
+- **Eliminar también exige ser administrador del HelpDesk** (prueba de punta a punta sobre el #12213,
+  2026-09-27): FitDesk autorizó (MSC001 = ADMIN de plataforma) y reenvió el `DELETE` con el token del
+  usuario; el HelpDesk respondió `403 {"error":{"code":"FORBIDDEN","message":"Requiere rol
+  administrador."}}`. Mismo 403 llamando al HelpDesk directo, sin FitDesk. FitDesk mostró el motivo y
+  no borró nada local (ticket y tarea intactos), como está diseñado.
+- **Confirmado con una cuenta ADMINISTRADOR del HelpDesk** (2026-09-27): el mismo `PUT` sí aplica
+  `subject` y `subsystem_id`, y el `DELETE` borró el #12213 (luego `GET` → 404). O sea, la restricción es
+  del rol del HelpDesk, no de FitDesk.
+- **Regla de negocio del HelpDesk:** `priority` ("Orden") es **única por cliente + tipo** — cambiar el
+  tipo de un ticket a uno donde ya existe ese orden rebota con "La prioridad ya existe para este
+  cliente y tipo." (hay que cambiar también el orden).
+
+**Implicación clave para el rol HELPDESK:** como el backend reenvía el **token del propio usuario**, el
+HelpDesk vuelve a aplicar SUS permisos encima de los de FitDesk. Editar asunto/módulo/tipo/orden y
+eliminar solo funcionan si la persona **también es administradora en el HelpDesk**. Opciones a decidir
+con la dueña: (a) dar el rol HELPDESK solo a quienes ya son administradores del HelpDesk; o (b) que el
+backend haga esas escrituras con una **cuenta de servicio administradora** (credencial por variable de
+entorno), dejando la autorización en FitDesk (rol HELPDESK + alcance).
+
+**Implicación:** nunca confiar en el 200 del `PUT` para dar un cambio por hecho: comparar lo pedido con
+el ticket devuelto (lo hace `HelpdeskService.updateTicketFields`, y el modal avisa qué no se guardó).
+Para editar asunto/módulo/tipo/orden probablemente hace falta una cuenta **administradora del
+HelpDesk** — confirmar con la dueña (y con la captura del Payload de su edición en el HelpDesk original).
+
+### [2026-09-24] Crear tarea manual ("Crear tarea" en Tickets/Mi Panel) no derivaba el tablero del
+### cliente — usaba el tablero que el actor tenía abierto, sin relación con el equipo responsable
+
+**Fuente:** la dueña reportó que el ticket #33624 (COAC CAPCPE GUALAQUIZA, equipo Oficina Cuenca)
+apareció en el tablero **"PRUEBA"**. Revisando el código: hay DOS caminos para crear una tarea desde
+un ticket. `POST /stories/desde-ticket-asignado` (automático, al asignar desde el HelpDesk) YA resolvía
+bien el tablero por `Cliente.equipoResponsable`. Pero el botón manual "Crear tarea" (`openTicketTask` →
+`CardDetailDialog` → `data.addStory()`) llega a `POST/PATCH /stories/stories`, cuyo `applyFields()`
+(backend) solo tomaba el `board` que mandaba el frontend — y el frontend siempre manda
+`this.currentBoard() || 'CUENCA'` (`data.service.ts:358`), es decir, el tablero que el actor tenía
+ABIERTO en pantalla en ese momento, sin ninguna relación con el cliente del ticket. Así fue como la
+tarea de Kevin Andrés Calderón García (asignado del ticket) terminó en "PRUEBA": probablemente tenía
+ese tablero abierto cuando hizo clic en "Crear tarea".
+
+**Implicación:** cualquier tarea creada manualmente desde un ticket podía terminar en un tablero
+equivocado si el creador no tenía el tablero correcto abierto — un problema de visibilidad/gobernanza
+real (el equipo dueño del cliente no ve la tarea en su tablero). Corregido, ver `docs/decisiones.md`
+([2026-09-24]).
+
+### [2026-09-22] COAC SEÑOR DE GIRÓN, comparada contra COAC CAPCPE GUALAQUIZA, tiene peores tiempos
+### de respuesta además de peor tasa de resolución — confirma que no es una mejor cuenta de referencia
+**Fuente:** extracción en vivo `GET /tickets/tickets?client_id=34` (últimos 6 meses) + primera
+respuesta real vía `GET /tickets/{id}/messages` (mismo método usado para Gualaquiza). Girón: 15
+tickets, 3 resueltos (20%), primera respuesta media ~4,3 días (102,9 h) y mediana ~0,8 días (19,1 h,
+alta dispersión: de 0,74 h a 545 h en un solo caso) — y **6 de los 15 tickets (40%) no tienen ningún
+mensaje de soporte registrado**, es decir ni siquiera hay dato para medir la respuesta. Gualaquiza en
+el mismo período: 43 tickets, 22 resueltos (51%), primera respuesta media ~2,5 días.
+**Implicación:** ya se había descartado a Girón como cliente de referencia para material comercial
+por su 20% de resolución (ver decisión de elegir Gualaquiza para la presentación de FIT-BANK); esta
+comparación adicional (pedida explícitamente para verificar si Girón "no era más favorable" de cara
+al SLA) confirma que Girón es peor en TODAS las dimensiones relevantes, no solo en resolución — no
+usarla como ejemplo positivo en ningún material de cara al cliente. Si se investiga la salud de la
+cuenta de Girón por otro motivo (no comercial), el dato de 40% de tickets sin respuesta registrada es
+la señal más grave, más que cualquier promedio de tiempo.
+
+### [2026-09-22] El HelpDesk no tiene campo de severidad — el "tiempo de primera respuesta" agregado
+### no es comparable contra un SLA formal (que mide en horas, por severidad)
+**Fuente:** al preparar una presentación comercial con métricas reales de COAC CAPCPE GUALAQUIZA, la
+dueña señaló que el tiempo promedio de primera respuesta extraído (~2,5 días, agregado sobre TODOS
+los tickets del cliente) no se ajustaba a lo que exige un SLA típico de la industria — usó como
+ejemplo un acuerdo real (`ACUERDO SOBRE NIVELES DE SERVICIO DE SOPORTE Y MANTENIMIENTO...pdf`, entre
+SOFT WAREHOUSE y una cooperativa, 2018) donde los tiempos de respuesta se definen en **horas**,
+clasificados por severidad: Emergencia 0,5h, Severidad Alta 1h, Severidad Media 4h, Severidad
+Baja/Requerimiento "según el caso" — y de resolución: Emergencia 4h, Alta 8h, Media/Baja "según orden
+fijado por el cliente". El campo `priority` del HelpDesk (visto en aprendizajes previos de esta misma
+sesión) es un número de orden secuencial, NO una severidad — así que hoy no existe ningún campo
+estructurado en el HelpDesk que permita clasificar un ticket en Emergencia/Alta/Media/Baja.
+**Implicación:** cualquier métrica de "tiempo de respuesta/resolución" calculada hoy sobre datos del
+HelpDesk es un promedio agregado de TODO tipo de caso (sin distinguir urgencia) y en días, no la
+métrica en horas-por-categoría que define un SLA formal — presentarla sin esa aclaración se lee como
+un incumplimiento de SLA que en realidad no se puede ni afirmar ni descartar con los datos actuales.
+Si en el futuro se quiere medir cumplimiento de SLA real, hace falta agregar un campo de severidad
+(al ticket o a la tarea espejo en FIT-DESK) — hoy no existe. Mientras tanto, cualquier material
+comercial o de reporte que muestre tiempos de respuesta/resolución debe aclarar este límite en vez de
+presentarlos como si fueran comparables a un SLA por severidad.
+
 ### [2026-09-17] La carrera de `persist()` fire-and-forget (ver aprendizaje de abajo) puede BORRAR
 ### datos reales, no solo mostrar uno viejo — y cómo se recuperaron con `pageinspect`/`pg_surgery`
 **Fuente:** los recordatorios de Diana Fiallo (31 tickets en `ticket_pendiente`) desaparecieron de

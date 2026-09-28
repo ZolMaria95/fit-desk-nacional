@@ -1,0 +1,161 @@
+<div class="tf-head" mat-dialog-title>
+  <mat-icon class="tf-head-icon">edit_note</mat-icon>
+  <div class="tf-head-text">
+    <h2 class="tf-title">Editar ticket <span class="tf-num">#{{ ticket.ticket }}</span></h2>
+    <p class="tf-sub">Los cambios se guardan directo en el HelpDesk.</p>
+  </div>
+  <button mat-icon-button type="button" class="tf-close" (click)="cerrar()" aria-label="Cerrar">
+    <mat-icon>close</mat-icon>
+  </button>
+</div>
+
+<mat-dialog-content class="tf-body">
+  <!-- Cliente: solo lectura (reasignar el cliente de un ticket emitido no se permite). -->
+  <div class="tf-field tf-static">
+    <label class="tf-label">Cliente</label>
+    <div class="tf-control">
+      <mat-icon class="tf-lead">apartment</mat-icon>
+      <span class="tf-value">{{ ticket.clienteRaw || '—' }}</span>
+      <mat-icon class="tf-trailing" matTooltip="El cliente de un ticket no se cambia">lock</mat-icon>
+    </div>
+  </div>
+
+  <div class="tf-2col">
+    <!-- Módulo -->
+    <div class="tf-field">
+      <label class="tf-label">Módulo</label>
+      <button type="button" class="tf-control tf-trigger" [matMenuTriggerFor]="moduloMenu" aria-label="Elegir módulo">
+        <mat-icon class="tf-lead">widgets</mat-icon>
+        <span class="tf-value" [class.tf-placeholder]="!moduloLabel()">{{ moduloLabel() || 'Elegir módulo' }}</span>
+        <mat-icon class="tf-caret">expand_more</mat-icon>
+      </button>
+    </div>
+    <mat-menu #moduloMenu="matMenu" class="tf-menu">
+      <div class="tf-menu-search" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+        <mat-icon>search</mat-icon>
+        <input [ngModel]="buscarModulo()" (ngModelChange)="buscarModulo.set($event)" placeholder="Buscar módulo…" aria-label="Buscar módulo" />
+      </div>
+      @for (m of modulosF(); track m.id) {
+        <button mat-menu-item (click)="moduloId.set(m.id)" [class.tf-on]="moduloId() === m.id">{{ m.nombre }}</button>
+      } @empty {
+        <div class="tf-menu-empty">Sin módulos para mostrar.</div>
+      }
+    </mat-menu>
+
+    <!-- Tipo de ticket -->
+    <div class="tf-field">
+      <label class="tf-label">Tipo de ticket</label>
+      <button type="button" class="tf-control tf-trigger" [matMenuTriggerFor]="tipoMenu" aria-label="Elegir tipo">
+        <mat-icon class="tf-lead">category</mat-icon>
+        <span class="tf-value" [class.tf-placeholder]="!tipoLabel()">{{ tipoLabel() || 'Elegir tipo' }}</span>
+        <mat-icon class="tf-caret">expand_more</mat-icon>
+      </button>
+    </div>
+    <mat-menu #tipoMenu="matMenu" class="tf-menu">
+      @for (t of tipos(); track t.id) {
+        <button mat-menu-item (click)="tipoId.set(t.id)" [class.tf-on]="tipoId() === t.id">{{ t.nombre }}</button>
+      }
+    </mat-menu>
+
+    <!-- Estado -->
+    <div class="tf-field">
+      <label class="tf-label">Estado</label>
+      <button type="button" class="tf-control tf-trigger" [matMenuTriggerFor]="estadoMenu" aria-label="Elegir estado">
+        <mat-icon class="tf-lead">flag</mat-icon>
+        <span class="tf-value" [class.tf-placeholder]="!estado()">{{ estado() || 'Elegir estado' }}</span>
+        <mat-icon class="tf-caret">expand_more</mat-icon>
+      </button>
+    </div>
+    <mat-menu #estadoMenu="matMenu" class="tf-menu">
+      @for (s of estados(); track s) {
+        <button mat-menu-item (click)="estado.set(s)" [class.tf-on]="estado() === s">{{ s }}</button>
+      }
+    </mat-menu>
+
+    <!-- Orden (el `priority` del HelpDesk: posición en la lista del cliente, NO urgencia) -->
+    <div class="tf-field">
+      <label class="tf-label" for="tf-orden">Orden</label>
+      <div class="tf-control">
+        <mat-icon class="tf-lead">format_list_numbered</mat-icon>
+        <input id="tf-orden" type="number" min="1" step="1" class="tf-input"
+               [ngModel]="orden()" (ngModelChange)="orden.set($event === '' || $event == null ? null : +$event)" />
+      </div>
+      <p class="tf-hint">Posición en la lista de este cliente — no es un nivel de urgencia.</p>
+    </div>
+  </div>
+
+  <!-- N° de incidencia -->
+  <div class="tf-field">
+    <label class="tf-label" for="tf-inc">Número de incidencia</label>
+    <div class="tf-control">
+      <mat-icon class="tf-lead">tag</mat-icon>
+      <input id="tf-inc" class="tf-input" maxlength="50" placeholder="0000000"
+             [ngModel]="incidencia()" (ngModelChange)="incidencia.set($event)" />
+    </div>
+  </div>
+
+  <!-- Asunto -->
+  <div class="tf-field">
+    <label class="tf-label" for="tf-asunto">Asunto <span class="tf-req">*</span></label>
+    <div class="tf-control">
+      <mat-icon class="tf-lead">subject</mat-icon>
+      <input id="tf-asunto" class="tf-input" maxlength="500"
+             [ngModel]="asunto()" (ngModelChange)="asunto.set($event)" />
+    </div>
+  </div>
+
+  <!-- Adjunto -->
+  <div class="tf-field">
+    <label class="tf-label">Adjunto</label>
+    <div class="tf-control">
+      <mat-icon class="tf-lead">attach_file</mat-icon>
+      @if (archivo(); as f) {
+        <span class="tf-value">{{ f.name }}</span>
+        <button mat-icon-button type="button" class="tf-mini" (click)="archivo.set(null)" matTooltip="Quitar archivo" aria-label="Quitar archivo">
+          <mat-icon>close</mat-icon>
+        </button>
+      } @else {
+        <label class="tf-file">
+          <input type="file" hidden (change)="onArchivo($event)" />
+          <span>Elegir archivo</span>
+        </label>
+        <span class="tf-value tf-placeholder">Ninguno (máx. 5 MB)</span>
+      }
+    </div>
+    <p class="tf-hint">Se agrega a la conversación del ticket.</p>
+  </div>
+
+  <!-- Asignar a -->
+  <div class="tf-field">
+    <label class="tf-label">Asignar a</label>
+    <button type="button" class="tf-control tf-trigger" [matMenuTriggerFor]="userMenu" aria-label="Elegir a quién asignar">
+      <mat-icon class="tf-lead">person</mat-icon>
+      <span class="tf-value" [class.tf-placeholder]="!asignado()">{{ asignadoLabel() || 'Sin asignar' }}</span>
+      <mat-icon class="tf-caret">expand_more</mat-icon>
+    </button>
+  </div>
+  <mat-menu #userMenu="matMenu" class="tf-menu">
+    <div class="tf-menu-search" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+      <mat-icon>search</mat-icon>
+      <input [ngModel]="buscarUsuario()" (ngModelChange)="buscarUsuario.set($event)" placeholder="Buscar persona…" aria-label="Buscar persona" />
+    </div>
+    @for (u of usuariosF(); track u.id) {
+      <button mat-menu-item (click)="asignado.set(u.id)" [class.tf-on]="asignado() === u.id">{{ u.name }}</button>
+    } @empty {
+      <div class="tf-menu-empty">Sin personas para mostrar.</div>
+    }
+  </mat-menu>
+</mat-dialog-content>
+
+<div class="tf-actions">
+  <span class="tf-spacer"></span>
+  <button mat-button type="button" (click)="cerrar()">Cancelar</button>
+  <button mat-flat-button color="primary" type="button" (click)="guardar()" [disabled]="guardando()">
+    @if (guardando()) {
+      <mat-spinner diameter="18"></mat-spinner>
+    } @else {
+      <mat-icon>save</mat-icon>
+    }
+    Guardar cambios
+  </button>
+</div>

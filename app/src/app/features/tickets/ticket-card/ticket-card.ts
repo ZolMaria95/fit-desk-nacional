@@ -44,8 +44,15 @@ export class TicketCard {
   readonly puedeTransferirTicket = input(false);
   /** ¿El usuario puede ESCALAR el ticket al Responsable? (Especialista, modo Quarkus). */
   readonly puedeEscalarTicket = input(false);
+  /** ¿Puede EDITAR / ELIMINAR / REASIGNAR este ticket? Rol HELPDESK en el alcance del cliente, o
+   *  ADMIN (`auth.puedeGestionarTicket(clientId)`, lo calcula el contenedor). El backend lo re-exige. */
+  readonly puedeGestionar = input(false);
 
   readonly verConversacion = output<void>();
+  /** Editar el ticket (modal "Editar ticket"); lo resuelve el contenedor. */
+  readonly editar = output<void>();
+  /** Eliminar el ticket del HelpDesk (con confirmación); lo resuelve el contenedor. */
+  readonly eliminar = output<void>();
   readonly crearTarea = output<void>();
   readonly asignar = output<void>();
   readonly cambiarEstado = output<string>();

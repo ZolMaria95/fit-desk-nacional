@@ -1,0 +1,211 @@
+// Modal "Editar ticket" — mismo lenguaje visual que el de reunión (campos tipo tarjeta con
+// label arriba, ícono guía, selects botón + mat-menu con buscador) y pie de acciones FIJO
+// (regla del proyecto: Guardar siempre visible, también en pantalla chica).
+
+:host {
+  --mix-base: #fff;
+  --tf-border: #dfe4ea;
+  --tf-border-focus: var(--brand, #048abf);
+  --tf-lead-bg: color-mix(in srgb, var(--brand, #048abf) 10%, transparent);
+  --tf-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: 90dvh;
+}
+
+// ── Encabezado ──
+.tf-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 20px 24px 10px;
+
+  .tf-head-icon { flex: none; color: var(--brand, #048abf); font-size: 28px; width: 28px; height: 28px; margin-top: 2px; }
+  .tf-head-text { flex: 1; min-width: 0; }
+  .tf-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    line-height: 1.15;
+    color: var(--mat-sys-on-surface, #16202a);
+  }
+  .tf-num { color: var(--brand, #048abf); }
+  .tf-sub { margin: 3px 0 0; font-size: 13px; color: var(--mat-sys-on-surface-variant, #5a6470); }
+  .tf-close { flex: none; margin: -6px -8px 0 0; color: var(--mat-sys-on-surface-variant, #5a6470); }
+}
+
+// ── Cuerpo (scroll interno; el pie queda afuera y siempre visible) ──
+.tf-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 6px;
+  min-width: 480px;
+  overflow-x: hidden;
+}
+
+.tf-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+// ── Campo tarjeta ──
+.tf-field {
+  border: 1px solid var(--tf-border);
+  border-radius: var(--tf-radius);
+  padding: 10px 14px 11px;
+  background: #fff;
+  min-width: 0;
+  transition: border-color 0.12s, box-shadow 0.12s;
+
+  &:focus-within {
+    border-color: var(--tf-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, #048abf) 14%, transparent);
+  }
+}
+.tf-static { background: var(--mat-sys-surface-container-low, #f6f8fa); }
+
+.tf-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface, #384552);
+  margin-bottom: 7px;
+  .tf-req { color: var(--brand, #048abf); font-weight: 700; }
+}
+
+.tf-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.tf-lead {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--tf-lead-bg);
+  color: var(--brand, #048abf);
+  font-size: 19px;
+}
+
+.tf-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--mat-sys-on-surface, #16202a);
+  padding: 0;
+  &::placeholder { color: #9aa4ae; }
+}
+
+.tf-trigger {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+}
+
+.tf-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--mat-sys-on-surface, #16202a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  &.tf-placeholder { color: #9aa4ae; }
+}
+
+.tf-caret, .tf-trailing {
+  flex: none;
+  color: var(--mat-sys-on-surface-variant, #97a1ab);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.tf-hint { margin: 6px 0 0; font-size: 11.5px; line-height: 1.35; color: var(--mat-sys-on-surface-variant, #5a6470); }
+
+.tf-file {
+  flex: none;
+  cursor: pointer;
+  border: 1px solid var(--mat-sys-outline-variant, #d6dbe0);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-dark, #0390bc);
+  background: var(--mat-sys-surface, #fff);
+  &:hover { background: color-mix(in srgb, var(--brand, #048abf) 8%, var(--mix-base, #fff)); }
+}
+.tf-mini { flex: none; width: 32px; height: 32px; padding: 4px; }
+
+// ── Menús (buscador + opción activa) ──
+.tf-menu-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: -8px 0 4px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+  mat-icon { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-on-surface-variant, #97a1ab); }
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: 14px;
+    &::placeholder { color: #9aa4ae; }
+  }
+}
+.tf-menu-empty { padding: 10px 16px; font-size: 13px; color: var(--mat-sys-on-surface-variant, #5a6470); }
+.tf-on { font-weight: 700; color: var(--brand-dark, #0390bc); }
+
+// ── Pie de acciones: FIJO ──
+.tf-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--mat-sys-surface-container-low, #fff);
+  border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+
+  button mat-icon, button mat-spinner { margin-right: 4px; }
+  mat-spinner { display: inline-block; vertical-align: middle; }
+}
+.tf-spacer { flex: 1 1 auto; }
+
+// ── Responsive ──
+@media (max-width: 560px) {
+  .tf-body { min-width: 0; }
+  .tf-2col { grid-template-columns: minmax(0, 1fr); }
+  .tf-head { padding: 16px 18px 8px; }
+  .tf-actions { padding: 10px 16px; }
+}
+
+// ─── TEMA OSCURO ───
+:host-context(html[data-theme='dark']) {
+  --mix-base: #1a222b;
+  --tf-border: #39434d;
+  .tf-field { background: #1a222b; }
+  .tf-static { background: #151c23; }
+  .tf-input::placeholder, .tf-value.tf-placeholder, .tf-menu-search input::placeholder { color: #8b949e; }
+}
