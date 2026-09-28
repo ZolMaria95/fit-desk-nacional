@@ -48,7 +48,15 @@ del HelpDesk se verificó de punta a punta: la edición aplica asunto/módulo (r
 cambio de tipo rebotó con "La prioridad ya existe para este cliente y tipo." y el modal quedó abierto
 con el motivo (correcto). Fix extra: en Tickets, un ticket **buscado por N°** (`remoteResult`) no se
 refrescaba tras editar/eliminar — ahora escucha `hd.ticketMutado()`. Desplegado a AWS el 2026-09-28
-(la dueña dio luz verde: "continua y al terminar deploy"); commits en la entrada de despliegue.
+(la dueña dio luz verde: "continua y al terminar deploy"): monorepo `fc1eb37`; GitLab back `e7d8f39`
+(Flyway 24 → **V25 + V26** aplicadas; backup previo `~/fitdesk/backup-pre-v26-20260928.dump`) y front
+`a3e10aa` (el lote incluye también Senior de Turno, modal de ticket y fix de vacaciones que ya
+estaban en producción pero no en GitLab; `angular.json` con budget de estilos 24 kB), bundle
+`main-M2S2RHBS.js`. Guardia de imagen OK; verificado en prod: POST al API sin 405 (401 del HelpDesk),
+`HELPDESK` en `/api/catalogos/roles`, DELETE directo al proxy → 403, login real de MSC001 con lápiz y
+papelera en las 15 tarjetas y conversación abierta en el último mensaje. Rollback: imagen dangling
+`59c6440757d8`. **Sigue abierto:** a quién se asigna el rol HELPDESK (solo admins del HelpDesk vs.
+cuenta de servicio) — nadie lo tiene asignado aún en producción.
 
 ### [2026-09-27] Conversación del ticket: abre mostrando el último mensaje
 
