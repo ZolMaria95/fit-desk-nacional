@@ -6,6 +6,18 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-28] Desplegado a AWS: Reportes, búsqueda acotada, Senior de Turno, filtros del Board y asignación
+
+Lote desplegado con luz verde de la dueña ("deploy"). Monorepo `d48e9c9`; GitLab back **`7483da1`**
+(Flyway 26 → **V27 `turno_senior` + V28 `tarea.en_proceso_desde`**; backup previo
+`~/fitdesk/backup-pre-v28-20260928.dump`) y front **`3b1d77d`** (con `package.json`/`package-lock.json`
+por `exceljs` y `angular.json` por `allowedCommonJsDependencies`), bundle **`main-JM6SHUMX.js`**.
+Guardia de imagen OK. Verificado en prod: POST al API sin 405 (401 del HelpDesk), DELETE directo al
+proxy 403, login real de MSC001, menú y pantalla Reportes con datos reales (`/api/reportes/*` 200, Excel
+preparado), `turnoSenior/hoy` 200; HelpDesk sano (Apache 302), memoria disponible ~2,6 GB. Rollback del
+front: imagen dangling `e44a43114372`. Desde ahora `en_proceso_desde` se llena al pasar a In Progress; las
+tareas que ya estaban en curso salen como "aprox." en el reporte.
+
 ### [2026-09-28] Asignar tickets: tomar uno sin asignado y el responsable reasigna a su gente
 
 **Decisión** (amplía la reasignación restringida del rol HELPDESK, 2026-09-27):
