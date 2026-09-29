@@ -6,6 +6,29 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-29] Fix: aceptar una transferencia (o aprobar una reasignación) ahora asigna el TICKET
+
+**Bug (reportado por la dueña, TA-682 #33910):** `TransferenciaResource.aceptar` y `SolicitudResource.aprobar`
+(REASIGNACION) solo cambiaban `tarea.asignado_a`; el ticket quedaba sin asignar en el HelpDesk. Con la regla
+del 2026-09-28 ("la tarea sigue al ticket") ese vacío terminó quitándole el asignado a la tarea.
+Afectadas en prod: TA-682 #33910 y TA-688 #33916 (→ JCEO001), TA-358 #33710 (→ BMHJ001).
+
+**Fix:**
+- Al aceptar/aprobar, si la tarea tiene ticket, el backend asigna el ticket en el HelpDesk **antes** de
+  completar (`TicketGestion.asignarTicketDeTarea` → `asignarEnHelpdesk`, con el `Authorization` del usuario,
+  confirmando que el HelpDesk devolvió ese asignado). Si no se confirma → error con el mensaje del HelpDesk y
+  la transferencia/solicitud **sigue PENDIENTE**. Sin `Authorization` (app vieja) → 409 "Recarga la página".
+  Confirmado → `TicketEspejoStore.upsertAssignee` (espejo + tarea).
+- El front (`transferencias.service`) manda `Authorization` en aceptar/aprobar (el interceptor solo lo pone
+  en `/api/v1`). `errorMsg` también lee `message`.
+- **Un ticket sin asignado ya no vacía la tarea** (`propagarAsignado` y `reconciliarAsignados` lo ignoran):
+  además, el HelpDesk vacía el asignado al cerrar/aprobar un ticket.
+
+**Verificado en local contra el HelpDesk real (ticket de pruebas #27732):** aceptar sin token → 409 y sigue
+PENDIENTE; aceptar a un usuario que el HelpDesk no conoce → 404 del HelpDesk y sigue PENDIENTE; aceptar bien →
+COMPLETADA, ticket y tarea asignados; quitar el asignado del ticket → la tarea lo conserva. #27732 quedó sin
+asignado.
+
 ### [2026-09-28] El rol HELPDESK puede finalizar cualquier tarea SIN ticket
 
 **Decisión (pedido de la dueña):** el check "Finalizado" de una tarea **sin ticket** (Board y detalle de la

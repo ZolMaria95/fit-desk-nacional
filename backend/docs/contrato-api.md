@@ -135,6 +135,10 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
   eliminan". Respuesta `{ ok, message, tareasEliminadas: [TA-…] }`; si el HelpDesk falla, su status y
   cuerpo tal cual, sin tocar nada local.
 - **Transferencias** `/api/transferencias`: `POST` (crear), `GET`, `GET /entrantes`, `GET /salientes`,
+  - **Aceptar transferencia / aprobar reasignación (2026-09-29):** si la tarea tiene ticket, el backend lo
+    asigna en el HelpDesk antes de completar; requiere `Authorization: Bearer <token del HelpDesk>` además de
+    `X-Actor-Hid` (sin él → 409). Error del HelpDesk → mismo status (4xx) o 502 con `{error, message}` y la
+    operación no se aplica.
   `GET /aceptadas`, `POST /{id}/aceptar`, `POST /{id}/rechazar`, `POST /{id}/cancelar`,
   `GET /mi-equipo/miembros`, `GET /equipo/{equipoId}/miembros`.
   - `POST /{id}/cancelar`: retira un envío PROPIO PENDIENTE (autoriza quien gobierna el equipo ORIGEN).

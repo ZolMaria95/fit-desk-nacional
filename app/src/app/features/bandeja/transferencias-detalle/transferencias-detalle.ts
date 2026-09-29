@@ -200,7 +200,7 @@ export class TransferenciasDetalle {
     this.busy.set('t-' + t.id);
     try {
       await this.svc.aceptarTransferencia(t.id, hid);
-      this.snack.open('Transferencia aceptada; la tarea quedó asignada.', 'OK', { duration: 4000 });
+      this.snack.open('Transferencia aceptada; la tarea y el ticket quedaron asignados.', 'OK', { duration: 4000 });
       await this.cargar();
     } catch (e: unknown) {
       this.snack.open(errorMsg(e, 'No se pudo aceptar.'), 'OK', { duration: 5000 });

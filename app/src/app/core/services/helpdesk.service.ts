@@ -836,10 +836,12 @@ export class HelpdeskService {
       const st = porTicket.get(ticket);
       if (!ticket || !st || this.reconciliando.has(ticket)) continue;
       const vivo = String(it.asignado ?? '').trim().toUpperCase();
-      if (vivo === String(st.assignee ?? '').trim().toUpperCase()) continue;
+      // "Sin asignado" no se reconcilia: el HelpDesk vacía el asignado al cerrar un ticket, y un ticket
+      // aún sin asignar no debe dejar la tarea sin dueño (mismo criterio que `propagarAsignado`).
+      if (!vivo || vivo === String(st.assignee ?? '').trim().toUpperCase()) continue;
       this.reconciliando.add(ticket);
       void this.refreshEspejoAssignee(ticket, vivo)
-        .then(() => this.data.stories.update((list) => list.map((s) => (String(s.ticket) === ticket ? { ...s, assignee: vivo || null } : s))))
+        .then(() => this.data.stories.update((list) => list.map((s) => (String(s.ticket) === ticket ? { ...s, assignee: vivo } : s))))
         .finally(() => this.reconciliando.delete(ticket));
     }
   }

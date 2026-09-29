@@ -109,6 +109,88 @@ public class TicketGestion {
         return borradas;
     }
 
+    @Inject
+    com.fitdesk.sync.TicketEspejoStore espejoStore;
+
+    /**
+     * Al ACEPTAR una transferencia o APROBAR una reasignación: si la tarea tiene ticket, se asigna también
+     * en el HelpDesk (antes solo cambiaba la tarea y el ticket quedaba sin asignar) y, confirmado, se deja
+     * el espejo + la tarea al día. Devuelve null si está todo bien (o la tarea no tiene ticket) y, si no,
+     * la respuesta de error: quien llama NO debe mutar nada en ese caso (se aborta la operación).
+     */
+    public jakarta.ws.rs.core.Response asignarTicketDeTarea(Tarea tarea, com.fitdesk.core.Usuario destino,
+            String authorization) {
+        if (tarea == null || tarea.ticketEspejo == null || tarea.ticketEspejo.helpdeskTicketId == null) {
+            return null;
+        }
+        String ticketId = tarea.ticketEspejo.helpdeskTicketId;
+        String hid = destino != null ? destino.helpdeskUserId : null;
+        if (hid == null || hid.isBlank()) {
+            return error(400, "La persona elegida no tiene usuario en el HelpDesk: no se puede asignar el ticket #" + ticketId + ".");
+        }
+        if (authorization == null || authorization.isBlank()) {
+            return error(409, "Recarga la página (FitDesk se actualizó) para completar: hace falta asignar el ticket #"
+                    + ticketId + " en el HelpDesk.");
+        }
+        try {
+            ResultadoAsignacion r = asignarEnHelpdesk(ticketId, hid, authorization);
+            if (!r.ok()) {
+                int st = r.status() >= 400 && r.status() < 500 ? r.status() : 502;
+                return error(st, "No se pudo asignar el ticket #" + ticketId + " en el HelpDesk: " + r.mensaje());
+            }
+        } catch (Exception ex) {
+            return error(502, "No se pudo asignar el ticket #" + ticketId + " en el HelpDesk (sin respuesta).");
+        }
+        espejoStore.upsertAssignee(ticketId, hid); // espejo + tarea(s) del ticket (propagarAsignado)
+        return null;
+    }
+
+    private static jakarta.ws.rs.core.Response error(int status, String msg) {
+        return jakarta.ws.rs.core.Response.status(status)
+                .type(jakarta.ws.rs.core.MediaType.APPLICATION_JSON)
+                .entity(java.util.Map.of("error", msg, "message", msg)) // misma forma que bad()/forbidden() de estos recursos
+                .build();
+    }
+
+    /** Resultado de asignar un ticket en el HelpDesk: {@code ok} solo si confirmó el asignado pedido. */
+    public record ResultadoAsignacion(boolean ok, int status, String mensaje) {
+    }
+
+    /**
+     * Asigna el ticket en el HelpDesk (PUT form-urlencoded {@code assigned_user_id}) con el Authorization del
+     * usuario, y lo CONFIRMA leyendo el asignado de la respuesta: el HelpDesk responde 200 aunque ignore un
+     * campo. Síncrono (regla del proyecto): quien llama no debe dar la operación por hecha si {@code !ok}.
+     */
+    public ResultadoAsignacion asignarEnHelpdesk(String ticketId, String hid, String authorization) throws Exception {
+        String body = "assigned_user_id=" + java.net.URLEncoder.encode(hid, java.nio.charset.StandardCharsets.UTF_8);
+        HttpRequest.Builder rb = HttpRequest.newBuilder(URI.create(target + "/tickets/tickets/" + ticketId))
+                .timeout(Duration.ofSeconds(60))
+                .method("PUT", HttpRequest.BodyPublishers.ofString(body))
+                .header("Accept", "application/json")
+                .header("Content-Type", "application/x-www-form-urlencoded");
+        if (authorization != null && !authorization.isBlank()) {
+            rb.header("Authorization", authorization);
+        }
+        HttpResponse<byte[]> r = HttpRetry.send(client, rb.build(), HttpResponse.BodyHandlers.ofByteArray());
+        JsonNode n = null;
+        try {
+            n = mapper.readTree(r.body());
+        } catch (Exception ignored) {
+            // cuerpo no JSON: se informa por status
+        }
+        if (r.statusCode() < 200 || r.statusCode() >= 300) {
+            String msg = n == null ? null
+                    : n.path("error").path("message").asText(n.path("message").asText(n.path("detail").asText("")));
+            return new ResultadoAsignacion(false, r.statusCode(),
+                    msg == null || msg.isBlank() ? "El HelpDesk no aceptó la asignación (" + r.statusCode() + ")." : msg);
+        }
+        String aplicado = n == null ? null : n.path("assigned_user_id").asText(null);
+        if (aplicado == null || !aplicado.trim().equalsIgnoreCase(hid.trim())) {
+            return new ResultadoAsignacion(false, r.statusCode(), "El HelpDesk no aplicó la asignación del ticket.");
+        }
+        return new ResultadoAsignacion(true, r.statusCode(), null);
+    }
+
     private HttpResponse<byte[]> send(String method, String path, String authorization) throws Exception {
         HttpRequest.Builder rb = HttpRequest.newBuilder(URI.create(target + "/" + path))
                 .timeout(Duration.ofSeconds(60))

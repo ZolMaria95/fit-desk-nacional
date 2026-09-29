@@ -6,6 +6,15 @@ Hechos descubiertos sobre el código real, el HelpDesk, Firebase y el negocio. *
 
 ---
 
+### [2026-09-29] Aceptar una transferencia no asignaba el ticket en el HelpDesk
+
+**Fuente:** TA-682 (#33910), transferencia 16 COMPLETADA con destino JCEO001 y ticket sin asignado.
+`aceptar`/`aprobar` solo tocaban `tarea.asignado_a`. Además, en el HelpDesk el `PUT` con
+`assigned_user_id=<hid inexistente>` responde 404 `ASSIGNED_USER_NOT_FOUND` ("El usuario asignado no existe
+o está inactivo").
+**Implicación:** toda operación de FitDesk que cambie el dueño de una tarea con ticket debe asignar también
+el ticket, de forma síncrona y confirmada; y "sin asignado" nunca se copia del ticket a la tarea.
+
 ### [2026-09-28] `tarea.asignado_a` queda desactualizado cuando se reasigna en el HelpDesk
 
 **Fuente:** reporte "Estado del equipo" en prod — TA-152 (#33181) con `asignado_a` = MSC001 y

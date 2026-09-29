@@ -43,6 +43,10 @@ import jakarta.ws.rs.core.Response;
 @Consumes(MediaType.APPLICATION_JSON)
 public class TransferenciaResource {
 
+    @jakarta.inject.Inject
+    TicketGestion gestion;
+
+
     @Inject
     NotificacionService notificaciones;
 
@@ -156,7 +160,8 @@ public class TransferenciaResource {
     @POST
     @Path("/{id}/aceptar")
     @Transactional
-    public Response aceptar(@PathParam("id") Long id, JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid) {
+    public Response aceptar(@PathParam("id") Long id, JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid,
+            @HeaderParam("Authorization") String authorization) {
         Transferencia t = Transferencia.findById(id);
         if (t == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
@@ -175,6 +180,12 @@ public class TransferenciaResource {
         Usuario asignado = usuarioBy(asignadoHid);
         if (asignado == null) {
             return bad("usuario asignado inexistente: " + asignadoHid);
+        }
+        // Tarea con ticket: se asigna también el TICKET en el HelpDesk (síncrono). Si el HelpDesk no lo
+        // confirma, la transferencia sigue PENDIENTE (antes se completaba y el ticket quedaba sin asignar).
+        Response errHd = gestion.asignarTicketDeTarea(t.tarea, asignado, authorization);
+        if (errHd != null) {
+            return errHd;
         }
         t.tarea.asignadoA = asignado;
         // Si la tarea nació de un ticket transferido (oculta), al aceptar APARECE en el board.

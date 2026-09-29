@@ -85,6 +85,17 @@ export class TransferenciasService {
     const hid = this.auth.session()?.id;
     return hid ? { headers: { 'X-Actor-Hid': hid } } : {};
   }
+  /** Como `actorOpts` + el token del HelpDesk: aceptar una transferencia / aprobar una reasignación
+   *  asigna también el TICKET en el HelpDesk (lo hace el backend con el token del usuario). El
+   *  interceptor solo pone `Authorization` en `/api/v1`, por eso va explícito aquí. */
+  private actorOptsConToken() {
+    const headers: Record<string, string> = {};
+    const hid = this.auth.session()?.id;
+    if (hid) headers['X-Actor-Hid'] = hid;
+    const t = this.auth.token;
+    if (t) headers['Authorization'] = `Bearer ${t}`;
+    return { headers };
+  }
 
   // ── Transferencias ──
   /** Crea una transferencia. Camino clásico: `tareaCodigo` (tarea ya en un board). Camino
@@ -108,7 +119,7 @@ export class TransferenciasService {
     return firstValueFrom(this.http.get<Transferencia[]>(`${this.base}/api/transferencias/salientes`, this.actorOpts()));
   }
   aceptarTransferencia(id: number, asignadoHid: string) {
-    return firstValueFrom(this.http.post<Transferencia>(`${this.base}/api/transferencias/${id}/aceptar`, { asignadoHid }, this.actorOpts()));
+    return firstValueFrom(this.http.post<Transferencia>(`${this.base}/api/transferencias/${id}/aceptar`, { asignadoHid }, this.actorOptsConToken()));
   }
   rechazarTransferencia(id: number, motivo?: string) {
     return firstValueFrom(this.http.post<Transferencia>(`${this.base}/api/transferencias/${id}/rechazar`, { motivo }, this.actorOpts()));
@@ -152,7 +163,7 @@ export class TransferenciasService {
     return firstValueFrom(this.http.get<Solicitud[]>(`${this.base}/api/solicitudes/mias`, this.actorOpts()));
   }
   aprobarSolicitud(id: number, b?: { asignadoHid?: string; equipoDestinoId?: number }) {
-    return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/aprobar`, b ?? {}, this.actorOpts()));
+    return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/aprobar`, b ?? {}, this.actorOptsConToken()));
   }
   rechazarSolicitud(id: number, motivo?: string) {
     return firstValueFrom(this.http.post<Solicitud>(`${this.base}/api/solicitudes/${id}/rechazar`, { motivo }, this.actorOpts()));

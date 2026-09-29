@@ -117,6 +117,8 @@ export class EnviarEquipoDialog {
 
 /** Mensaje de error del backend ({error} en el cuerpo) o un fallback. */
 export function errorMsg(e: unknown, fallback: string): string {
-  const err = e as { error?: { error?: string } };
-  return err?.error?.error || fallback;
+  const err = e as { error?: { error?: string | { message?: string }; message?: string } };
+  const b = err?.error;
+  if (typeof b?.error === 'string' && b.error) return b.error;
+  return (typeof b?.error === 'object' && b.error?.message) || b?.message || fallback;
 }

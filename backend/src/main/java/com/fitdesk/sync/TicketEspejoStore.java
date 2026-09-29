@@ -92,11 +92,16 @@ public class TicketEspejoStore {
      * El asignado de una tarea CON ticket es el del ticket: cada vez que cambia el del espejo, se copia a
      * sus tareas (`tarea.asignado_a`), venga el cambio de FitDesk o de una reasignación hecha directo en el
      * HelpDesk. Si el hid no es un usuario de FitDesk, la tarea queda sin usuario local (el asignado
-     * efectivo sigue siendo el del espejo). Devuelve cuántas tareas cambió.
+     * efectivo sigue siendo el del espejo). Un espejo SIN asignado no toca la tarea. Devuelve cuántas cambió.
      */
     public int propagarAsignado(TicketEspejo e) {
-        Usuario u = e.asignadoHd == null ? null : Usuario.findByHelpdeskUserId(e.asignadoHd);
-        if (u == null && e.asignadoHd != null) {
+        // "Sin asignado" NO se propaga: el HelpDesk vacía el asignado al cerrar/aprobar un ticket, y un
+        // ticket aún no asignado (p. ej. transferencia aceptada antes del fix) dejaba la tarea sin dueño.
+        if (e.asignadoHd == null || e.asignadoHd.isBlank()) {
+            return 0;
+        }
+        Usuario u = Usuario.findByHelpdeskUserId(e.asignadoHd);
+        if (u == null) {
             u = Usuario.find("upper(helpdeskUserId) = ?1", e.asignadoHd).firstResult();
         }
         int n = 0;

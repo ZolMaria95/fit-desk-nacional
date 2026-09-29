@@ -41,6 +41,10 @@ import jakarta.ws.rs.core.Response;
 @Consumes(MediaType.APPLICATION_JSON)
 public class SolicitudResource {
 
+    @jakarta.inject.Inject
+    TicketGestion gestion;
+
+
     @Inject
     NotificacionService notificaciones;
 
@@ -156,7 +160,8 @@ public class SolicitudResource {
     @POST
     @Path("/{id}/aprobar")
     @Transactional
-    public Response aprobar(@PathParam("id") Long id, JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid) {
+    public Response aprobar(@PathParam("id") Long id, JsonNode in, @HeaderParam("X-Actor-Hid") String actorHid,
+            @HeaderParam("Authorization") String authorization) {
         Solicitud s = Solicitud.findById(id);
         if (s == null) {
             return Response.status(Response.Status.NOT_FOUND).build();
@@ -176,6 +181,12 @@ public class SolicitudResource {
                     : s.asignadoSugerido;
             if (destinatario == null) {
                 return bad("falta el asignado (asignadoHid en el body o asignadoSugerido en la solicitud)");
+            }
+            // Tarea con ticket: la reasignación también va al TICKET en el HelpDesk (síncrono); si no se
+            // confirma, la solicitud sigue PENDIENTE.
+            Response errHd = gestion.asignarTicketDeTarea(s.tarea, destinatario, authorization);
+            if (errHd != null) {
+                return errHd;
             }
             s.tarea.asignadoA = destinatario;
             // Si la tarea nació de un ticket escalado (oculta), al aprobar la reasignación APARECE en el board.
