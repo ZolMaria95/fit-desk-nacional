@@ -6,6 +6,15 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-28] Desplegado a AWS: asignado de la tarea sigue al ticket, recordatorios y sub-pestañas
+
+Lote desplegado ("deploy y commit"). Monorepo `d3f07e0`; GitLab back **`ed0c874`** (Flyway 28 → **V29**,
+backup previo `~/fitdesk/backup-pre-v29-20260928.dump`; tras la V29, 0 tareas con asignado distinto del
+espejo — TA-152 ya es de Carlos García) y front **`b35802a`**, bundle **`main-NHAS5TT4.js`**. Guardia de
+imagen OK. Verificado en prod: login proxy 401 (un 503 momentáneo mientras arrancaba el contenedor del
+front), login real de MSC001 (sesión cerrada al terminar), Recordatorio con Próximos/Anteriores y Reportes
+con sus dos sub-pestañas. Rollback del front: imagen dangling `98586ed7a5cc`.
+
 ### [2026-09-28] Recordatorios pasados: no vuelven a alertar y van a la sub-pestaña "Anteriores"
 
 **Decisión (pedido de la dueña):** un recordatorio **solo suena el día de su fecha**, desde su hora, una vez
