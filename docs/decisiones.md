@@ -29,6 +29,13 @@ PENDIENTE; aceptar a un usuario que el HelpDesk no conoce → 404 del HelpDesk y
 COMPLETADA, ticket y tarea asignados; quitar el asignado del ticket → la tarea lo conserva. #27732 quedó sin
 asignado.
 
+**Desplegado a AWS 2026-09-29:** monorepo `74ecf98`; GitLab back `578c01c` (sin migración) y front `64b5731`,
+bundle `main-LAFUQLBF.js`; guardia OK, login proxy 401 (503 momentáneo al cambiar el contenedor), login real
++ Bandeja OK (sesión cerrada). Rollback front: `85bc555a9636`. **Reparación** (backup previo
+`backup-pre-reparacion-transferencias-20260929.dump`): #33910 y #33916 ya estaban asignados a JCEO001 en el
+HelpDesk (alguien lo hizo a mano); #33710 se asignó a BMHJ001 (cuenta de pruebas RTAM001, admin del HelpDesk,
+respuesta confirmada). Espejo + tarea al día: TA-682 y TA-688 → Juan Carlos Espinel, TA-358 → Heccer Benavides.
+
 ### [2026-09-28] El rol HELPDESK puede finalizar cualquier tarea SIN ticket
 
 **Decisión (pedido de la dueña):** el check "Finalizado" de una tarea **sin ticket** (Board y detalle de la
