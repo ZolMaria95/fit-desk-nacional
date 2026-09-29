@@ -16,7 +16,9 @@ backend no tenía guarda sobre `approved`, así que el cambio es solo del front.
 HELPDESK es DEFM001 (Diana Fiallo, GLOBAL).
 
 **Verificado en local:** con HELPDESK, TA-005 (ajena, sin ticket, Entregado) → puede finalizar, no
-mover; TA-001 (con ticket) → no. Sin desplegar.
+mover; TA-001 (con ticket) → no. **Desplegado a AWS 2026-09-28** (solo front): monorepo `295647b`, GitLab
+`d2a828b`, bundle `main-S3KBGF3Y.js`; guardia OK, login proxy 401, login real + Board OK (sesión cerrada
+al terminar). Rollback del front: imagen dangling `79a4365d809d`.
 
 ### [2026-09-28] Desplegado a AWS: asignado de la tarea sigue al ticket, recordatorios y sub-pestañas
 
