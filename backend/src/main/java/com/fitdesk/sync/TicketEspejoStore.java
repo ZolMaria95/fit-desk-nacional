@@ -8,7 +8,9 @@ import java.time.format.DateTimeParseException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fitdesk.core.Cliente;
+import com.fitdesk.core.Tarea;
 import com.fitdesk.core.TicketEspejo;
+import com.fitdesk.core.Usuario;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -46,6 +48,9 @@ public class TicketEspejoStore {
                 e.estadoOrigen = text(t, "estado");
                 e.prioridad = text(t, "priority");
                 e.asignadoHd = upper(text(t, "assigned_user_id"));
+                if (!nuevo) {
+                    propagarAsignado(e);
+                }
                 e.fechaIngreso = ts(text(t, "entry_date"));
                 e.fechaModificacion = ts(text(t, "modified_date"));
                 e.lastSyncedAt = OffsetDateTime.now();
@@ -80,6 +85,31 @@ public class TicketEspejoStore {
         }
         e.asignadoHd = upper(hid == null || hid.isBlank() ? null : hid.trim());
         e.lastSyncedAt = OffsetDateTime.now();
+        propagarAsignado(e);
+    }
+
+    /**
+     * El asignado de una tarea CON ticket es el del ticket: cada vez que cambia el del espejo, se copia a
+     * sus tareas (`tarea.asignado_a`), venga el cambio de FitDesk o de una reasignación hecha directo en el
+     * HelpDesk. Si el hid no es un usuario de FitDesk, la tarea queda sin usuario local (el asignado
+     * efectivo sigue siendo el del espejo). Devuelve cuántas tareas cambió.
+     */
+    public int propagarAsignado(TicketEspejo e) {
+        Usuario u = e.asignadoHd == null ? null : Usuario.findByHelpdeskUserId(e.asignadoHd);
+        if (u == null && e.asignadoHd != null) {
+            u = Usuario.find("upper(helpdeskUserId) = ?1", e.asignadoHd).firstResult();
+        }
+        int n = 0;
+        for (Tarea t : Tarea.<Tarea>list("ticketEspejo = ?1", e)) {
+            Long actual = t.asignadoA != null ? t.asignadoA.id : null;
+            Long nuevo = u != null ? u.id : null;
+            if (actual == null ? nuevo != null : !actual.equals(nuevo)) {
+                t.asignadoA = u;
+                t.actualizadoEn = OffsetDateTime.now();
+                n++;
+            }
+        }
+        return n;
     }
 
     /** Resuelve el cliente por helpdesk_client_id y, si no, por nombre. Null si no está (otra regional). */

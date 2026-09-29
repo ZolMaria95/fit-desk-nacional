@@ -21,6 +21,8 @@ import org.jboss.logging.Logger;
 
 import com.fitdesk.http.HttpRetry;
 
+import com.fitdesk.sync.TicketEspejoStore;
+
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -105,7 +107,33 @@ public class HelpdeskProxyResource {
         if (denegado != null) {
             return denegado;
         }
-        return forward("PUT", path, uriInfo, headers, bytes);
+        Response r = forward("PUT", path, uriInfo, headers, bytes);
+        reflejarAsignacion(path, headers, bytes, r);
+        return r;
+    }
+
+    @Inject
+    TicketEspejoStore espejo;
+
+    /**
+     * Write-through server-side: si el HelpDesk CONFIRMÓ (2xx) un PUT de `tickets/tickets/{id}` que trae
+     * `assigned_user_id`, se actualiza el espejo y, con él, la tarea del ticket
+     * ({@link TicketEspejoStore#propagarAsignado}). No depende del front. Nunca rompe el relay.
+     */
+    private void reflejarAsignacion(String path, HttpHeaders headers, byte[] body, Response r) {
+        try {
+            if (r == null || r.getStatus() < 200 || r.getStatus() >= 300) {
+                return;
+            }
+            Matcher m = TICKET_PATH.matcher(path == null ? "" : path);
+            Map<String, String> campos = m.matches() ? camposForm(headers.getMediaType(), body) : null;
+            if (campos == null || !campos.containsKey("assigned_user_id")) {
+                return;
+            }
+            espejo.upsertAssignee(m.group(1), campos.get("assigned_user_id"));
+        } catch (Exception ex) {
+            LOG.warnf("No se pudo reflejar la asignación en el espejo (%s): %s", path, ex.toString());
+        }
     }
 
     // ── Gating del rol HELPDESK sobre escrituras de tickets ─────────────────────────────

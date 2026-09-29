@@ -55,7 +55,11 @@ export class Reportes {
   /** hid elegidos; vacío = todos los del equipo. */
   readonly consultoresSel = signal<Set<string>>(new Set());
   readonly buscarConsultor = signal('');
-  readonly incluirPendientes = signal(false);
+  /** Casillas independientes: In Progress se ve siempre; cada una suma su estado. */
+  /** Sub-pestaña visible (la 1ª es "Requieren seguimiento hoy"). */
+  readonly seccion = signal<'seguimiento' | 'consultores'>('seguimiento');
+  readonly incluirTodo = signal(false);
+  readonly incluirCert = signal(false);
 
   readonly cargando = signal(false);
   /** Excel ya generado para el reporte en pantalla. Se prepara ANTES del clic: en la PWA instalada,
@@ -88,12 +92,14 @@ export class Reportes {
   readonly grupos = computed<GrupoConsultor[]>(() => {
     const rep = this.reporte();
     if (!rep) return [];
-    const todas = this.incluirPendientes();
-    const visibles = rep.filas.filter((f) => todas || f.estado === 'IN_PROGRESS');
+    const estados = new Set(['IN_PROGRESS']);
+    if (this.incluirTodo()) estados.add('TODO');
+    if (this.incluirCert()) estados.add('EN_CERTIFICACION');
+    const visibles = rep.filas.filter((f) => estados.has(f.estado));
     const out: GrupoConsultor[] = rep.consultores.map((p) => ({
       hid: p.hid,
       nombre: nombrePropio(p.nombre),
-      filas: visibles.filter((f) => f.consultorHid === p.hid),
+      filas: visibles.filter((f) => (f.consultorHid ?? '').toUpperCase() === String(p.hid).toUpperCase()),
     }));
     const sinAsignar = visibles.filter((f) => !f.consultorHid);
     if (sinAsignar.length) out.push({ hid: SIN_ASIGNAR, nombre: 'Sin asignar', filas: sinAsignar });
@@ -191,23 +197,46 @@ export class Reportes {
     }
   }
 
-  /** El Orden del ticket del espejo puede estar desactualizado: se lee en vivo (como el Board). Si la
-   *  lectura de un ticket falla, queda el del espejo. */
+  /** Orden y ASIGNADO del ticket, en vivo (como el Board): el espejo puede estar desactualizado y una
+   *  reasignación hecha en el HelpDesk no toca la tarea. Si la lectura de un ticket falla, queda lo del
+   *  backend. Una fila cuyo ticket ahora es de alguien fuera del reporte, sale del reporte. */
   private async ordenEnVivo(rep: ReporteEstadoEquipo): Promise<void> {
     const tickets = [...new Set(rep.filas.map((f) => f.ticket).filter((t): t is string => !!t))];
-    const vivo = new Map<string, string>();
+    const vivo = new Map<string, { orden: string | null; asignado: string | null }>();
     await Promise.all(
       tickets.map(async (t) => {
         const raw = await this.hd.fetchTicketRaw(t);
-        const p = raw?.priority;
-        if (p !== undefined && p !== null && String(p).trim()) vivo.set(t, String(p).trim());
+        if (!raw) return;
+        const p = raw.priority;
+        const a = String(raw.assigned_user_id ?? '').trim().toUpperCase();
+        vivo.set(t, { orden: p !== undefined && p !== null && String(p).trim() ? String(p).trim() : null, asignado: a || null });
       }),
     );
-    const aplicar = (f: FilaReporte) => {
-      if (f.ticket && vivo.has(f.ticket)) f.ordenTicket = vivo.get(f.ticket)!;
+    // El asignado de la tarea es SIEMPRE el del ticket: si en vivo difiere, se corrige la tarea.
+    this.hd.reconciliarAsignados([...vivo].map(([ticket, v]) => ({ ticket, asignado: v.asignado })));
+    const enReporte = new Set(rep.consultores.map((p) => String(p.hid).toUpperCase()));
+    const aplicar = (f: FilaReporte): boolean => {
+      const v = f.ticket ? vivo.get(f.ticket) : undefined;
+      if (!v) return true;
+      if (v.orden) f.ordenTicket = v.orden;
+      if (v.asignado !== (f.consultorHid ? f.consultorHid.toUpperCase() : null)) {
+        f.consultorHid = v.asignado;
+        f.consultorNombre = null;
+      }
+      return !f.consultorHid || enReporte.has(f.consultorHid.toUpperCase());
     };
-    rep.filas.forEach(aplicar);
-    rep.seguimiento.forEach(aplicar);
+    rep.filas = rep.filas.filter(aplicar);
+    rep.seguimiento = rep.seguimiento.filter(aplicar);
+    const conTarea = new Set(rep.filas.map((f) => f.consultorHid?.toUpperCase()).filter(Boolean));
+    rep.sinTarea = rep.consultores.filter((p) => !conTarea.has(String(p.hid).toUpperCase()));
+  }
+
+  /** Nombre del consultor de una fila (por su hid, contra los consultores del reporte). Regla #8: nunca el código. */
+  nombreConsultor(f: FilaReporte): string {
+    const hid = (f.consultorHid ?? '').toUpperCase();
+    if (!hid) return 'Sin asignar';
+    const p = this.reporte()?.consultores.find((x) => String(x.hid).toUpperCase() === hid);
+    return nombrePropio(p?.nombre || f.consultorNombre || '') || '—';
   }
 
   verTicket(ticket: string | null): void {
@@ -227,7 +256,7 @@ export class Reportes {
         generadoPor: nombrePropio(String(this.auth.session()?.name ?? '')) || '—',
         generadoEn: new Date(rep.generadoEn),
         grupos,
-        seguimiento: seg.map((s) => ({ ...s, consultorNombre: s.consultorNombre ? nombrePropio(s.consultorNombre) : null })),
+        seguimiento: seg.map((s) => ({ ...s, consultorNombre: s.consultorHid ? this.nombreConsultor(s) : null })),
       });
       if (v !== this.prepVersion) return; // llegó otro cambio mientras se generaba
       const hoy = rep.generadoEn.slice(0, 10);

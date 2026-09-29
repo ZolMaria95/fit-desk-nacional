@@ -1,9 +1,18 @@
 <div class="pend-header">
   <h2>Recordatorio</h2>
-  <span class="pend-count">{{ items().length }}</span>
+  <span class="pend-count">{{ proximos().length }}</span>
   <span class="pend-header-spacer"></span>
   <button mat-flat-button color="primary" (click)="crear()">
     <mat-icon>add_alert</mat-icon> Crear recordatorio
+  </button>
+</div>
+
+<div class="pend-tabs" role="tablist">
+  <button class="pend-tab" role="tab" [class.active]="tab() === 'proximos'" [attr.aria-selected]="tab() === 'proximos'" (click)="tab.set('proximos')">
+    Próximos <span class="pend-tab-count">{{ proximos().length }}</span>
+  </button>
+  <button class="pend-tab" role="tab" [class.active]="tab() === 'anteriores'" [attr.aria-selected]="tab() === 'anteriores'" (click)="tab.set('anteriores')">
+    Anteriores <span class="pend-tab-count">{{ anteriores().length }}</span>
   </button>
 </div>
 
@@ -23,7 +32,7 @@
             </td>
           </tr>
           @for (it of g.items; track it.ticket + '·' + (it.owner || '')) {
-          <tr [class.due]="isDue(it)" [class.resaltado]="esResaltado(it.ticket)" [class.ajena]="!it.mine">
+          <tr [class.resaltado]="esResaltado(it.ticket)" [class.ajena]="!it.mine">
             <td>
               @if (esSinTicket(it)) {
                 <span class="pend-ticket pend-ticket-sin" matTooltip="Recordatorio personal, sin ticket">
@@ -46,7 +55,7 @@
             <td class="recordatorio">
               <span class="fecha">{{ fmtDateTime(it) }}</span>
               @switch (estado(it)) {
-                @case ('vencido') { <span class="badge vencido">⏰ Recordar</span> }
+                @case ('pasado') { <span class="badge pasado">Pasado</span> }
                 @case ('pausado') { <span class="badge pausado">⏸ Pausado</span> }
                 @case ('programado') { <span class="badge programado">Programado</span> }
                 @default { <span class="badge sinfecha">Sin fecha</span> }
@@ -80,5 +89,5 @@
     </table>
   </div>
 } @else {
-  <div class="pend-empty">No hay tickets pendientes.</div>
+  <div class="pend-empty">{{ tab() === 'anteriores' ? 'No hay recordatorios anteriores.' : 'No hay recordatorios próximos.' }}</div>
 }

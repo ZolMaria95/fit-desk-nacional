@@ -300,6 +300,8 @@ export class Board implements OnDestroy {
     );
     this.ticketPrioMap.set(prios);
     this.ticketAssigneeMap.set(asignados);
+    // El asignado de la tarea es SIEMPRE el del ticket: si en vivo difiere, se corrige la tarea.
+    this.helpdesk.reconciliarAsignados(Object.entries(asignados).map(([ticket, a]) => ({ ticket, asignado: a.id })));
     this.ticketClientMap = clientes;
     this.syncing.set(false);
   }

@@ -51,10 +51,16 @@
     </mat-menu>
   </div>
 
-  <label class="rp-check">
-    <input type="checkbox" [checked]="incluirPendientes()" (change)="incluirPendientes.set($any($event.target).checked)" />
-    Incluir To Do y En Certificación
-  </label>
+  <div class="rp-checks">
+    <label class="rp-check">
+      <input type="checkbox" [checked]="incluirTodo()" (change)="incluirTodo.set($any($event.target).checked)" />
+      Incluir To Do
+    </label>
+    <label class="rp-check">
+      <input type="checkbox" [checked]="incluirCert()" (change)="incluirCert.set($any($event.target).checked)" />
+      Incluir En Certificación
+    </label>
+  </div>
 
   <span class="grow"></span>
   <div class="rp-acciones">
@@ -79,6 +85,17 @@
     <div class="rp-kpi red"><div class="n">{{ seguimiento().length }}</div><div class="l">Seguimiento hoy</div></div>
   </div>
 
+  <!-- Sub-pestañas: 1) Requieren seguimiento hoy · 2) Qué está haciendo cada consultor -->
+  <div class="rp-tabs" role="tablist">
+    <button class="rp-tab" role="tab" [class.active]="seccion() === 'seguimiento'" [attr.aria-selected]="seccion() === 'seguimiento'" (click)="seccion.set('seguimiento')">
+      Requieren seguimiento hoy <span class="rp-tab-count">{{ seguimiento().length }}</span>
+    </button>
+    <button class="rp-tab" role="tab" [class.active]="seccion() === 'consultores'" [attr.aria-selected]="seccion() === 'consultores'" (click)="seccion.set('consultores')">
+      Qué está haciendo cada consultor
+    </button>
+  </div>
+
+  @if (seccion() === 'seguimiento') {
   <!-- ¿Qué tickets requieren seguimiento hoy? -->
   <section class="rp-bloque red">
     <h3><mat-icon>priority_high</mat-icon> Requieren seguimiento hoy</h3>
@@ -99,7 +116,7 @@
               <span class="rp-tit">{{ s.titulo }}</span>
             </span>
             <span class="rp-seg-meta">
-              {{ s.consultorNombre ? nombre(s.consultorNombre) : 'Sin asignar' }}
+              {{ nombreConsultor(s) }}
               @if (s.cliente) { · {{ s.cliente }} }
               @if (s.ordenTicket) { · <span class="rp-orden {{ prioBadgeClase(s.ordenTicket) }}" matTooltip="Orden del ticket en el HelpDesk">Orden {{ s.ordenTicket }}</span> }
               @if (s.prioridad) { · {{ PRIORIDAD_LABEL[s.prioridad] || s.prioridad }} }
@@ -111,7 +128,7 @@
       <p class="rp-vacio">Nada requiere seguimiento hoy.</p>
     }
   </section>
-
+  } @else {
   <!-- ¿Qué está haciendo cada recurso? -->
   <section class="rp-bloque blue">
     <h3><mat-icon>groups</mat-icon> Qué está haciendo cada consultor</h3>
@@ -164,6 +181,7 @@
       }
     </div>
   </section>
+  }
 
   <p class="rp-pie">{{ generadoTxt() }}</p>
 }

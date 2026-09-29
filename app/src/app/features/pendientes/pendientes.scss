@@ -19,6 +19,39 @@
   .pend-header-spacer { flex: 1 1 auto; }
 }
 
+// Sub-pestañas Próximos / Anteriores (mismo estilo que las pestañas de Tickets).
+.pend-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 2px;
+  border-bottom: 2px solid var(--mat-sys-outline-variant);
+  margin-bottom: 14px;
+}
+.pend-tab {
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface-variant);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  &.active { color: var(--mat-sys-primary); border-bottom-color: var(--mat-sys-primary); }
+}
+.pend-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--mat-sys-surface-container-high);
+  border-radius: 10px;
+  padding: 0 7px;
+}
+
 .pend-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
@@ -126,6 +159,7 @@
     white-space: nowrap;
   }
   .vencido { background: #c0392b18; color: #c0392b; }
+  .pasado { background: #5a6b7d1f; color: #4a5866; }
   .pausado { background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); }
   .programado { background: #e3effb; color: #0c447c; }
   .sinfecha { background: #f0e2a8; color: #6a5a00; }
@@ -209,6 +243,7 @@ tr.ajena { opacity: .82; }
   tr.resaltado:hover td { background: #3d2e12; }
   .recordatorio {
     .vencido { background: #3a1e20; color: #f09a9a; }
+    .pasado { background: #26303a; color: #b8c4d0; }
     .programado { background: #12304f; color: #8fc4f5; }
     .sinfecha { background: #3d2e12; color: #f0c070; }
   }

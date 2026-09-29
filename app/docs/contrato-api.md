@@ -66,7 +66,7 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
   backend pero **el frontend ya no los consume**: vestigiales.)
 - **Board / legacy (escritura)** `POST|PATCH|PUT|DELETE /api/legacy/…`: `stories/stories[/{id}]`,
   `hdNotes`, `hdActions`, `hdPendientes`, `weeklySupport`, `solNotes`,
-  `ticket-espejo/{id}/assignee`. (`sprints`/`progress`/`queries` = vestigiales.)
+  `ticket-espejo/{id}/assignee` (desde 2026-09-28 también actualiza `tarea.asignado_a` de las tareas del ticket; el front lo llama además cuando una lectura en vivo muestra otro asignado). (`sprints`/`progress`/`queries` = vestigiales.)
 - **Reportes** (2026-09-28; acceso = `Actor.equiposGestionables`: ADMIN o RESPONSABLE_EQUIPO en su
   alcance EQUIPO/REGIONAL/GLOBAL; el resto **403**; header `X-Actor-Hid`):
   - `GET /api/reportes/equipos` → `[{codigo, nombre}]` equipos sobre los que puede generar reportes.

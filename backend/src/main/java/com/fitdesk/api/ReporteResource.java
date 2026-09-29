@@ -101,16 +101,33 @@ public class ReporteResource {
         ordenados.sort(Comparator.comparing(u -> u.nombre == null ? "" : u.nombre.toLowerCase()));
 
         // ── Tareas activas de esa gente (cualquier tablero) + sin asignar del equipo (si es el equipo completo) ──
+        // El asignado que manda es el EFECTIVO: el del ticket (espejo) y, si no hay, el de la tarea — igual que
+        // el Board. Una reasignación hecha directamente en el HelpDesk no toca `tarea.asignado_a`.
+        Set<String> hids = new java.util.HashSet<>();
+        for (Usuario u : gente.values()) {
+            if (u.helpdeskUserId != null) {
+                hids.add(u.helpdeskUserId.trim().toUpperCase());
+            }
+        }
+        Set<Long> ids = gente.isEmpty() ? Set.of(-1L) : gente.keySet();
+        Set<String> hidsQ = hids.isEmpty() ? Set.of("__NINGUNO__") : hids;
         List<Tarea> tareas = new ArrayList<>();
-        if (!gente.isEmpty()) {
-            tareas.addAll(Tarea.<Tarea>list(
-                    "asignadoA.id in ?1 and pendienteTransferencia = false and tipo <> 'REUNION'", gente.keySet()));
+        for (Tarea t : Tarea.<Tarea>list(
+                "select t from Tarea t left join t.ticketEspejo e left join t.asignadoA u left join t.board b "
+                        + "where t.pendienteTransferencia = false and t.tipo <> 'REUNION' "
+                        + "and (u.id in ?1 or upper(e.asignadoHd) in ?2 or b.equipo = ?3)",
+                ids, hidsQ, eq)) {
+            if (t.workflowEstado == null || !ACTIVOS.contains(t.workflowEstado.codigo)) {
+                continue;
+            }
+            String ef = asignadoEfectivo(t);
+            boolean deLaGente = ef != null && hids.contains(ef);
+            boolean sinAsignarDelEquipo = ef == null && pedidos.isEmpty()
+                    && t.board != null && t.board.equipo != null && t.board.equipo.id.equals(eq.id);
+            if (deLaGente || sinAsignarDelEquipo) {
+                tareas.add(t);
+            }
         }
-        if (pedidos.isEmpty()) {
-            tareas.addAll(Tarea.<Tarea>list(
-                    "asignadoA is null and board.equipo = ?1 and pendienteTransferencia = false and tipo <> 'REUNION'", eq));
-        }
-        tareas.removeIf(t -> t.workflowEstado == null || !ACTIVOS.contains(t.workflowEstado.codigo));
 
         // Recordatorios vencidos/de hoy de esa gente, por ticket (para "seguimiento hoy").
         Map<String, TicketPendiente> recordatorios = new HashMap<>();
@@ -123,20 +140,26 @@ public class ReporteResource {
             }
         }
 
-        Map<Long, Integer> posicion = new HashMap<>();
+        Map<String, Integer> posicion = new HashMap<>();
+        Map<String, Usuario> porHid = new HashMap<>();
         for (int i = 0; i < ordenados.size(); i++) {
-            posicion.put(ordenados.get(i).id, i);
+            Usuario u = ordenados.get(i);
+            if (u.helpdeskUserId != null) {
+                posicion.put(u.helpdeskUserId.trim().toUpperCase(), i);
+                porHid.put(u.helpdeskUserId.trim().toUpperCase(), u);
+            }
         }
         List<Map<String, Object>> filas = new ArrayList<>();
         List<Map<String, Object>> seguimiento = new ArrayList<>();
-        Set<Long> conTarea = new java.util.HashSet<>();
+        Set<String> conTarea = new java.util.HashSet<>();
         for (Tarea t : tareas) {
-            Map<String, Object> f = fila(t, eq, hoy);
-            // Posición del consultor (por nombre); sin asignar / fuera de la lista → al final.
-            f.put("_pos", t.asignadoA != null ? posicion.getOrDefault(t.asignadoA.id, Integer.MAX_VALUE) : Integer.MAX_VALUE);
+            String ef = asignadoEfectivo(t);
+            Map<String, Object> f = fila(t, eq, hoy, ef, ef != null ? porHid.get(ef) : null);
+            // Posición del consultor (por nombre); sin asignar → al final.
+            f.put("_pos", ef != null ? posicion.getOrDefault(ef, Integer.MAX_VALUE) : Integer.MAX_VALUE);
             filas.add(f);
-            if (t.asignadoA != null) {
-                conTarea.add(t.asignadoA.id);
+            if (ef != null) {
+                conTarea.add(ef);
             }
             Map<String, Object> s = motivoSeguimiento(t, f, hoy, recordatorios);
             if (s != null) {
@@ -158,7 +181,7 @@ public class ReporteResource {
 
         List<Map<String, Object>> sinTarea = new ArrayList<>();
         for (Usuario u : ordenados) {
-            if (!conTarea.contains(u.id)) {
+            if (u.helpdeskUserId == null || !conTarea.contains(u.helpdeskUserId.trim().toUpperCase())) {
                 sinTarea.add(persona(u));
             }
         }
@@ -175,10 +198,20 @@ public class ReporteResource {
         return Response.ok(out).build();
     }
 
-    private static Map<String, Object> fila(Tarea t, Equipo eq, LocalDate hoy) {
+    /** Asignado efectivo (MAYÚSCULAS): el del ticket (espejo) si lo hay; si no, el de la tarea; null = sin asignar. */
+    static String asignadoEfectivo(Tarea t) {
+        String hd = t.ticketEspejo != null ? t.ticketEspejo.asignadoHd : null;
+        if (hd != null && !hd.isBlank()) {
+            return hd.trim().toUpperCase();
+        }
+        String local = t.asignadoA != null ? t.asignadoA.helpdeskUserId : null;
+        return local != null && !local.isBlank() ? local.trim().toUpperCase() : null;
+    }
+
+    private static Map<String, Object> fila(Tarea t, Equipo eq, LocalDate hoy, String asignadoHid, Usuario asignado) {
         Map<String, Object> f = new LinkedHashMap<>();
-        f.put("consultorHid", t.asignadoA != null ? t.asignadoA.helpdeskUserId : null);
-        f.put("consultorNombre", t.asignadoA != null ? t.asignadoA.nombre : null);
+        f.put("consultorHid", asignadoHid);
+        f.put("consultorNombre", asignado != null ? asignado.nombre : null);
         f.put("tarea", t.codigo);
         f.put("titulo", t.titulo);
         String ticket = t.ticketEspejo != null ? t.ticketEspejo.helpdeskTicketId : null;

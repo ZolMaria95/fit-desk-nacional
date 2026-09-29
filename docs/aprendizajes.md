@@ -6,6 +6,14 @@ Hechos descubiertos sobre el código real, el HelpDesk, Firebase y el negocio. *
 
 ---
 
+### [2026-09-28] `tarea.asignado_a` queda desactualizado cuando se reasigna en el HelpDesk
+
+**Fuente:** reporte "Estado del equipo" en prod — TA-152 (#33181) con `asignado_a` = MSC001 y
+`ticket_espejo.asignado_hd` = CEGG001 (el real). 13 de 127 tareas activas con ticket difieren.
+**Implicación:** para tareas CON ticket, cualquier vista o reporte debe usar el asignado EFECTIVO
+(`COALESCE(espejo.asignado_hd, tarea.asignado)`, y mejor aún el del ticket en vivo), nunca solo
+`tarea.asignado_a`. El write-through solo corre cuando la reasignación se hace desde FitDesk.
+
 ### [2026-09-28] `GET /tickets/tickets/search` acepta los MISMOS filtros que el listado
 
 **Fuente:** pruebas de solo lectura contra el HelpDesk real (`q=credito`): sin filtros `total=1516`;

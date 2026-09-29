@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -61,11 +61,20 @@ export class Pendientes {
 
   constructor() {
     this.data.ensureInit().then(() => this.refresh());
+    const reloj = setInterval(() => this.ahora.set(Date.now()), 60_000);
+    inject(DestroyRef).onDestroy(() => clearInterval(reloj));
     // Resalta (y baja a la vista) los tickets que acaban de sonar en la alerta.
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((q) => {
       const raw = q.get('resaltar');
       if (!raw) { this.resaltados.set(new Set()); return; }
-      this.resaltados.set(new Set(raw.split(',').filter(Boolean)));
+      const res = new Set(raw.split(',').filter(Boolean));
+      this.resaltados.set(res);
+      // Desde la alerta: el recordatorio que acaba de sonar ya está en "Anteriores" (su hora llegó).
+      this.data.ensureInit().then(() => {
+        if (this.anteriores().some((p) => res.has(p.ticket)) && !this.proximos().some((p) => res.has(p.ticket))) {
+          this.tab.set('anteriores');
+        }
+      });
       setTimeout(() => document.querySelector('tr.resaltado')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
       setTimeout(() => this.resaltados.set(new Set()), 12000); // se desvanece solo
     });
@@ -73,14 +82,35 @@ export class Pendientes {
 
   esResaltado(ticket: string): boolean { return this.resaltados().has(ticket); }
 
-  readonly items = computed<PendItem[]>(() =>
-    this.pend().slice().sort((a, b) => {
-      const da = pendienteDueAt(a)?.getTime() ?? Infinity;
-      const db = pendienteDueAt(b)?.getTime() ?? Infinity;
-      if (da !== db) return da - db; // recordatorio más próximo primero
-      return (b.addedAt || '').localeCompare(a.addedAt || '');
-    }),
-  );
+  /** Sub-pestaña: "Próximos" (aún no llega su hora, o sin fecha) y "Anteriores" (su fecha/hora ya pasó). */
+  readonly tab = signal<'proximos' | 'anteriores'>('proximos');
+  /** Reloj de la vista (cada minuto): un recordatorio pasa solo a "Anteriores" cuando llega su hora. */
+  private readonly ahora = signal(Date.now());
+
+  private esAnterior(p: PendItem, now: number): boolean {
+    const at = pendienteDueAt(p);
+    return !!at && at.getTime() <= now;
+  }
+
+  readonly proximos = computed<PendItem[]>(() => {
+    const now = this.ahora();
+    return this.pend()
+      .filter((p) => !this.esAnterior(p, now))
+      .sort((a, b) => {
+        const da = pendienteDueAt(a)?.getTime() ?? Infinity;
+        const db = pendienteDueAt(b)?.getTime() ?? Infinity;
+        if (da !== db) return da - db; // el más próximo primero; sin fecha al final
+        return (b.addedAt || '').localeCompare(a.addedAt || '');
+      });
+  });
+  readonly anteriores = computed<PendItem[]>(() => {
+    const now = this.ahora();
+    return this.pend()
+      .filter((p) => this.esAnterior(p, now))
+      .sort((a, b) => (pendienteDueAt(b)?.getTime() ?? 0) - (pendienteDueAt(a)?.getTime() ?? 0)); // el más reciente primero
+  });
+  /** Lo que muestra la pestaña activa. */
+  readonly items = computed<PendItem[]>(() => (this.tab() === 'anteriores' ? this.anteriores() : this.proximos()));
 
   /** Pendientes CLASIFICADOS por equipo (grupos alfabéticos; dentro, orden por recordatorio). */
   readonly itemsPorEquipo = computed(() => {
@@ -106,10 +136,10 @@ export class Pendientes {
     const at = pendienteDueAt(it);
     return !!at && at.getTime() <= Date.now();
   }
-  estado(it: PendItem): 'pausado' | 'vencido' | 'programado' | 'sin-fecha' {
+  estado(it: PendItem): 'pausado' | 'pasado' | 'programado' | 'sin-fecha' {
     if (!it.dueDate) return 'sin-fecha';
     if (it.paused) return 'pausado';
-    return this.isDue(it) ? 'vencido' : 'programado';
+    return this.isDue(it) ? 'pasado' : 'programado';
   }
 
   // ── Formato ──

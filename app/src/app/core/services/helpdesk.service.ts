@@ -409,6 +409,7 @@ export class HelpdeskService {
       const data = await firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets`, { params }));
       const items: Ticket[] = (data?.items || []).map(mapTicket).map(evaluarFechas).map(clasificar);
       this._tickets.set(items);
+      this.reconciliarAsignados(items.map((t) => ({ ticket: t.ticket, asignado: t.usuarioAsignado })));
       this._total.set(Number(data?.total ?? items.length));
       this.hasMore.set((pageIndex + 1) * pageSize < this._total());
       // El total es el universo del API (paginado); items.length es lo realmente traído.
@@ -493,6 +494,7 @@ export class HelpdeskService {
       }
       const items: Ticket[] = raw.map(mapTicket).map(evaluarFechas).map(clasificar);
       this._tickets.set(items);
+      this.reconciliarAsignados(items.map((t) => ({ ticket: t.ticket, asignado: t.usuarioAsignado })));
       this._total.set(total);
       this.hasMore.set(false);
       this.setStatus(`✓ ${items.length} cargados de ${total} del equipo`, 'ok');
@@ -533,6 +535,7 @@ export class HelpdeskService {
       const data = await firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets/search`, { params }));
       const items: Ticket[] = (data?.items || []).map(mapTicket).map(evaluarFechas).map(clasificar);
       this._tickets.set(items);
+      this.reconciliarAsignados(items.map((t) => ({ ticket: t.ticket, asignado: t.usuarioAsignado })));
       this._total.set(Number(data?.total ?? items.length));
       this.hasMore.set((pageIndex + 1) * pageSize < this._total());
       this.setStatus(`✓ ${items.length} de ${this._total()} coinciden con "${term}"`, 'ok');
@@ -630,6 +633,7 @@ export class HelpdeskService {
       const data = Array.isArray(raw) ? raw[0] : raw?.item || raw?.data || raw;
       if (!data || !data.ticket_id) return null;
       const t = clasificar(evaluarFechas(mapTicket(data)));
+      this.reconciliarAsignados([{ ticket: t.ticket, asignado: t.usuarioAsignado }]);
       applyMessages(t, await this.fetchMessages(t.ticket));
       evaluarFechas(t);
       clasificar(t);
@@ -811,6 +815,32 @@ export class HelpdeskService {
       this.snack.open(`Se creó la tarea ${d.tareaCodigo} para el ticket #${ticket.ticket}.`, 'OK', { duration: 4000 });
     } catch {
       // silencioso: la asignación ya quedó confirmada, esto es un plus best-effort
+    }
+  }
+
+  /** Tickets con una reconciliación de asignado en curso (evita repetirla mientras responde el backend). */
+  private readonly reconciliando = new Set<string>();
+
+  /**
+   * El asignado de una tarea CON ticket es SIEMPRE el del ticket. Cuando una lectura en vivo del HelpDesk
+   * (Tickets, Board, Reportes) muestra un asignado distinto al de la tarea —p. ej. se reasignó directo en el
+   * HelpDesk—, se actualiza el espejo en el backend, que lo copia a la tarea
+   * (`TicketEspejoStore.propagarAsignado`), y la tarea en memoria. Solo escribe en FitDesk, nunca en el
+   * HelpDesk. Best-effort: si falla, se reintenta en la próxima lectura.
+   */
+  reconciliarAsignados(items: { ticket: string | number; asignado: string | null | undefined }[]): void {
+    if (environment.dataBackend !== 'quarkus' || !items.length) return;
+    const porTicket = new Map(this.data.stories().filter((s) => s.ticket).map((s) => [String(s.ticket), s]));
+    for (const it of items) {
+      const ticket = String(it.ticket ?? '').trim();
+      const st = porTicket.get(ticket);
+      if (!ticket || !st || this.reconciliando.has(ticket)) continue;
+      const vivo = String(it.asignado ?? '').trim().toUpperCase();
+      if (vivo === String(st.assignee ?? '').trim().toUpperCase()) continue;
+      this.reconciliando.add(ticket);
+      void this.refreshEspejoAssignee(ticket, vivo)
+        .then(() => this.data.stories.update((list) => list.map((s) => (String(s.ticket) === ticket ? { ...s, assignee: vivo || null } : s))))
+        .finally(() => this.reconciliando.delete(ticket));
     }
   }
 

@@ -6,6 +6,46 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-28] Recordatorios pasados: no vuelven a alertar y van a la sub-pestaña "Anteriores"
+
+**Decisión (pedido de la dueña):** un recordatorio **solo suena el día de su fecha**, desde su hora, una vez
+por día (dedup por navegador que ya existía). Antes sonaba cada día mientras siguiera vencido. En
+Recordatorio hay dos sub-pestañas: **Próximos** (aún no llega su hora, o sin fecha; el más próximo
+primero) y **Anteriores** (su fecha/hora ya pasó; el más reciente primero, con badge "Pasado"). Un
+recordatorio pasa solo de pestaña al llegar su hora (reloj de la vista cada minuto); postergarlo lo
+devuelve a Próximos. Al llegar desde la alerta ("Ver"), se abre la pestaña donde está lo resaltado.
+Cambios: `layout.ts` (`checkReminders`: `dueDate === hoy`), `features/pendientes/*`.
+
+**Verificado en local** con tres recordatorios de prueba (ayer, hoy con la hora ya pasada, mañana):
+pestañas Próximos 1 / Anteriores 2; la alerta incluyó solo el de hoy. Datos de prueba borrados.
+Sin desplegar.
+
+### [2026-09-28] Reportes: las secciones pasan a sub-pestañas
+
+**Decisión (pedido de la dueña):** en `/reportes`, "Requieren seguimiento hoy" (1ª, con su contador) y
+"Qué está haciendo cada consultor" (2ª) son sub-pestañas en vez de secciones apiladas. El Excel no
+cambia (sigue con sus dos hojas). Verificado en local (cambio de pestaña, 390 px sin desborde). Sin
+desplegar.
+
+### [2026-09-28] El asignado de la tarea se actualiza SIEMPRE al reasignar el ticket
+
+**Decisión (pedido de la dueña: "al reasignar se debe actualizar la tarea siempre"):** en una tarea CON
+ticket, `tarea.asignado_a` sigue al asignado del ticket, venga la reasignación de FitDesk o del HelpDesk.
+- **Un solo punto en el backend:** `TicketEspejoStore.propagarAsignado` copia el asignado del espejo a sus
+  tareas cada vez que cambia (en `upsertAssignee` y en el `upsert` del sync). Si el hid no es usuario de
+  FitDesk, la tarea queda sin usuario local (el asignado efectivo sigue siendo el del espejo).
+- **Proxy:** tras un `PUT tickets/tickets/{id}` con `assigned_user_id` confirmado (2xx) por el HelpDesk,
+  el servidor actualiza espejo + tarea (`HelpdeskProxyResource.reflejarAsignacion`) — ya no depende del front.
+- **Reasignaciones hechas directo en el HelpDesk** (el sync completo es manual): el front, cada vez que
+  lee tickets en vivo (listados y búsquedas de Tickets, sync del Board, Reportes), compara con la tarea y,
+  si difiere, llama a `PUT /api/legacy/ticket-espejo/{id}/assignee` (`HelpdeskService.reconciliarAsignados`).
+  Solo escribe en FitDesk, nunca en el HelpDesk.
+- **V29** corrige de una vez lo ya desfasado (en prod: 41 tareas, 40 con usuario FitDesk y 1 que queda sin
+  usuario local).
+
+**Verificado en local:** V29 dejó 0 desfasadas; cambiar el espejo arrastra la tarea al instante; una
+tarea desfasada a propósito (TA-007) volvió sola a su asignado real al cargar el Board. Sin desplegar.
+
 ### [2026-09-28] Desplegado a AWS: Reportes, búsqueda acotada, Senior de Turno, filtros del Board y asignación
 
 Lote desplegado con luz verde de la dueña ("deploy"). Monorepo `d48e9c9`; GitLab back **`7483da1`**
@@ -62,6 +102,17 @@ requiere seguimiento hoy (vencidas · vencen hoy · recordatorios · esperando c
 - **Próximo paso, ¿Bloqueado? (Sí/No), Motivo y Quién debe intervenir** no existen en el modelo: por
   decisión de la dueña **no** se crearon campos; van como **columnas vacías (amarillas) en el Excel**
   para completarlas ahí (¿Bloqueado? con lista Sí/No).
+- **Filtro de estados (ajuste 2026-09-28, pedido de la dueña):** In Progress se ve siempre; dos casillas
+  **independientes** — "Incluir To Do" e "Incluir En Certificación" — suman cada estado (antes era una sola
+  casilla para ambos, y un ticket ABIERTO, cuya tarea está en To Do, parecía no estar en el reporte).
+  El Excel sigue lo que se ve en pantalla. Sin desplegar.
+- **Asignado del reporte = el del ticket (fix 2026-09-28, reportado por la dueña: TA-152/#33181 salía como
+  de Sol Contreras y el ticket es de Carlos García).** El reporte usaba `tarea.asignado_a`, que no cambia si
+  el ticket se reasigna directo en el HelpDesk (en prod, 13 de 127 tareas activas con ticket difieren).
+  Ahora el backend usa el **asignado efectivo** (`ReporteResource.asignadoEfectivo`: espejo
+  `asignado_hd` → si no, la tarea), como el Board, y el front lo corrige además **en vivo** (la misma
+  lectura del ticket que refresca el Orden): si el ticket ahora es de alguien fuera del reporte, la fila
+  sale. Sin desplegar.
 - **Excel** con `exceljs` (import dinámico: chunk aparte de ~218 kB gzip, no toca la carga inicial).
   Se prepara al generar el reporte y el clic solo descarga (regla: nada de `await` entre el clic y
   `descargarUrl`, la PWA instalada bloquea la descarga). Hojas "Estado del equipo" y "Seguimiento hoy".

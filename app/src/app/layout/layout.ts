@@ -477,6 +477,10 @@ export class Layout {
     const list = await this.getAlarmaList();
     const due = list.filter((x: any) => {
       if (!x.dueDate || x.paused) return false;
+      // Solo suena el DÍA del recordatorio (desde su hora). Los de días anteriores ya pasaron: no
+      // vuelven a alertar; quedan en la pestaña "Anteriores" de Recordatorio. Postergarlo a otra
+      // fecha lo vuelve a activar.
+      if (x.dueDate !== todayStr) return false;
       if (this.alertedToday(`${x.ticket}|${x.owner || ''}`, todayStr)) return false;
       const at = new Date(`${x.dueDate}T${x.dueTime || '09:00'}:00`).getTime();
       return at <= now;
