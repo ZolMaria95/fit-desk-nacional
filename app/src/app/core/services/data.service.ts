@@ -637,9 +637,8 @@ export class DataService {
   // hay `teamMembers()` propio acá: el picker de la UI usa `HelpdeskService.hdUsers()` (catálogo
   // completo). Solo Quarkus: es una función nueva, sin dato histórico en Firebase que migrar.
   //
-  // ⚠️ Los endpoints `turnoSenior?equipo=` y `turnoSenior/hoy` son NUEVOS — no existen todavía en
-  // el backend (`fit-desk-api`, repo aparte). Ver `docs/contrato-api.md` para el contrato
-  // documentado y `docs/decisiones.md` para la nota de la dependencia pendiente.
+  // Endpoints `turnoSenior?equipo=` y `turnoSenior/hoy` (backend V27, 2026-09-28). Contrato en
+  // `docs/contrato-api.md`.
   private _turnoSeniorTeam = '';
   async loadTurnoSenior(equipoCodigo: string): Promise<void> {
     this._turnoSeniorTeam = equipoCodigo || '';

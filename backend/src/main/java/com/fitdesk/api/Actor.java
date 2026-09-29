@@ -105,6 +105,37 @@ public final class Actor {
 
     /** Agrega el client_id del HelpDesk y, además, el código (slug) de FitDesk del cliente: las
      *  TAREAS del board guardan el código, los TICKETS el id del HelpDesk — así sirve para ambos. */
+    /**
+     * A quién puede asignar/reasignar tickets el actor como RESPONSABLE_EQUIPO (sin ser HELPDESK/ADMIN):
+     * él mismo + miembros vigentes (alcance EQUIPO) de los equipos que dirige. hids en MAYÚSCULAS; vacío si
+     * no dirige ningún equipo. Vale para tickets con o sin asignado.
+     */
+    public static Set<String> asignablesComoResponsable(String hid) {
+        Set<String> destinos = new HashSet<>();
+        Set<Long> equipos = equiposComoResponsable(hid);
+        if (equipos.isEmpty()) {
+            return destinos;
+        }
+        destinos.add(hid.trim().toUpperCase());
+        LocalDate hoy = LocalDate.now();
+        for (Asignacion a : Asignacion.<Asignacion>list(
+                "alcanceTipo = 'EQUIPO' and alcanceEquipo.id in ?1 and activo = true", equipos)) {
+            if (a.usuario != null && a.usuario.helpdeskUserId != null
+                    && (a.vigenteHasta == null || !a.vigenteHasta.isBefore(hoy))) {
+                destinos.add(a.usuario.helpdeskUserId.trim().toUpperCase());
+            }
+        }
+        return destinos;
+    }
+
+    /** ¿Puede el actor, como responsable, asignar o reasignar un ticket a {@code destinoHid}? */
+    public static boolean puedeAsignarComoResponsable(String hid, String destinoHid) {
+        if (hid == null || hid.isBlank() || destinoHid == null || destinoHid.isBlank()) {
+            return false;
+        }
+        return asignablesComoResponsable(hid).contains(destinoHid.trim().toUpperCase());
+    }
+
     private static void agregarHdId(Set<String> ids, Cliente c) {
         if (c.helpdeskClientId != null && !c.helpdeskClientId.isBlank()) {
             ids.add(c.helpdeskClientId.trim());

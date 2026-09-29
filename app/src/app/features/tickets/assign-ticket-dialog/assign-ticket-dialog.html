@@ -11,11 +11,13 @@
     Asignado actual: <strong>{{ ticket.nombreAsignado || '— Sin asignar —' }}</strong>
   </div>
 
-  <mat-form-field appearance="outline" class="search">
-    <mat-label>Buscar consultor</mat-label>
-    <input matInput [ngModel]="filtro()" (ngModelChange)="filtro.set($event)" placeholder="Nombre…" autocomplete="off" />
-    <mat-icon matSuffix>search</mat-icon>
-  </mat-form-field>
+  @if (!soloYo) {
+    <mat-form-field appearance="outline" class="search">
+      <mat-label>Buscar consultor</mat-label>
+      <input matInput [ngModel]="filtro()" (ngModelChange)="filtro.set($event)" placeholder="Nombre…" autocomplete="off" />
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+  }
 
   <div class="emp-list">
     @for (e of filtrados(); track e.id) {

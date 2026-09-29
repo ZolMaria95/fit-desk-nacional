@@ -115,6 +115,8 @@ public class PerfilResource {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("global", g.global());
         m.put("clientes", new ArrayList<>(g.clientes()));
+        // Como RESPONSABLE_EQUIPO: a quién puede asignar/reasignar (él + su gente).
+        m.put("asignables", new ArrayList<>(Actor.asignablesComoResponsable(actorHid)));
         return m;
     }
 

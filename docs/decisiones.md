@@ -6,6 +6,117 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-28] Asignar tickets: tomar uno sin asignado y el responsable reasigna a su gente
+
+**Decisión** (amplía la reasignación restringida del rol HELPDESK, 2026-09-27):
+- **Cualquiera** puede **tomar** un ticket **sin asignado**, solo para sí mismo. En el front, "Asignar /
+  reasignar" queda habilitado y la lista muestra **solo su propio nombre** (sin buscador ni otras opciones).
+- El **Responsable de equipo** puede **asignar y reasignar** (tenga o no asignado el ticket) **a sí mismo
+  o a la gente de los equipos que dirige** (asignación EQUIPO vigente); la lista le muestra solo a esos.
+- HELPDESK (en su alcance) y ADMIN siguen reasignando a cualquiera. El resto de la edición no cambia.
+
+**Enforcement** (`HelpdeskProxyResource.guardaEdicionTicket`): un `PUT` con solo `assigned_user_id` (y a lo
+sumo el estado) pasa si es autoasignación sobre un ticket que, leído en vivo del HelpDesk, no tiene
+asignado (`TicketGestion.ClienteDelTicket.asignado`), o si el destino está en
+`Actor.asignablesComoResponsable(actor)`. `GET /perfil/tickets-gestionables` suma `asignables` para armar la
+lista en el front (`AuthService.destinosAsignacion` / `puedeAsignarTicket`). Aplica a la tarjeta de ticket
+(Tickets, Mi Panel, Guardados), la conversación y el campo "Asignado a" del detalle de tarea del Board.
+
+**Verificado** contra el HelpDesk real sobre el ticket de pruebas **#27732** (COAC PRUEBAS HELPDESK):
+consultor → asignar a otro 403 · tomarlo para sí 200 · ya asignado, pasarlo a otro 403; responsable de
+CUENCA → a alguien fuera del equipo 403 · reasignar a su gente 200 · a sí mismo 200 · asignación + asunto
+en el mismo PUT 403. En Chrome: el consultor ve solo su nombre (sin buscador) en un ticket sin asignado
+y la opción deshabilitada en uno asignado. El #27732 quedó otra vez sin asignado (`assigned_user_id=`
+vacío lo limpia; `null` da 404 ASSIGNED_USER_NOT_FOUND).
+
+**Contexto:** pedidos de la dueña: "un ticket sin asignación puede ser autoasignado por cualquiera", "el
+front solo debe mostrar el nombre propio", "el RE también puede asignar a su equipo y a sí mismo" y
+"el RE también puede reasignar".
+
+**Estado:** implementado y verificado en local. Sin desplegar.
+
+### [2026-09-28] Pantalla "Reportes" — Estado del equipo (por equipo y consultores) + Excel
+
+**Decisión:** nueva pantalla `/reportes` (menú "Reportes", solo responsables de equipo y ADMIN; el
+guard espera los roles y el backend vuelve a autorizar por equipo con `Actor.equiposGestionables`).
+Responde por equipo, y opcionalmente para consultores concretos: qué hace cada consultor (tarea/ticket
+en curso), prioridad **de la tarea y Orden del ticket** (leído en vivo del HelpDesk, como el Board;
+el del espejo queda de respaldo), desde cuándo y cuántos días lleva, y una lista priorizada de lo que
+requiere seguimiento hoy (vencidas · vencen hoy · recordatorios · esperando cliente ≥ 3 d · en curso
+≥ 5 d; luego Orden del ticket, prioridad y días). Consultores sin tarea en curso aparecen como tales.
+- **Fecha de inicio:** columna nueva `tarea.en_proceso_desde` (**V28**), que se marca al ENTRAR a In
+  Progress (se renueva si vuelve a entrar; se conserva al salir). Sin backfill: las tareas que ya
+  estaban en curso usan `creado_en` y se muestran como "aprox.".
+- **Próximo paso, ¿Bloqueado? (Sí/No), Motivo y Quién debe intervenir** no existen en el modelo: por
+  decisión de la dueña **no** se crearon campos; van como **columnas vacías (amarillas) en el Excel**
+  para completarlas ahí (¿Bloqueado? con lista Sí/No).
+- **Excel** con `exceljs` (import dinámico: chunk aparte de ~218 kB gzip, no toca la carga inicial).
+  Se prepara al generar el reporte y el clic solo descarga (regla: nada de `await` entre el clic y
+  `descargarUrl`, la PWA instalada bloquea la descarga). Hojas "Estado del equipo" y "Seguimiento hoy".
+
+**Contexto:** pedido de la dueña (tabla de 8 preguntas: tarea actual, prioridad, fecha de inicio, días,
+próximo paso, bloqueo + motivo, quién interviene, seguimiento hoy), por equipo y por consultores.
+
+**Estado:** verificado en local (CUENCA: 12 consultores, filtro por 2 consultores, recarga directa en
+/reportes, especialista 403 y consultor redirigido, Excel leído con openpyxl, 390 px sin desborde).
+Sin desplegar: backend (V28 + endpoints) antes o junto con el front; sincronizar también `angular.json`
+(`allowedCommonJsDependencies: exceljs`) y `package.json`/`package-lock.json` al clon de deploy.
+
+### [2026-09-28] Fix: filtros del Board — asignados y búsqueda por palabra
+
+**Contexto:** la dueña reportó que los filtros del Board "no listan bien los asignados ni buscan bien".
+
+**Causas y arreglos** (`features/board/board.ts`, `HelpdeskService.searchTicketNumbers`):
+- **Elegir a una persona ocultaba SUS tarjetas.** La lista del filtro tomaba el `id` que devuelve
+  `resolveMember`, que para quien está en el roster es el **código local** ("AB"), mientras las tarjetas se
+  comparan por el `helpdesk_user_id` efectivo ("APBM001"). Ahora la clave es siempre el
+  `helpdesk_user_id` en mayúsculas (`claveAsignado`), y el nombre sale igual que en la tarjeta
+  (`assigneeView`, con el nombre del ticket si la persona no está en el roster).
+- **Las tarjetas sin asignar pasaban siempre el filtro de asignado.** Ahora se ocultan, y hay una opción
+  **"Sin asignar"** (primera de la lista) para verlas a propósito.
+- **Elegir una prioridad borraba los asignados elegidos** ("paridad con el legacy"). Ahora se combinan.
+- Las listas de Asignado y Cliente incluyen las tarjetas de otros tableros que suman "Asignados a mí" /
+  "Mi equipo" (salen de `cardsSource`, lo mismo que pintan las columnas).
+- **La búsqueda por palabra solo miraba las primeras 300 coincidencias de TODO el HelpDesk**: con
+  palabras comunes ("credito" ≈ 1500 tickets) las tarjetas del tablero que quedaban más allá no
+  aparecían. Ahora recorre todas las páginas (100 por consulta, en paralelo) y va **acotada a los
+  clientes de las tarjetas visibles** (`client_id` del ticket, guardado en el sync): con "credito" en
+  CUENCA, 12 tarjetas por contenido del ticket en 1,7 s (la búsqueda global completa tardaba 8,8 s).
+
+**Estado:** verificado en local contra el HelpDesk real (tablero CUENCA). Sin desplegar.
+
+### [2026-09-28] Senior de Turno se guarda en el backend (V27 `turno_senior`)
+
+**Decisión:** implementados en `fit-desk-api` los endpoints que la pantalla ya consumía y que daban 404
+(el calendario no se guardaba): `GET/PUT /api/legacy/turnoSenior?equipo=` y `GET /api/legacy/turnoSenior/hoy`.
+Tabla nueva `turno_senior` (equipo + lunes de la semana, únicos juntos; `mesa_ayuda`/`emergentes` como
+`helpdesk_user_id` en texto **sin FK**, porque se puede asignar a cualquier empleado del HelpDesk, no solo
+a usuarios de FitDesk). Resolución del equipo idéntica a `weeklySupport` (board o equipo; sin él, el
+del actor). `hoy` recorre todos los equipos, semana lun→vie en hora de Ecuador, e ignora mayúsculas.
+Sin cambios en el frontend. Mismo gating que `weeklySupport` (ninguno en el servidor).
+
+**Contexto:** la dueña pidió que la información del calendario de Senior de Turno se guarde.
+
+**Estado:** verificado en local (PUT/GET, separación por equipo, punto rojo del menú con `hoy`, recarga
+de la pantalla muestra lo guardado con nombres). Sin desplegar: en el deploy, el backend (V27) va antes
+o junto con el front.
+
+### [2026-09-28] La búsqueda por palabra respeta los filtros elegidos (cliente, estatus, asignado, tipo)
+
+**Decisión:** en Tickets, la palabra clave (campo Palabra o buscador de la barra superior) se acota con
+los filtros **elegidos a mano**: Cliente (uno o varios), Estatus, Asignado y Tipo, en la misma consulta
+al HelpDesk. **No** aplica los filtros implícitos de la pestaña (clientes del equipo, ocultar
+Aprobado/Cerrado, "asignados a mí"), así que también se encuentra el historial cerrado de un cliente.
+Sin filtros elegidos sigue siendo global. La búsqueda por N° sigue siendo global. El chip "Buscando"
+muestra el ámbito ("en COAC X", "en N clientes", "· con filtros").
+
+**Contexto:** la dueña elegía un cliente y buscaba una palabra, pero salían tickets de todos los
+clientes: `query()` llamaba a `searchTickets` sin filtros (búsqueda global por diseño).
+
+**Estado:** implementado y verificado en local contra el HelpDesk real (cliente 9 + "credito" → 112,
+todos de ese cliente; página 2 y Tipo combinados; quitar el cliente → global 1517; 390px sin
+desborde). Sin desplegar.
+
 ### [2026-09-27] Rol de plataforma HELPDESK: editar, eliminar y reasignar tickets desde FitDesk
 
 **Decisión:** nuevo rol **`HELPDESK`** (migración `V26__rol_helpdesk.sql`, 6.º rol). Solo **HELPDESK**

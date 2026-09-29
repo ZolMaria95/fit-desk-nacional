@@ -1,0 +1,169 @@
+<div class="rp-header">
+  <div>
+    <h2>Reportes</h2>
+    <p class="rp-sub">Estado del equipo: qué hace cada consultor y qué requiere seguimiento hoy</p>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="rp-filtros">
+  <div class="rp-campo">
+    <span class="rp-label">Equipo</span>
+    <button type="button" class="rp-sel" [matMenuTriggerFor]="menuEquipo" [disabled]="equipos().length < 2">
+      <span class="rp-sel-txt">{{ equipoNombre() || 'Elegir equipo' }}</span>
+      @if (equipos().length > 1) { <mat-icon>expand_more</mat-icon> }
+    </button>
+    <mat-menu #menuEquipo="matMenu">
+      @for (e of equipos(); track e.codigo) {
+        <button mat-menu-item (click)="elegirEquipo(e.codigo)">
+          @if (e.codigo === equipoSel()) { <mat-icon>check</mat-icon> }
+          <span>{{ e.nombre }}</span>
+        </button>
+      }
+    </mat-menu>
+  </div>
+
+  <div class="rp-campo">
+    <span class="rp-label">Consultores</span>
+    <button type="button" class="rp-sel" [matMenuTriggerFor]="menuConsultores" [disabled]="!miembros().length"
+            (menuClosed)="buscarConsultor.set('')">
+      <span class="rp-sel-txt">{{ consultoresLabel() }}</span>
+      <mat-icon>expand_more</mat-icon>
+    </button>
+    <mat-menu #menuConsultores="matMenu" class="rp-menu-consultores">
+      <div class="rp-menu-buscar" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+        <mat-icon>search</mat-icon>
+        <input [value]="buscarConsultor()" (input)="buscarConsultor.set($any($event.target).value)" placeholder="Buscar consultor…" aria-label="Buscar consultor" />
+      </div>
+      <button mat-menu-item (click)="$event.stopPropagation(); todosConsultores()">
+        <mat-icon>{{ consultoresSel().size ? 'check_box_outline_blank' : 'check_box' }}</mat-icon>
+        <span>Todos los del equipo</span>
+      </button>
+      @for (m of miembrosF(); track m.id) {
+        <button mat-menu-item (click)="$event.stopPropagation(); toggleConsultor(m.id)">
+          <mat-icon>{{ consultoresSel().has(m.id) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+          <span>{{ nombre(m.name) }}</span>
+          @if (m.global) { <span class="rp-global">soporte nacional</span> }
+        </button>
+      } @empty {
+        <button mat-menu-item disabled>Sin coincidencias</button>
+      }
+    </mat-menu>
+  </div>
+
+  <label class="rp-check">
+    <input type="checkbox" [checked]="incluirPendientes()" (change)="incluirPendientes.set($any($event.target).checked)" />
+    Incluir To Do y En Certificación
+  </label>
+
+  <span class="grow"></span>
+  <div class="rp-acciones">
+    <button mat-flat-button (click)="generar()" [disabled]="!equipoSel() || cargando()">
+      <mat-icon>refresh</mat-icon> Generar
+    </button>
+    <button mat-stroked-button (click)="descargarExcel()" [disabled]="!excel()"
+            [matTooltip]="exportando() ? 'Preparando el Excel…' : 'Incluye columnas para completar: próximo paso, bloqueo, motivo y quién debe intervenir'">
+      <mat-icon>download</mat-icon> {{ exportando() ? 'Preparando…' : 'Descargar Excel' }}
+    </button>
+  </div>
+</div>
+
+@if (cargando()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+@if (error()) { <div class="rp-error"><mat-icon>error_outline</mat-icon> {{ error() }}</div> }
+
+@if (reporte(); as rep) {
+  <div class="rp-kpis">
+    <div class="rp-kpi"><div class="n">{{ rep.consultores.length }}</div><div class="l">Consultores</div></div>
+    <div class="rp-kpi blue"><div class="n">{{ totalEnCurso() }}</div><div class="l">Tareas en curso</div></div>
+    <div class="rp-kpi amber"><div class="n">{{ sinTareaEnCurso() }}</div><div class="l">Sin tarea en curso</div></div>
+    <div class="rp-kpi red"><div class="n">{{ seguimiento().length }}</div><div class="l">Seguimiento hoy</div></div>
+  </div>
+
+  <!-- ¿Qué tickets requieren seguimiento hoy? -->
+  <section class="rp-bloque red">
+    <h3><mat-icon>priority_high</mat-icon> Requieren seguimiento hoy</h3>
+    <p class="rp-ayuda">
+      Priorizado: vencidas · vencen hoy · recordatorios · esperando al cliente ≥ {{ rep.umbrales.diasEsperandoCliente }} días ·
+      en curso ≥ {{ rep.umbrales.diasEnProceso }} días; luego por Orden del ticket y prioridad de la tarea.
+    </p>
+    @if (seguimiento().length) {
+      <ol class="rp-seg">
+        @for (s of seguimiento(); track s.tarea) {
+          <li class="rp-seg-item">
+            <span class="rp-motivo m{{ s.peso }}">{{ s.motivo }}</span>
+            <span class="rp-seg-main">
+              <strong>{{ s.tarea }}</strong>
+              @if (s.ticket) {
+                <button type="button" class="rp-tk" (click)="verTicket(s.ticket)" [matTooltip]="'Abrir la conversación del ticket'">#{{ s.ticket }}</button>
+              }
+              <span class="rp-tit">{{ s.titulo }}</span>
+            </span>
+            <span class="rp-seg-meta">
+              {{ s.consultorNombre ? nombre(s.consultorNombre) : 'Sin asignar' }}
+              @if (s.cliente) { · {{ s.cliente }} }
+              @if (s.ordenTicket) { · <span class="rp-orden {{ prioBadgeClase(s.ordenTicket) }}" matTooltip="Orden del ticket en el HelpDesk">Orden {{ s.ordenTicket }}</span> }
+              @if (s.prioridad) { · {{ PRIORIDAD_LABEL[s.prioridad] || s.prioridad }} }
+            </span>
+          </li>
+        }
+      </ol>
+    } @else {
+      <p class="rp-vacio">Nada requiere seguimiento hoy.</p>
+    }
+  </section>
+
+  <!-- ¿Qué está haciendo cada recurso? -->
+  <section class="rp-bloque blue">
+    <h3><mat-icon>groups</mat-icon> Qué está haciendo cada consultor</h3>
+    <div class="rp-tabla" role="table" aria-label="Estado del equipo">
+      <div class="rp-fila rp-cab" role="row">
+        <span role="columnheader">Consultor</span>
+        <span role="columnheader">Tarea / ticket</span>
+        <span role="columnheader">Cliente</span>
+        <span role="columnheader">Estado</span>
+        <span role="columnheader">Prioridad</span>
+        <span role="columnheader" matTooltip="Orden del ticket en el HelpDesk: posición en la lista del cliente (1 = primero)">Orden</span>
+        <span role="columnheader">Inicio</span>
+        <span role="columnheader">Días</span>
+      </div>
+      @for (g of grupos(); track g.hid) {
+        @if (g.filas.length) {
+          @for (f of g.filas; track f.tarea; let first = $first) {
+            <div class="rp-fila" role="row" [class.primera]="first">
+              <span class="c-cons" role="cell">{{ first ? g.nombre : '' }}</span>
+              <span class="c-tarea" role="cell">
+                <strong>{{ f.tarea }}</strong>
+                @if (f.ticket) {
+                  <button type="button" class="rp-tk" (click)="verTicket(f.ticket)" [matTooltip]="'Abrir la conversación del ticket'">#{{ f.ticket }}</button>
+                }
+                <span class="rp-tit">{{ f.titulo }}</span>
+                @if (f.tablero) { <span class="rp-chip">tablero {{ f.tablero }}</span> }
+                @if (f.esperandoCliente) { <span class="rp-chip amber">esperando cliente</span> }
+              </span>
+              <span class="c-cli" role="cell" data-l="Cliente">{{ f.cliente || '—' }}</span>
+              <span class="c-est" role="cell" data-l="Estado">{{ ESTADO_LABEL[f.estado] || f.estado }}</span>
+              <span class="c-prio" role="cell" data-l="Prioridad">{{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}</span>
+              <span class="c-ord" role="cell" data-l="Orden">
+                @if (f.ordenTicket) { <span class="rp-orden {{ prioBadgeClase(f.ordenTicket) }}">{{ f.ordenTicket }}</span> } @else { — }
+              </span>
+              <span class="c-ini" role="cell" data-l="Inicio">
+                @if (f.inicio) {
+                  {{ fechaCorta(f.inicio) }}
+                  @if (f.inicioAprox) { <span class="rp-aprox" matTooltip="Tarea que ya estaba en curso antes de registrar esta fecha: se usa su fecha de creación">aprox.</span> }
+                } @else { — }
+              </span>
+              <span class="c-dias" role="cell" data-l="Días" [class.alto]="(f.dias ?? 0) >= rep.umbrales.diasEnProceso">{{ f.dias ?? '—' }}</span>
+            </div>
+          }
+        } @else {
+          <div class="rp-fila primera sin" role="row">
+            <span class="c-cons" role="cell">{{ g.nombre }}</span>
+            <span class="c-tarea muted" role="cell">Sin tarea en curso</span>
+          </div>
+        }
+      }
+    </div>
+  </section>
+
+  <p class="rp-pie">{{ generadoTxt() }}</p>
+}

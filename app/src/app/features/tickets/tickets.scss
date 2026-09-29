@@ -45,7 +45,7 @@
   // tope de ancho para no empujar el botón "Limpiar"/↻ en búsquedas de texto largas.
   .filter-busqueda-activa {
     margin-bottom: 0;
-    max-width: 260px;
+    max-width: 360px;
     flex: 1 1 auto;
     // Los ítems flex no encogen por debajo de su contenido por defecto (`min-width: auto`) —
     // sin esto, el texto largo de una búsqueda forzaba el ancho de la fila entera aunque
@@ -402,3 +402,6 @@ mat-paginator {
   }
   .hd-tab-count.alert { background: #2a1618; color: #f09a9a; }
 }
+
+// Ámbito de la búsqueda por palabra ("en COAC X · con filtros"): mismo chip, peso normal.
+.busqueda-ambito { font-weight: 400; opacity: .8; margin-left: 4px; }

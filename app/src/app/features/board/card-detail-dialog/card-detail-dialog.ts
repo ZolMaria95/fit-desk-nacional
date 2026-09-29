@@ -239,7 +239,9 @@ export class CardDetailDialog {
 
   readonly filteredAssignees = computed<HdUser[]>(() => {
     const f = this.assigneeFilter().toLowerCase().trim();
-    const list = this.assignees();
+    // Tarea CON ticket: solo los destinos permitidos (responsable → su gente y él; sin asignado → uno mismo).
+    const d = this.ticket.trim() ? this.destinosTicket() : 'todos';
+    const list = d === 'todos' ? this.assignees() : this.assignees().filter((u) => d.has(String(u.id).toUpperCase()));
     if (!f) return list;
     return list.filter((m) => m.name.toLowerCase().includes(f) || m.id.toLowerCase().includes(f));
   });
@@ -375,6 +377,8 @@ export class CardDetailDialog {
   status: Status = (this.story?.status as Status) ?? statusFromTicketEstado(this.input.prefill?.estatus || '').status;
   dueDateModel: Date | null = this.story?.dueDate ? new Date(this.story.dueDate + 'T00:00:00') : null;
   assignee = this.story?.assignee ?? this.input.prefill?.assignee ?? '';
+  /** Asignado del ticket al abrir (para decidir si "tomarlo" aplica: solo sin asignado). */
+  private readonly asignadoInicial = this.assignee;
   ticket = this.story?.ticket ?? this.input.prefill?.ticket ?? '';
   clientId = this.story?.client ?? this.input.prefill?.client ?? '';
   readonly progress = signal<number>(this.story?.progress ?? 0);
@@ -515,15 +519,23 @@ export class CardDetailDialog {
    * HELPDESK (en el alcance del cliente) o ADMIN. Para el resto el campo queda de solo lectura
    * (el backend además rechaza la reasignación). Tareas sin ticket: sin cambios.
    */
+  /** A quién se puede asignar el ticket de esta tarea (ver `AuthService.destinosAsignacion`). */
+  private destinosTicket(): 'todos' | Set<string> {
+    return this.auth.destinosAsignacion({ clientId: this.clientId, usuarioAsignado: this.asignadoInicial });
+  }
+
   asignadoBloqueado(): boolean {
-    return !!this.ticket.trim() && !this.auth.puedeGestionarTicket(this.clientId);
+    if (!this.ticket.trim()) return false;
+    const d = this.destinosTicket();
+    return d !== 'todos' && d.size === 0;
   }
 
   /** Asigna el ticket asociado al empleado en el API (si hay ticket y cambió el asignado). */
   private maybeAssignHd(ticket: string, assignee: string | null, prev?: string | null): void {
     if (!ticket || !assignee || assignee === prev) return;
-    // Sin permiso de reasignar no se intenta (el backend lo rechazaría con 403).
-    if (!this.auth.puedeGestionarTicket(this.clientId)) return;
+    // Destino no permitido: no se intenta (el backend lo rechazaría con 403).
+    const d = this.auth.destinosAsignacion({ clientId: this.clientId, usuarioAsignado: prev });
+    if (d !== 'todos' && !d.has(assignee.trim().toUpperCase())) return;
     this.helpdesk.assignTicket(ticket, assignee).then((ok) => {
       if (ok) this.snack.open(`Ticket #${ticket} asignado a ${assignee} en el Helpdesk.`, '', { duration: 2500 });
       else this.snack.open(`No se pudo asignar el ticket #${ticket} en el Helpdesk.`, 'OK', { duration: 4000 });

@@ -2,10 +2,12 @@ import { Component, inject, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { firstValueFrom } from 'rxjs';
 import { abrirEditarTicket, eliminarTicket } from '../tickets/ticket-acciones';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
+import { AssignTicketDialog } from '../tickets/assign-ticket-dialog/assign-ticket-dialog';
 import { Ticket } from '../tickets/ticket-utils';
 import { TicketCard } from '../tickets/ticket-card/ticket-card';
 import { TicketMessagesDialog } from '../tickets/ticket-messages-dialog/ticket-messages-dialog';
@@ -79,9 +81,21 @@ export class Guardados {
   puedeGestionar(t: Ticket): boolean {
     return this.auth.puedeGestionarTicket(t.clientId);
   }
+  /** Asignar/reasignar: HELPDESK/ADMIN a cualquiera; responsable a sí mismo o a su gente; cualquiera se
+   *  toma un ticket sin asignado. */
+  puedeAsignar(t: Ticket): boolean {
+    return this.auth.puedeAsignarTicket(t);
+  }
   /** Guardados tiene su propia lista (no el pool de Tickets): tras guardar se recarga ese ticket. */
   async editarTicket(t: Ticket): Promise<void> {
     if (!(await abrirEditarTicket(this.dialog, t))) return;
+    const fresco = await this.hd.searchTicketRemote(t.ticket);
+    if (fresco) this.tickets.set(this.tickets().map((x) => (x.ticket === t.ticket ? fresco : x)));
+  }
+  /** Asignar (o tomarlo, si no tiene asignado): Guardados tiene su propia lista → se refresca ese ticket. */
+  async openAssign(t: Ticket): Promise<void> {
+    const ref = this.dialog.open(AssignTicketDialog, { data: { ticket: t }, width: '440px', maxWidth: '95vw' });
+    if (!(await firstValueFrom(ref.afterClosed()))) return;
     const fresco = await this.hd.searchTicketRemote(t.ticket);
     if (fresco) this.tickets.set(this.tickets().map((x) => (x.ticket === t.ticket ? fresco : x)));
   }

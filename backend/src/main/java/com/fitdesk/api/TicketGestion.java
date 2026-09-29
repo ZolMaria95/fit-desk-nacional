@@ -53,19 +53,24 @@ public class TicketGestion {
             .build();
 
     /** Resultado de consultar el ticket en el HelpDesk: status HTTP + client_id (si vino). */
-    public record ClienteDelTicket(int status, String clientId) {
+    /** {@code asignado} = assigned_user_id actual del ticket (null = sin asignar). */
+    public record ClienteDelTicket(int status, String clientId, String asignado) {
     }
 
     /** GET /tickets/tickets/{id} al HelpDesk con el Authorization del usuario → su client_id. */
     public ClienteDelTicket clienteDelTicket(String ticketId, String authorization) throws Exception {
         HttpResponse<byte[]> r = send("GET", "tickets/tickets/" + ticketId, authorization);
         if (r.statusCode() < 200 || r.statusCode() >= 300) {
-            return new ClienteDelTicket(r.statusCode(), null);
+            return new ClienteDelTicket(r.statusCode(), null, null);
         }
         JsonNode n = mapper.readTree(r.body());
-        JsonNode c = n != null ? n.get("client_id") : null;
-        String id = (c == null || c.isNull()) ? null : c.asText().trim();
-        return new ClienteDelTicket(r.statusCode(), id == null || id.isEmpty() ? null : id);
+        return new ClienteDelTicket(r.statusCode(), texto(n, "client_id"), texto(n, "assigned_user_id"));
+    }
+
+    private static String texto(JsonNode n, String campo) {
+        JsonNode v = n != null ? n.get(campo) : null;
+        String s = (v == null || v.isNull()) ? null : v.asText().trim();
+        return s == null || s.isEmpty() ? null : s;
     }
 
     /** DELETE /tickets/tickets/{id} al HelpDesk (sin body), con el Authorization del usuario. */

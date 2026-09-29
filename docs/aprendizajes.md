@@ -6,6 +6,17 @@ Hechos descubiertos sobre el código real, el HelpDesk, Firebase y el negocio. *
 
 ---
 
+### [2026-09-28] `GET /tickets/tickets/search` acepta los MISMOS filtros que el listado
+
+**Fuente:** pruebas de solo lectura contra el HelpDesk real (`q=credito`): sin filtros `total=1516`;
+`client_id=9` → 112, todos del cliente 9; `client_id=9,66` → 150 (lista por comas, igual que el
+listado); `ticket_status_id=002` → solo 002, y `002,003` también funciona; `assigned_user_id` y
+`ticket_type_id` también se aplican; combinados (`client_id=9&ticket_type_id=001&ticket_status_id=002`)
+→ 35, todos cumplen los tres.
+**Implicación:** la búsqueda por palabra se puede acotar server-side sin paginar en el cliente
+(`HelpdeskService.searchTickets(..., f)` reusa `conFiltros`, el mismo armado de parámetros que
+`loadFiltered`/`loadAllFiltered`).
+
 ### [2026-09-27] El `PUT /tickets/tickets/{id}` del HelpDesk ignora en silencio lo que la cuenta no
 ### puede cambiar — y existen catálogos de módulos y tipos
 

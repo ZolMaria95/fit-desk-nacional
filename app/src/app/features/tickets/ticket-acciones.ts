@@ -56,3 +56,4 @@ export async function eliminarTicket(
   snack.open(r.error || 'No se pudo eliminar el ticket.', 'OK', { duration: 6000 });
   return false;
 }
+

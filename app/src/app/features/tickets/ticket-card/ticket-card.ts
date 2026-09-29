@@ -47,6 +47,8 @@ export class TicketCard {
   /** ¿Puede EDITAR / ELIMINAR / REASIGNAR este ticket? Rol HELPDESK en el alcance del cliente, o
    *  ADMIN (`auth.puedeGestionarTicket(clientId)`, lo calcula el contenedor). El backend lo re-exige. */
   readonly puedeGestionar = input(false);
+  /** ¿Puede asignar/reasignar este ticket? (HELPDESK/ADMIN, responsable a su gente, o tomarlo si no tiene asignado). */
+  readonly puedeAsignar = input(false);
 
   readonly verConversacion = output<void>();
   /** Editar el ticket (modal "Editar ticket"); lo resuelve el contenedor. */

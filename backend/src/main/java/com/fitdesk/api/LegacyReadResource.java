@@ -1,6 +1,8 @@
 package com.fitdesk.api;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,6 +25,7 @@ import com.fitdesk.overlay.TicketAccion;
 import com.fitdesk.overlay.TicketGuardado;
 import com.fitdesk.overlay.TicketNota;
 import com.fitdesk.overlay.TicketPendiente;
+import com.fitdesk.overlay.TurnoSenior;
 
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
@@ -309,6 +312,54 @@ public class LegacyReadResource {
             weeks.put(rs.semanaInicio.toString(), m);
         }
         return Map.of("weeks", weeks);
+    }
+
+    // ── /turnoSenior?equipo=CODIGO → Senior de Turno DEL EQUIPO: { weeks:{ "<lunes>": {...} } } ──
+    // Mismo patrón que /weeklySupport (equipo = board o equipo elegido; sin él, el del actor), pero con
+    // 2 roles por semana (helpdesk_user_id de cualquier empleado) y sin log de tickets.
+    @GET
+    @Path("/turnoSenior")
+    public Map<String, Object> turnoSenior(@QueryParam("equipo") String equipoCodigo, @HeaderParam("X-Actor-Hid") String actorHid) {
+        Map<String, Object> weeks = new LinkedHashMap<>();
+        Equipo eq = resolverEquipoSemanal(equipoCodigo, actorHid);
+        if (eq == null) {
+            return Map.of("weeks", weeks);
+        }
+        for (TurnoSenior t : TurnoSenior.<TurnoSenior>list("equipo = ?1 order by semanaInicio", eq)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("mesaAyuda", t.mesaAyuda != null ? t.mesaAyuda : "");
+            m.put("emergentes", t.emergentes != null ? t.emergentes : "");
+            m.put("notes", t.notas != null ? t.notas : "");
+            m.put("updatedAt", t.actualizadoEn != null ? t.actualizadoEn.toString() : null);
+            weeks.put(t.semanaInicio.toString(), m);
+        }
+        return Map.of("weeks", weeks);
+    }
+
+    // ── /turnoSenior/hoy → ¿el actor está de turno HOY en algún equipo? (punto rojo del menú) ──
+    // Agregado sobre TODOS los equipos: la asignación es abierta, puede tocarle un equipo ajeno.
+    // Semana Lun→Vie en hora de Ecuador; sábado y domingo nadie está de turno.
+    @GET
+    @Path("/turnoSenior/hoy")
+    public Map<String, Object> turnoSeniorHoy(@HeaderParam("X-Actor-Hid") String actorHid) {
+        String hid = actorHid == null ? "" : actorHid.trim();
+        LocalDate hoy = LocalDate.now(ZoneId.of("America/Guayaquil"));
+        if (hid.isEmpty() || hoy.getDayOfWeek() == DayOfWeek.SATURDAY || hoy.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            return Map.of("deTurno", false);
+        }
+        LocalDate lunes = hoy.with(DayOfWeek.MONDAY);
+        for (TurnoSenior t : TurnoSenior.<TurnoSenior>list("semanaInicio = ?1 order by id", lunes)) {
+            String rol = hid.equalsIgnoreCase(t.mesaAyuda) ? "mesaAyuda" : hid.equalsIgnoreCase(t.emergentes) ? "emergentes" : null;
+            if (rol != null && t.equipo != null) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("deTurno", true);
+                m.put("rol", rol);
+                m.put("equipo", t.equipo.codigo);
+                m.put("equipoNombre", t.equipo.nombre);
+                return m;
+            }
+        }
+        return Map.of("deTurno", false);
     }
 
     // ── /equipo-miembros?equipo=CODIGO → miembros del equipo (para el picker de la rotación) ──

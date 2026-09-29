@@ -107,9 +107,9 @@
 </div>
 
 <mat-menu #menu="matMenu">
-  <button mat-menu-item [disabled]="soloLectura() || !puedeGestionar()" (click)="asignar.emit()"
+  <button mat-menu-item [disabled]="soloLectura() || !puedeAsignar()" (click)="asignar.emit()"
           [matTooltip]="soloLectura() ? 'Ticket cerrado — no se puede reasignar'
-            : !puedeGestionar() ? 'La reasignación la hace el rol Helpdesk' : ''">
+            : !puedeAsignar() ? 'La reasignación la hace el rol Helpdesk o el responsable del equipo' : ''">
     <mat-icon>person_add</mat-icon> Asignar / reasignar
   </button>
   <button mat-menu-item [matMenuTriggerFor]="estadoMenu"

@@ -131,11 +131,11 @@
       @if (selectedAssignees().length) {
         <mat-chip-set class="assignee-chips">
           @for (id of selectedAssignees(); track id) {
-            @let mem = resolveMember(id);
+            @let nom = nombreFiltroAsignado(id);
             @let ch = chipAsignado(id);
-            <mat-chip class="achip" [style.background]="ch.bg" [style.color]="ch.fg" [matTooltip]="mem?.name || '—'" (removed)="removeAssignee(id)">
-              {{ shortName(mem?.name || '—') }}
-              <button matChipRemove [attr.aria-label]="'Quitar ' + (mem?.name || '—')">
+            <mat-chip class="achip" [style.background]="ch.bg" [style.color]="ch.fg" [matTooltip]="nom" (removed)="removeAssignee(id)">
+              {{ shortName(nom) }}
+              <button matChipRemove [attr.aria-label]="'Quitar ' + nom">
                 <mat-icon>close</mat-icon>
               </button>
             </mat-chip>

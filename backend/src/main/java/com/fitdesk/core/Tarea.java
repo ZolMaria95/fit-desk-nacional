@@ -113,6 +113,10 @@ public class Tarea extends PanacheEntityBase {
     @Column(name = "pendiente_transferencia", nullable = false)
     public boolean pendienteTransferencia = false;
 
+    /** Cuándo entró a IN_PROGRESS por última vez (V28). Null = nunca desde que existe la columna. */
+    @Column(name = "en_proceso_desde")
+    public OffsetDateTime enProcesoDesde;
+
     @Column(name = "creado_en")
     public OffsetDateTime creadoEn = OffsetDateTime.now();
 

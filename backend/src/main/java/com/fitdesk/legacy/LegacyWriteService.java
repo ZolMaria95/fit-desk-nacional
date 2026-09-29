@@ -25,6 +25,7 @@ import com.fitdesk.notificaciones.NotificacionService;
 import com.fitdesk.overlay.Consulta;
 import com.fitdesk.overlay.Progreso;
 import com.fitdesk.overlay.RotacionSemanal;
+import com.fitdesk.overlay.TurnoSenior;
 import com.fitdesk.overlay.TicketAccion;
 import com.fitdesk.overlay.TicketNota;
 import com.fitdesk.overlay.TicketPendiente;
@@ -136,6 +137,10 @@ public class LegacyWriteService {
         return DeleteResult.OK;
     }
 
+    private static boolean esEnProceso(WorkflowEstado we) {
+        return we != null && "IN_PROGRESS".equals(we.codigo);
+    }
+
     /** Siguiente codigo TA-NNN, derivado del MÁXIMO REAL de la BD (no del cliente). Atómico dentro de la tx. */
     private String nextTareaCodigo() {
         Number max = (Number) Tarea.getEntityManager()
@@ -189,7 +194,13 @@ public class LegacyWriteService {
         boolean sinFinalizarAntes = esTareaSinFinalizarPendiente(t);
         boolean aprobadoAntes = t.aprobado;
         if (f.has("status")) {
+            boolean enProcesoAntes = esEnProceso(t.workflowEstado);
             t.workflowEstado = workflowByStatus(text(f, "status"));
+            // "¿Desde cuándo está trabajando en eso?" (reporte Estado del equipo): se marca al ENTRAR a
+            // In Progress; si ya estaba, no se toca; si sale, se conserva la última.
+            if (!enProcesoAntes && esEnProceso(t.workflowEstado)) {
+                t.enProcesoDesde = OffsetDateTime.now();
+            }
         }
         // El cliente se resuelve ANTES que el board: al CREAR una tarea con ticket, el equipo
         // responsable del cliente (si está registrado) manda sobre el 'board' que mande el
@@ -601,6 +612,51 @@ public class LegacyWriteService {
             RotacionSemanal.delete("equipo = ?1", eq);
         } else {
             RotacionSemanal.delete("equipo = ?1 and semanaInicio not in ?2", eq, keep);
+        }
+    }
+
+    /**
+     * PUT /turnoSenior?equipo=CODIGO: { weeks: { "<lunes>": { mesaAyuda, emergentes, notes } } } — el
+     * Senior de Turno DEL EQUIPO (mismo equipo que weeklySupport). Reconcilia solo las semanas de ese
+     * equipo; una semana sin ningún rol lleno se borra.
+     */
+    @Transactional
+    public void putTurnoSenior(JsonNode node, String equipoCodigo, String actorHid) {
+        Equipo eq = equipoSemanal(equipoCodigo, actorHid);
+        if (eq == null) {
+            return;
+        }
+        Set<LocalDate> keep = new HashSet<>();
+        JsonNode weeks = node.path("weeks");
+        if (weeks.isObject()) {
+            Iterator<Map.Entry<String, JsonNode>> it = weeks.fields();
+            while (it.hasNext()) {
+                Map.Entry<String, JsonNode> e = it.next();
+                LocalDate semana = date(e.getKey());
+                JsonNode w = e.getValue();
+                String mesa = trunc(text(w, "mesaAyuda"), 40);
+                String emerg = trunc(text(w, "emergentes"), 40);
+                if (semana == null || (mesa == null && emerg == null)) {
+                    continue;
+                }
+                keep.add(semana);
+                TurnoSenior t = TurnoSenior.findBySemanaAndEquipo(semana, eq);
+                if (t == null) {
+                    t = new TurnoSenior();
+                    t.semanaInicio = semana;
+                    t.equipo = eq;
+                    t.persist();
+                }
+                t.mesaAyuda = mesa;
+                t.emergentes = emerg;
+                t.notas = text(w, "notes");
+                t.actualizadoEn = OffsetDateTime.now();
+            }
+        }
+        if (keep.isEmpty()) {
+            TurnoSenior.delete("equipo = ?1", eq);
+        } else {
+            TurnoSenior.delete("equipo = ?1 and semanaInicio not in ?2", eq, keep);
         }
     }
 

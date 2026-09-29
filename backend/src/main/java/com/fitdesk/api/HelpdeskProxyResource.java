@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.nio.charset.StandardCharsets;
@@ -126,7 +127,8 @@ public class HelpdeskProxyResource {
         if (!m.matches()) {
             return null;
         }
-        if (soloCamposLibres(headers.getMediaType(), body)) {
+        Map<String, String> campos = camposForm(headers.getMediaType(), body);
+        if (campos != null && CAMPOS_LIBRES.containsAll(campos.keySet())) {
             return null;
         }
         String actor = headers.getHeaderString("X-Actor-Hid");
@@ -139,30 +141,67 @@ public class HelpdeskProxyResource {
             if (Actor.puedeGestionarTicket(actor, c.clientId())) {
                 return null;
             }
+            if (esAutoasignacion(campos, actor, c.asignado())) {
+                return null;
+            }
+            if (soloAsignacion(campos) && Actor.puedeAsignarComoResponsable(actor, campos.get("assigned_user_id"))) {
+                return null;
+            }
         } catch (Exception ex) {
             LOG.warnf("Guarda de edición de ticket %s: no se pudo leer el ticket (%s)", ticketId, ex.toString());
             return Response.status(Response.Status.BAD_GATEWAY).type(MediaType.APPLICATION_JSON)
                     .entity("{\"error\":{\"message\":\"No se pudo verificar el ticket en el HelpDesk.\"}}").build();
         }
-        return denegar("Solo el rol Helpdesk (en su alcance) o un administrador pueden editar o reasignar este ticket.");
+        return denegar("No puedes hacer ese cambio en este ticket. Un ticket sin asignar lo puedes tomar para ti; el responsable de equipo asigna a su gente, y el resto de cambios los hace el rol Helpdesk o un administrador.");
     }
 
-    /** ¿El body del PUT toca SOLO campos abiertos a todos (hoy: el estado)? Multipart = no (trae archivo). */
-    private static boolean soloCamposLibres(MediaType type, byte[] body) {
+    /** Campos de un body form-urlencoded (vacío → mapa vacío). null = otro formato (multipart trae
+     *  archivo): nunca cuenta como "solo campos libres" ni como autoasignación. */
+    private static Map<String, String> camposForm(MediaType type, byte[] body) {
+        Map<String, String> out = new HashMap<>();
         if (body == null || body.length == 0) {
-            return true;
+            return out;
         }
         if (type == null || !MediaType.APPLICATION_FORM_URLENCODED_TYPE.isCompatible(type)) {
-            return false;
+            return null;
         }
-        String raw = new String(body, StandardCharsets.UTF_8);
-        for (String par : raw.split("&")) {
+        for (String par : new String(body, StandardCharsets.UTF_8).split("&")) {
             if (par.isBlank()) {
                 continue;
             }
             int eq = par.indexOf('=');
             String key = URLDecoder.decode(eq >= 0 ? par.substring(0, eq) : par, StandardCharsets.UTF_8).trim();
-            if (!CAMPOS_LIBRES.contains(key)) {
+            String val = eq >= 0 ? URLDecoder.decode(par.substring(eq + 1), StandardCharsets.UTF_8).trim() : "";
+            out.put(key, val);
+        }
+        return out;
+    }
+
+    /**
+     * Excepción a la reasignación restringida: un ticket SIN asignado lo puede tomar CUALQUIERA, pero solo
+     * para sí mismo. El body trae solo {@code assigned_user_id} (y a lo sumo el estado), su valor es el
+     * propio actor, y el ticket —leído en vivo del HelpDesk— no tiene asignado. Además, un RESPONSABLE_EQUIPO
+     * asigna o reasigna a sí mismo o a su gente (ver {@link Actor#puedeAsignarComoResponsable}). Cualquier otra
+     * reasignación sigue exigiendo HELPDESK/ADMIN.
+     */
+    private static boolean esAutoasignacion(Map<String, String> campos, String actor, String asignadoActual) {
+        if (!soloAsignacion(campos) || actor == null || actor.isBlank() || asignadoActual != null) {
+            return false;
+        }
+        return campos.get("assigned_user_id").equalsIgnoreCase(actor.trim());
+    }
+
+    /** ¿El body es una asignación pura: `assigned_user_id` no vacío y, a lo sumo, el estado? */
+    private static boolean soloAsignacion(Map<String, String> campos) {
+        if (campos == null) {
+            return false;
+        }
+        String nuevo = campos.get("assigned_user_id");
+        if (nuevo == null || nuevo.isBlank()) {
+            return false;
+        }
+        for (String k : campos.keySet()) {
+            if (!"assigned_user_id".equals(k) && !CAMPOS_LIBRES.contains(k)) {
                 return false;
             }
         }

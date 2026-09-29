@@ -405,15 +405,7 @@ export class HelpdeskService {
         .set('offset', String(pageIndex * pageSize))
         // El API ordena por `<campo>_order=asc|desc` (p. ej. modified_date_order).
         .set(`${sort.field}_order`, sort.dir);
-      // Multi-cliente: el API espera una LISTA separada por comas en un solo
-      // parámetro (client_id=4,5,6), igual que la herramienta del Helpdesk.
-      // (Repetir el parámetro NO sirve: el API se queda con uno solo.)
-      if (f.clientIds?.length) params = params.set('client_id', f.clientIds.join(','));
-      // Estatus server-side: un estado explícito, o una LISTA (p. ej. no finalizados).
-      if (f.statusId) params = params.set('ticket_status_id', f.statusId);
-      else if (f.statusIds?.length) params = params.set('ticket_status_id', f.statusIds.join(','));
-      if (f.assignedUserId) params = params.set('assigned_user_id', f.assignedUserId);
-      if (f.typeId) params = params.set('ticket_type_id', f.typeId);
+      params = this.conFiltros(params, f);
       const data = await firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets`, { params }));
       const items: Ticket[] = (data?.items || []).map(mapTicket).map(evaluarFechas).map(clasificar);
       this._tickets.set(items);
@@ -426,6 +418,18 @@ export class HelpdeskService {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** Filtros server-side comunes a `/tickets/tickets` y `/tickets/tickets/search` (el search acepta
+   *  los mismos parámetros, verificado 2026-09-28). Multi-cliente y multi-estado van como LISTA
+   *  separada por comas en un solo parámetro (repetirlo NO sirve: el API se queda con uno). */
+  private conFiltros(p: HttpParams, f: TicketFilters): HttpParams {
+    if (f.clientIds?.length) p = p.set('client_id', f.clientIds.join(','));
+    if (f.statusId) p = p.set('ticket_status_id', f.statusId);
+    else if (f.statusIds?.length) p = p.set('ticket_status_id', f.statusIds.join(','));
+    if (f.assignedUserId) p = p.set('assigned_user_id', f.assignedUserId);
+    if (f.typeId) p = p.set('ticket_type_id', f.typeId);
+    return p;
   }
 
   /** Fetch SIN efectos de la 1ª página de tickets de un conjunto de clientes, ordenada por
@@ -471,13 +475,8 @@ export class HelpdeskService {
     try {
       const LIMIT = 100; // tope del API (200+ → 422)
       const build = (offset: number) => {
-        let p = new HttpParams().set('limit', String(LIMIT)).set('offset', String(offset)).set(`${sort.field}_order`, sort.dir);
-        if (f.clientIds?.length) p = p.set('client_id', f.clientIds.join(','));
-        if (f.statusId) p = p.set('ticket_status_id', f.statusId);
-        else if (f.statusIds?.length) p = p.set('ticket_status_id', f.statusIds.join(','));
-        if (f.assignedUserId) p = p.set('assigned_user_id', f.assignedUserId);
-        if (f.typeId) p = p.set('ticket_type_id', f.typeId);
-        return p;
+        const p = new HttpParams().set('limit', String(LIMIT)).set('offset', String(offset)).set(`${sort.field}_order`, sort.dir);
+        return this.conFiltros(p, f);
       };
       const fetchPage = (offset: number) =>
         firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets`, { params: build(offset) }));
@@ -508,25 +507,29 @@ export class HelpdeskService {
    * Búsqueda por texto libre: consulta `/tickets/tickets/search?q=…` (el API busca la
    * palabra en el contenido del ticket) y deja la página como resultado actual +
    * `total`, EXACTAMENTE igual que `loadFiltered` → la vista y la paginación
-   * server-side funcionan sin cambios. La búsqueda es global (no aplica los filtros
-   * de tab). El orden va como `<campo>_order` (mismo esquema que el listado).
+   * server-side funcionan sin cambios. `f` acota la búsqueda (cliente, estatus, asignado, tipo) en
+   * la MISMA consulta; sin filtros es global. El orden va como `<campo>_order` (mismo esquema que el listado).
    */
   async searchTickets(
     q: string,
     pageIndex: number,
     pageSize: number,
     sort: { field: string; dir: 'asc' | 'desc' } = { field: 'modified_date', dir: 'desc' },
+    f: TicketFilters = {},
   ): Promise<void> {
     const term = q.trim();
     if (!term || this.loading()) return;
     this.loading.set(true);
     this.setStatus(`Buscando "${term}"...`, 'loading');
     try {
-      const params = new HttpParams()
-        .set('q', term)
-        .set('limit', String(pageSize))
-        .set('offset', String(pageIndex * pageSize))
-        .set(`${sort.field}_order`, sort.dir);
+      const params = this.conFiltros(
+        new HttpParams()
+          .set('q', term)
+          .set('limit', String(pageSize))
+          .set('offset', String(pageIndex * pageSize))
+          .set(`${sort.field}_order`, sort.dir),
+        f,
+      );
       const data = await firstValueFrom(this.http.get<any>(`${this.base}/tickets/tickets/search`, { params }));
       const items: Ticket[] = (data?.items || []).map(mapTicket).map(evaluarFechas).map(clasificar);
       this._tickets.set(items);
@@ -541,31 +544,42 @@ export class HelpdeskService {
   }
 
   /**
-   * Números de ticket que coinciden con una búsqueda por texto. Para el board:
-   * filtrar las cards cuyo ticket coincide con el HelpDesk. Recorre las páginas del
-   * endpoint de búsqueda hasta agotarlas o alcanzar `cap` (cota de seguridad) y NO
-   * toca las señales de la lista (`_tickets`/`_total`). Devuelve un Set de números.
+   * Números de ticket que coinciden con una búsqueda por texto. Para el board: filtrar las cards
+   * cuyo ticket coincide con el HelpDesk (opcionalmente acotado a `clientIds`). NO toca las señales
+   * de la lista (`_tickets`/`_total`).
+   * Recorre TODAS las páginas (100 por consulta, tope del API; en paralelo por lotes) hasta `cap`:
+   * antes se detenía en 300 y, con palabras comunes (p. ej. "credito" ≈ 1500 tickets), las tarjetas
+   * del tablero cuyo ticket caía más allá de esas 300 no aparecían.
    */
-  async searchTicketNumbers(q: string, cap = 300): Promise<Set<string>> {
+  async searchTicketNumbers(q: string, cap = 3000, clientIds: string[] = []): Promise<Set<string>> {
     const term = q.trim();
     const numbers = new Set<string>();
     if (!term) return numbers;
-    const LIMIT = 50;
+    const LIMIT = 100;
+    const fetchPage = (offset: number) =>
+      firstValueFrom(
+        this.http.get<any>(`${this.base}/tickets/tickets/search`, {
+          params: this.conFiltros(
+            new HttpParams().set('q', term).set('limit', String(LIMIT)).set('offset', String(offset)),
+            { clientIds },
+          ),
+          context: new HttpContext().set(HD_SAFE, true),
+        }),
+      );
+    const add = (data: any) => {
+      for (const it of data?.items || []) {
+        const id = String(it.ticket_id ?? '').trim();
+        if (id) numbers.add(id);
+      }
+    };
     try {
-      for (let offset = 0; offset < cap; offset += LIMIT) {
-        const params = new HttpParams().set('q', term).set('limit', String(LIMIT)).set('offset', String(offset));
-        const data = await firstValueFrom(
-          this.http.get<any>(`${this.base}/tickets/tickets/search`, {
-            params,
-            context: new HttpContext().set(HD_SAFE, true),
-          }),
-        );
-        const items: any[] = data?.items || [];
-        for (const it of items) {
-          const id = String(it.ticket_id ?? '').trim();
-          if (id) numbers.add(id);
-        }
-        if (items.length < LIMIT) break; // última página
+      const first = await fetchPage(0);
+      add(first);
+      const total = Math.min(Number(first?.total ?? 0), cap);
+      const offsets: number[] = [];
+      for (let o = LIMIT; o < total; o += LIMIT) offsets.push(o);
+      for (let k = 0; k < offsets.length; k += 5) {
+        (await Promise.all(offsets.slice(k, k + 5).map(fetchPage))).forEach(add);
       }
     } catch {
       /* devuelve lo acumulado hasta el fallo */

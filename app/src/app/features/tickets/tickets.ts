@@ -353,6 +353,17 @@ export class Tickets implements OnDestroy {
       ),
   );
 
+  /** Ámbito de la búsqueda por palabra ("en COAC X", "en 3 clientes · con filtros"); '' = global. */
+  readonly ambitoBusqueda = computed(() => {
+    if (!this.filterTexto()) return '';
+    const cli = this.filterClientes();
+    const partes: string[] = [];
+    if (cli.length === 1) partes.push(`en ${this.clienteName(cli[0])}`);
+    else if (cli.length > 1) partes.push(`en ${cli.length} clientes`);
+    if (this.filterEstatus().length || this.filterAsignado() || this.filterTipo()) partes.push('con filtros');
+    return partes.join(' · ');
+  });
+
   /** Texto escrito pero aún NO buscado (hint "Presiona Enter"), por campo. */
   readonly ticketPending = computed(() => {
     const v = this.ticketInput().trim();
@@ -438,6 +449,19 @@ export class Tickets implements OnDestroy {
     return f;
   }
 
+  /** Solo los filtros elegidos a mano (sin los implícitos de la tab) → acotan la búsqueda por palabra. */
+  private buildFiltrosExplicitos(): TicketFilters {
+    const f: TicketFilters = {};
+    if (this.filterClientes().length) f.clientIds = this.filterClientes();
+    const statusIds = this.filterEstatus()
+      .map((n) => this.hd.statusIdOf(n))
+      .filter((id): id is string => !!id);
+    if (statusIds.length) f.statusIds = statusIds;
+    if (this.filterAsignado()) f.assignedUserId = this.filterAsignado();
+    if (this.filterTipo()) f.typeId = this.filterTipo();
+    return f;
+  }
+
   /** Consulta la página actual: búsqueda por palabra, filtrada server-side, o carga amplia. */
   private async query(): Promise<void> {
     // Firma del filtro de equipo que se está consultando → el effect de auto-requery no re-consulta
@@ -445,12 +469,17 @@ export class Tickets implements OnDestroy {
     this.ultimoEquipoKey = this.tab() + ':' + this.equipoClientIds().join(',');
     // El responsable "vio" los tickets del equipo → limpia el badge de novedades y avanza la marca de agua.
     if (this.tab() === 'equipo' && this.auth.esResponsableEquipo()) this.nuevosTickets.marcarVistos();
-    // Búsqueda por palabra: global (ignora los filtros de tab), paginada server-side.
+    // Búsqueda por palabra: paginada server-side y acotada SOLO por los filtros que el usuario eligió
+    // (cliente/estatus/asignado/tipo). Los implícitos de la tab no aplican: así se encuentra también el
+    // historial (cerrados) de un cliente. Sin filtros elegidos es global.
     if (this.filterTexto()) {
-      await this.hd.searchTickets(this.filterTexto(), this.pageIndex(), this.pageSize(), {
-        field: this.sortField(),
-        dir: this.sortDir(),
-      });
+      await this.hd.searchTickets(
+        this.filterTexto(),
+        this.pageIndex(),
+        this.pageSize(),
+        { field: this.sortField(), dir: this.sortDir() },
+        this.buildFiltrosExplicitos(),
+      );
       return;
     }
     // "Sin asignar": el API no filtra por "sin asignado" → cargamos TODO el equipo (todas
@@ -618,7 +647,7 @@ export class Tickets implements OnDestroy {
       this.query();
     }
   }
-  /** Búsqueda EXPLÍCITA por palabra (Enter / 🔍). Contenido, paginada y global. */
+  /** Búsqueda EXPLÍCITA por palabra (Enter / 🔍). Contenido, paginada, acotada por los filtros elegidos. */
   async submitPalabra(): Promise<void> {
     const v = this.palabraInput().trim();
     this.pageIndex.set(0);
@@ -708,6 +737,11 @@ export class Tickets implements OnDestroy {
   /** Editar / eliminar / reasignar: rol HELPDESK en el alcance del cliente, o ADMIN. */
   puedeGestionar(t: Ticket): boolean {
     return this.auth.puedeGestionarTicket(t.clientId);
+  }
+  /** Asignar/reasignar: HELPDESK/ADMIN a cualquiera; responsable a sí mismo o a su gente; cualquiera se
+   *  toma un ticket sin asignado. */
+  puedeAsignar(t: Ticket): boolean {
+    return this.auth.puedeAsignarTicket(t);
   }
   editarTicket(t: Ticket): void {
     void abrirEditarTicket(this.dialog, t);

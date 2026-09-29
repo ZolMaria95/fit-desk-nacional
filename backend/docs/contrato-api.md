@@ -30,7 +30,7 @@
 un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaustivo):
 - `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /users/me`
 - Catálogos: `GET /users/catalog`, `GET /clients/catalog`, `GET /ticket-statuses/catalog`
-- Tickets: `GET /tickets/tickets` (paginado, filtros, `?..._order=`), `GET /tickets/tickets/search`,
+- Tickets: `GET /tickets/tickets` (paginado, filtros, `?..._order=`), `GET /tickets/tickets/search` (`q` + los mismos filtros del listado: `client_id` y `ticket_status_id` en lista por comas, `assigned_user_id`, `ticket_type_id`; verificado 2026-09-28),
   `GET /tickets/tickets/{id}`, `PUT /tickets/tickets/{id}` (`x-www-form-urlencoded`)
 - **Guardas del rol HELPDESK sobre el proxy (2026-09-27)** — el relay deja de ser 1:1 SOLO para
   `tickets/tickets/{id}` (el resto sigue intacto):
@@ -40,6 +40,11 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
     **ADMIN**; si no, **403** `{"error":{"message":"…"},"message":"…"}`. El actor llega en
     **`X-Actor-Hid`**, que el frontend ahora manda en toda escritura a `/api/v1` (sin header → 403).
     El `client_id` se lee del propio HelpDesk (`GET` con el `Authorization` del usuario).
+  - **Asignación (2026-09-28):** un `PUT` con solo `assigned_user_id` (+ a lo sumo `ticket_status_id`)
+    también pasa si (a) es **autoasignación** (`assigned_user_id` = `X-Actor-Hid`) sobre un ticket **sin
+    asignado** (leído en vivo), o (b) el actor es **RESPONSABLE_EQUIPO** y el destino es él o un miembro
+    vigente de los equipos que dirige (con o sin asignado previo). `assigned_user_id=` vacío quita el
+    asignado (solo HELPDESK/ADMIN); `null` literal → 404 del HelpDesk.
   - `DELETE tickets/tickets/{id}` → **403 siempre**: el borrado va por `DELETE /api/legacy/tickets/{id}`.
   - `POST tickets/tickets` (crear ticket) → sin cambios por ahora (pendiente, "crear" se hará después).
   - Catálogos usados por "Editar ticket": `GET /subsystems/catalog` (módulos: `subsystem_id`,
@@ -60,6 +65,49 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - **Board / legacy (escritura)** `PATCH|PUT|DELETE /api/legacy/…`: `stories/stories[/{id}]`,
   `sprints`, `hdNotes`, `hdActions`, `hdPendientes`, `weeklySupport`, `progress`, `queries`,
   `solNotes`, `ticket-espejo/{id}/assignee`.
+- **Reportes** (2026-09-28; acceso = `Actor.equiposGestionables`: ADMIN o RESPONSABLE_EQUIPO en su
+  alcance EQUIPO/REGIONAL/GLOBAL; el resto **403**; header `X-Actor-Hid`):
+  - `GET /api/reportes/equipos` → `[{codigo, nombre}]` equipos sobre los que puede generar reportes.
+  - `GET /api/reportes/estado-equipo?equipo=<codigo>[&consultores=HID,HID]` → 404 si el equipo no
+    existe. Sin `consultores` = miembros del equipo (asignación EQUIPO vigente) + tareas sin asignar del
+    equipo. Tareas activas (TODO / IN_PROGRESS / EN_CERTIFICACION, sin REUNION ni pendientes de
+    transferencia) de esa gente en **cualquier** tablero:
+    ```json
+    { "equipo": {"codigo","nombre"}, "generadoEn": "ISO",
+      "consultores": [{"hid","nombre"}], "sinTarea": [{"hid","nombre"}],
+      "filas": [{ "consultorHid","consultorNombre","tarea","titulo","ticket","cliente","clientId",
+                  "estado","prioridad","ordenTicket","inicio","inicioAprox","dias","fechaLimite",
+                  "esperandoCliente","fechaEsperando","tablero" }],
+      "seguimiento": [{ ...fila, "peso": 1-5, "motivo": "Vencida (3 d)" }],
+      "umbrales": {"diasEsperandoCliente": 3, "diasEnProceso": 5} }
+    ```
+    `inicio` = `tarea.en_proceso_desde` (V28); si falta y la tarea está en IN_PROGRESS, `creado_en` con
+    `inicioAprox: true`. `dias` = días corridos hasta hoy (hora de Ecuador). `ordenTicket` sale del
+    espejo (respaldo): el front lo refresca en vivo del HelpDesk. `tablero` = nombre del equipo dueño si
+    no es el del reporte. Seguimiento (un motivo por tarea, el de más peso): 1 vencida · 2 vence hoy ·
+    3 recordatorio (`ticket_pendiente` no pausado con `due_date ≤ hoy`) · 4 esperando cliente ≥ 3 d ·
+    5 en In Progress ≥ 5 d; orden: peso → Orden del ticket → prioridad → días.
+- **`turnoSenior`** (implementado 2026-09-28, tabla `turno_senior` de la **V27**; por equipo, roles
+  guardados como `helpdesk_user_id`; una semana sin ningún rol se borra; `hoy` usa la hora de Ecuador y
+  en sábado/domingo siempre responde `deTurno:false`):
+  - `GET/PUT /api/legacy/turnoSenior?equipo=<codigo>` — mismo patrón que `weeklySupport?equipo=`
+    (rotación semanal por equipo), pero con **2 roles** y semana **LUNES→VIERNES** (clave = fecha ISO del **lunes**; sáb/dom no pertenecen a ninguna semana de turno)
+    en vez de 1 y **sin** el log de tickets que sí tiene `weeklySupport` (no aplica a esta pantalla):
+    ```json
+    { "weeks": { "<YYYY-MM-DD del lunes>": {
+        "mesaAyuda": "<hid o ''>", "emergentes": "<hid o ''>",
+        "notes": "", "updatedAt": "ISO"
+    } } }
+    ```
+  - `GET /api/legacy/turnoSenior/hoy` (header `X-Actor-Hid`, igual que el resto de `/api/legacy/`) —
+    agregado sobre TODOS los equipos: ¿el actor está de turno HOY, en cualquiera de los 2 roles, en
+    cualquier equipo? (la asignación de "Senior de Turno" es abierta a cualquier empleado, así que
+    puede tocarle un equipo al que ni pertenece — no alcanza con mirar solo un equipo). Usado para el
+    punto rojo del menú lateral ("Senior de Turno"), visible sin importar la pantalla activa:
+    ```json
+    { "deTurno": true, "rol": "mesaAyuda", "equipo": "CACEL", "equipoNombre": "COAC CACEL" }
+    ```
+    (`deTurno: false` y el resto de campos ausentes si no está de turno en ningún equipo hoy).
   - `POST /stories/desde-ticket-asignado`: crea la tarea automáticamente al asignar un ticket que aún no
     la tenía (lo llama el frontend tras confirmar la asignación al HelpDesk). Body `{ ticket,
     clienteCodigo, clienteNombre, titulo, asignadoHid, asignadoNombre }` + `X-Actor-Hid`. Idempotente
@@ -75,7 +123,7 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
     nunca reasigna el tablero** por esta regla, aunque el body incluya `ticket`/`client` — solo aplica en
     el momento de crear. Ver `docs/decisiones.md` (2026-09-24) y `LegacyWriteService.applyFields()`.
 - **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `GET /tickets-gestionables`, `PUT /foto`.
-  - `GET /tickets-gestionables` (+ `X-Actor-Hid`) → `{ global: bool, clientes: [..] }`: sobre qué tickets
+  - `GET /tickets-gestionables` (+ `X-Actor-Hid`) → `{ global: bool, clientes: [..], asignables: [hid] }` (`asignables` = a quién asigna o reasigna como responsable de equipo: él + su gente; 2026-09-28): sobre qué tickets
     puede el actor editar/eliminar/reasignar (rol HELPDESK en su alcance; ADMIN = `global`). `clientes`
     trae el `client_id` del HelpDesk **y** el código (slug) FitDesk de cada cliente cubierto (los tickets
     usan el primero, las tareas el segundo). Solo para mostrar/ocultar acciones; autoriza el backend.

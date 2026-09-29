@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { adminGuard } from './core/guards/admin.guard';
 import { authGuard } from './core/guards/auth.guard';
 import { bandejaGuard } from './core/guards/bandeja.guard';
+import { reportesGuard } from './core/guards/reportes.guard';
 import { solGuard } from './core/guards/sol.guard';
 
 export const routes: Routes = [
@@ -21,6 +22,7 @@ export const routes: Routes = [
       { path: 'senior-turno', loadComponent: () => import('./features/senior-turno/senior-turno').then((m) => m.SeniorTurno) },
       { path: 'vacaciones', loadComponent: () => import('./features/vacaciones/vacaciones').then((m) => m.Vacaciones) },
       { path: 'mi-panel', canActivate: [solGuard], loadComponent: () => import('./features/mi-panel/mi-panel').then((m) => m.MiPanel) },
+      { path: 'reportes', canActivate: [reportesGuard], loadComponent: () => import('./features/reportes/reportes').then((m) => m.Reportes) },
       { path: 'pendientes', loadComponent: () => import('./features/pendientes/pendientes').then((m) => m.Pendientes) },
       { path: 'guardados', loadComponent: () => import('./features/guardados/guardados').then((m) => m.Guardados) },
       { path: 'bandeja', canActivate: [bandejaGuard], loadComponent: () => import('./features/bandeja/bandeja').then((m) => m.Bandeja) },

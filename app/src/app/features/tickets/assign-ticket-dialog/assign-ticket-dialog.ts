@@ -9,6 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { wireDialogEsc } from '../../../core/dialog-esc';
+import { AuthService } from '../../../core/services/auth.service';
 import { HdUser, HelpdeskService } from '../../../core/services/helpdesk.service';
 import { Ticket } from '../ticket-utils';
 import { estadoStyle } from '../tickets-card-utils';
@@ -41,7 +42,25 @@ export class AssignTicketDialog {
 
   readonly ticket = this.data.ticket;
   readonly estadoStyle = estadoStyle;
-  readonly empleados = signal<HdUser[]>(this.hd.hdUsers());
+  private readonly auth = inject(AuthService);
+  /** Destinos permitidos: 'todos' (HELPDESK en su alcance / ADMIN) o una lista — el responsable de equipo
+   *  ve a su gente y a sí mismo; cualquier otro, solo su nombre en un ticket sin asignado. El backend
+   *  vuelve a exigir la misma regla. */
+  private readonly destinos = this.auth.destinosAsignacion(this.data.ticket);
+  /** Lista cerrada de pocos nombres (no hace falta buscador): solo el propio nombre. */
+  readonly soloYo = this.destinos !== 'todos' && this.destinos.size <= 1;
+  private readonly todos = signal<HdUser[]>(this.hd.hdUsers());
+  readonly empleados = computed<HdUser[]>(() => {
+    const d = this.destinos;
+    if (d === 'todos') return this.todos();
+    const list = this.todos().filter((u) => d.has(String(u.id).toUpperCase()));
+    // El propio usuario, aunque el catálogo aún no lo traiga (nunca se muestra el código).
+    const yo = String(this.auth.session()?.id ?? '').trim().toUpperCase();
+    if (yo && d.has(yo) && !list.some((u) => String(u.id).toUpperCase() === yo)) {
+      list.unshift({ id: yo, name: String(this.auth.session()?.name || 'Yo') } as HdUser);
+    }
+    return list;
+  });
   readonly filtro = signal('');
   readonly busy = signal<string | null>(null);
 
@@ -54,7 +73,7 @@ export class AssignTicketDialog {
 
   constructor() {
     wireDialogEsc(this.ref); // ESC cierra primero el listado abierto, no el modal
-    this.hd.getHdUsers().then((users) => this.empleados.set(users));
+    this.hd.getHdUsers().then((users) => this.todos.set(users));
   }
 
   async asignar(emp: HdUser): Promise<void> {

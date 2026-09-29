@@ -194,6 +194,11 @@ export class MiPanel {
   puedeGestionar(t: Ticket): boolean {
     return this.auth.puedeGestionarTicket(t.clientId);
   }
+  /** Asignar/reasignar: HELPDESK/ADMIN a cualquiera; responsable a sí mismo o a su gente; cualquiera se
+   *  toma un ticket sin asignado. */
+  puedeAsignar(t: Ticket): boolean {
+    return this.auth.puedeAsignarTicket(t);
+  }
   editarTicket(t: Ticket): void {
     void abrirEditarTicket(this.dialog, t);
   }

@@ -59,7 +59,7 @@ erDiagram
 - **Equipo** — unidad de trabajo; pertenece a una Regional; dueño de Boards.
 - **Cliente** — la COAC (`helpdesk_client_id`). Tiene **`equipo_responsable_id`**: el equipo dueño de la cuenta. De aquí se deriva "los clientes de mi equipo" para la visibilidad del Responsable de Equipo. (Que otro equipo *trabaje* un ticket suyo es emergente vía Transferencia; no cambia el equipo responsable.)
 - **TicketEspejo** — **encabezado liviano** del ticket del HelpDesk (`helpdesk_ticket_id`, cliente, asunto, estado_origen, prioridad, fecha_ingreso/modif., asignado_hd, `last_synced_at`). **NO guarda la conversación ni los adjuntos** (mensajes, imágenes, zips): eso se consume **en vivo del HelpDesk** bajo demanda, igual que hoy. La fuente de verdad sigue siendo el HelpDesk; el espejo solo sirve para pintar el board y filtrar por alcance sin pegarle al HelpDesk por cada tarjeta.
-- **Tarea** — entidad dueña. `(ticket_espejo, board, sprint, asignado_a, estado_workflow, prioridad, cliente)`.
+- **Tarea** — entidad dueña. `(ticket_espejo, board, sprint, asignado_a, estado_workflow, prioridad, cliente)`. Desde V28 guarda `en_proceso_desde` (cuándo entró a In Progress por última vez; alimenta el reporte "Estado del equipo").
 - **Board** — tablero Scrum de un Equipo. Una Tarea = un Board.
 - **Sprint** — pertenece a un Board; cada equipo con su cadencia.
 - **WorkflowEstado** — columnas (TO DO, IN PROGRESS, EN CERTIFICACIÓN, ENTREGADO…). Workflow corporativo estándar; extensible.

@@ -4,9 +4,9 @@
     <!-- La búsqueda (N° o texto) ya no vive aquí: la cubre el buscador ÚNICO del
          drawer, que alimenta estos mismos filtros vía SearchService. -->
     @if (filterTicket() || filterTexto()) {
-      <div class="filter-busqueda-activa">
+      <div class="filter-busqueda-activa" [title]="(filterTicket() || filterTexto()) + (ambitoBusqueda() ? ' ' + ambitoBusqueda() : '')">
         <mat-icon>search</mat-icon>
-        <span>Buscando: <strong>{{ filterTicket() || filterTexto() }}</strong></span>
+        <span>Buscando: <strong>{{ filterTicket() || filterTexto() }}</strong>@if (!filterTicket() && ambitoBusqueda()) { <span class="busqueda-ambito">{{ ambitoBusqueda() }}</span>}</span>
       </div>
     }
 
@@ -128,9 +128,9 @@
        (a propósito, para teclear la siguiente) y sin este chip no quedaba ninguna pista
        visible de que la lista sigue filtrada por una búsqueda. -->
   @if (filterTicket() || filterTexto()) {
-    <div class="filter-busqueda-activa">
+    <div class="filter-busqueda-activa" [title]="(filterTicket() || filterTexto()) + (ambitoBusqueda() ? ' ' + ambitoBusqueda() : '')">
       <mat-icon>search</mat-icon>
-      <span>Buscando: <strong>{{ filterTicket() || filterTexto() }}</strong></span>
+      <span>Buscando: <strong>{{ filterTicket() || filterTexto() }}</strong>@if (!filterTicket() && ambitoBusqueda()) { <span class="busqueda-ambito">{{ ambitoBusqueda() }}</span>}</span>
     </div>
   }
   <!-- Botón VISIBLE para volver a "todos los tickets": el "Limpiar filtros" que había
@@ -199,7 +199,7 @@
       @if (searching()) { Buscando ticket #{{ filterTicket() }} en el sistema… }
       @else if (loading()) { Cargando tickets… }
       @else if (filterTicket()) { No se encontró el ticket #{{ filterTicket() }}. }
-      @else if (filterTexto()) { No se encontraron tickets que contengan “{{ filterTexto() }}”. }
+      @else if (filterTexto()) { No se encontraron tickets que contengan “{{ filterTexto() }}”{{ ambitoBusqueda() ? ' ' + ambitoBusqueda() : '' }}. }
       @else if (tabHasData()) { Sin tickets que coincidan con el filtro. }
       @else { No hay tickets. Usa el botón <strong>↻</strong> para refrescar. }
     </div>
@@ -219,6 +219,7 @@
           [puedeTransferirTicket]="puedeTransferirEste(t)"
           [puedeEscalarTicket]="puedeEscalarTicket()"
           [puedeGestionar]="puedeGestionar(t)"
+          [puedeAsignar]="puedeAsignar(t)"
           (editar)="editarTicket(t)"
           (eliminar)="eliminarTicket(t)"
           (verConversacion)="openConversation(t)"

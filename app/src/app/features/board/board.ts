@@ -54,6 +54,8 @@ import {
 } from './board-utils';
 
 type PriorityFilter = 'all' | Priority;
+/** Opción "Sin asignar" del filtro de asignados (no choca con ningún helpdesk_user_id). */
+const SIN_ASIGNAR = '__SIN_ASIGNAR__';
 
 interface Column {
   status: Status;
@@ -117,6 +119,8 @@ export class Board implements OnDestroy {
    *  CON ticket usan ESTE asignado (el del HelpDesk manda) en vez del guardado en la tarea.
    *  SOLO LECTURA: no se persiste ni se re-empuja al HelpDesk (el board solo consulta). */
   readonly ticketAssigneeMap = signal<Record<string, { id: string; name: string }>>({});
+  /** client_id del HelpDesk por ticketId (del sync): acota la búsqueda por palabra a los clientes del tablero. */
+  private ticketClientMap: Record<string, string> = {};
 
   /** Toggle "Mi equipo" (solo RE/ADMIN): incluye en el board las tareas foráneas de mi gente. */
   readonly teamOnly = signal(false);
@@ -254,6 +258,7 @@ export class Board implements OnDestroy {
     const cache = this.data.usesQuarkus() ? await this.data.getTicketEspejoCache() : null;
     const prios: Record<string, string> = {};
     const asignados: Record<string, { id: string; name: string }> = {};
+    const clientes: Record<string, string> = {};
     await Promise.all(
       conTicket.map(async (s) => {
         const raw = (await this.helpdesk.fetchTicketRaw(s.ticket)) ?? (cache ? cache[s.ticket] : null);
@@ -278,6 +283,7 @@ export class Board implements OnDestroy {
         // El cliente de una tarea con ticket lo define el ticket (id + nombre, para
         // mostrar el nombre aunque el cliente no esté en el catálogo).
         const clientId = String(raw.client_id ?? '').trim();
+        if (clientId) clientes[s.ticket] = clientId;
         if (clientId && s.client !== clientId) patch.client = clientId;
         const clientName = String(raw.cliente ?? '').trim();
         if (clientName && s.clientName !== clientName) patch.clientName = clientName;
@@ -294,6 +300,7 @@ export class Board implements OnDestroy {
     );
     this.ticketPrioMap.set(prios);
     this.ticketAssigneeMap.set(asignados);
+    this.ticketClientMap = clientes;
     this.syncing.set(false);
   }
 
@@ -460,9 +467,10 @@ export class Board implements OnDestroy {
   /** Fuente FINAL de tarjetas: consolidada (mis tareas de todos los equipos) o por tablero. */
   readonly feed = computed<Story[]>(() => (this.esConsolidado() ? this.misTareas() : this.cardsSource()));
 
-  /** Fuente para poblar los selects de filtro (asignado/cliente): consolidada o del tablero actual. */
+  /** Fuente para poblar los selects de filtro (asignado/cliente): lo mismo que alimenta las columnas
+   *  (consolidada, o el tablero + las tarjetas de otros tableros de "Asignados a mí"/"Mi equipo"). */
   private readonly filterSource = computed<Story[]>(() =>
-    this.esConsolidado() ? this.misTareas() : this.visibleStories(),
+    this.esConsolidado() ? this.misTareas() : this.cardsSource(),
   );
 
   /**
@@ -515,14 +523,31 @@ export class Board implements OnDestroy {
     return this.esConsolidado() || this.esForanea(card);
   }
 
-  /** Empleados asignados en el board (para el multi-select), ordenados por nombre. */
+  /** Clave del filtro de asignados: el helpdesk_user_id EFECTIVO en mayúsculas (lo que compara
+   *  `columns`), o `SIN_ASIGNAR`. Antes la lista usaba el `id` que devuelve `resolveMember` — el código
+   *  LOCAL del roster ("SC"), no el del HelpDesk ("MSC001") — y al elegir a alguien se ocultaban
+   *  justamente SUS tarjetas. */
+  private claveAsignado(card: Story): string {
+    return this.effAssignee(card).toUpperCase() || SIN_ASIGNAR;
+  }
+
+  /** Empleados asignados en lo que se ve (para el multi-select), por nombre; "Sin asignar" primero.
+   *  Incluye las tarjetas de otros tableros que suman "Asignados a mí"/"Mi equipo" (`cardsSource`). */
   readonly assigneeChips = computed(() => {
-    const ids = [...new Set(this.filterSource().map((s) => this.effAssignee(s)).filter(Boolean))] as string[];
-    return ids
-      .map((id) => this.resolveMember(id))
-      .filter((m): m is NonNullable<typeof m> => !!m)
-      .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id, 'es'));
+    const src = this.filterSource();
+    const porClave = new Map<string, Story>();
+    for (const s of src) if (!porClave.has(this.claveAsignado(s))) porClave.set(this.claveAsignado(s), s);
+    const personas = [...porClave.entries()]
+      .filter(([k]) => k !== SIN_ASIGNAR)
+      .map(([id, card]) => ({ id, name: this.assigneeView(card)?.name || '—' }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+    return porClave.has(SIN_ASIGNAR) ? [{ id: SIN_ASIGNAR, name: 'Sin asignar' }, ...personas] : personas;
   });
+
+  /** Nombre de una clave del filtro de asignados (globos de la selección). Regla #8: nunca el código. */
+  nombreFiltroAsignado(id: string): string {
+    return this.assigneeChips().find((m) => m.id === id)?.name || (id === SIN_ASIGNAR ? 'Sin asignar' : this.resolveMember(id)?.name || '—');
+  }
 
   /** Clientes presentes en las tareas del board (para el multi-select), por nombre. */
   readonly clientChips = computed(() => {
@@ -566,7 +591,7 @@ export class Board implements OnDestroy {
       if (!cons && mine && !team && ea.toUpperCase() !== me) return false;
       if (prio !== 'all' && this.prioBandaDe(s) !== prio) return false;
       if (clients.size > 0 && !(s.client && clients.has(s.client))) return false;
-      if (!cons && assignees.size > 0 && !(!ea || assignees.has(ea))) return false;
+      if (!cons && assignees.size > 0 && !assignees.has(ea.toUpperCase() || SIN_ASIGNAR)) return false;
       // Campo 1: N° de ticket O código de tarea (TA-NNN = s.id), coincidencia parcial local.
       if (code) {
         const t = String(s.ticket || '').toLowerCase();
@@ -596,8 +621,7 @@ export class Board implements OnDestroy {
 
   // ── Filtros ──
   setPriority(f: PriorityFilter): void {
-    this.priorityFilter.set(f);
-    this.activeAssignees.set(new Set()); // paridad con el legacy
+    this.priorityFilter.set(f); // combina con los demás filtros (antes borraba los asignados elegidos)
   }
   /** Atajo: alterna el filtro "Asignados a mí" (solo mis tareas). Al activarlo limpia
    *  el multi-select de asignados para no mezclar criterios. */
@@ -683,7 +707,12 @@ export class Board implements OnDestroy {
     }
     this.searchingTickets.set(true);
     this.matchedTickets.set(null);
-    const set = await this.helpdesk.searchTicketNumbers(v);
+    // Acotada a los clientes de las tarjetas visibles: la búsqueda global devolvía miles de tickets
+    // ajenos al tablero (lenta). Sin clientes conocidos (sync pendiente) → búsqueda global completa.
+    const clientIds = [
+      ...new Set(this.filterSource().map((s) => this.ticketClientMap[String(s.ticket || '')]).filter(Boolean)),
+    ];
+    const set = await this.helpdesk.searchTicketNumbers(v, 3000, clientIds);
     if (this.palabraSearch().trim() !== v) return; // el usuario cambió el término
     this.matchedTickets.set(set);
     this.searchingTickets.set(false);

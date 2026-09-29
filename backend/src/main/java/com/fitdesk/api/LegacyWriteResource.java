@@ -237,6 +237,13 @@ public class LegacyWriteResource {
     }
 
     @PUT
+    @Path("/turnoSenior")
+    public Response putTurnoSenior(JsonNode node, @QueryParam("equipo") String equipo, @HeaderParam("X-Actor-Hid") String actorHid) {
+        write.putTurnoSenior(node, equipo, actorHid);
+        return Response.ok().build();
+    }
+
+    @PUT
     @Path("/progress")
     public Response putProgress(JsonNode node) {
         write.putProgress(node);

@@ -84,7 +84,7 @@
       <input matInput [matAutocomplete]="autoAssignee" [ngModel]="assigneeModel"
              (ngModelChange)="onAssigneeInput($event)" placeholder="Buscar por nombre…" autocomplete="off"
              [disabled]="asignadoBloqueado()" />
-      <mat-icon matSuffix [matTooltip]="asignadoBloqueado() ? 'La reasignación del ticket la hace el rol Helpdesk' : ''">
+      <mat-icon matSuffix [matTooltip]="asignadoBloqueado() ? 'La reasignación del ticket la hace el rol Helpdesk o el responsable del equipo' : ''">
         {{ asignadoBloqueado() ? 'lock' : 'search' }}
       </mat-icon>
       <mat-autocomplete #autoAssignee="matAutocomplete" [displayWith]="displayAssignee" (optionSelected)="onAssigneePicked($event.option.value)">

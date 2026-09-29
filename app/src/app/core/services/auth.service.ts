@@ -110,6 +110,29 @@ export class AuthService {
     return !!clientId && this.clientesGestionables().has(String(clientId).trim());
   }
 
+  /** Como RESPONSABLE_EQUIPO: a quién puede asignar/reasignar (él + su gente; hids en mayúsculas). Lo
+   *  sirve `tickets-gestionables`; el backend re-exige la misma regla. */
+  private readonly _asignablesRe = signal<Set<string>>(new Set());
+
+  /**
+   * ¿A quién puede asignar este ticket? `'todos'` (HELPDESK en su alcance o ADMIN) o la lista de hids
+   * permitidos: el responsable de equipo, a sí mismo y a su gente (con o sin asignado previo); cualquiera,
+   * solo a sí mismo si el ticket no tiene asignado. Vacío = no puede asignar.
+   */
+  destinosAsignacion(t: { clientId?: string | null; usuarioAsignado?: string | null }): 'todos' | Set<string> {
+    if (this.puedeGestionarTicket(t.clientId)) return 'todos';
+    const out = new Set(this._asignablesRe());
+    const yo = String(this._session()?.id ?? '').trim().toUpperCase();
+    if (!String(t.usuarioAsignado ?? '').trim() && yo) out.add(yo);
+    return out;
+  }
+
+  /** ¿Puede asignar/reasignar este ticket a alguien? (ver `destinosAsignacion`). */
+  puedeAsignarTicket(t: { clientId?: string | null; usuarioAsignado?: string | null }): boolean {
+    const d = this.destinosAsignacion(t);
+    return d === 'todos' || d.size > 0;
+  }
+
   /**
    * "Descargar la conversación SIN anonimizar", para responsables. El PDF sale con los nombres
    * reales en vez de "Soporte".
@@ -250,6 +273,7 @@ export class AuthService {
     if (!hid || environment.dataBackend !== 'quarkus') {
       this._rolesPlataforma.set([]);
       this._ticketsGestionables.set({ global: false, clientes: [] });
+      this._asignablesRe.set(new Set());
       return;
     }
     try {
@@ -272,8 +296,12 @@ export class AuthService {
         global: !!d?.global,
         clientes: Array.isArray(d?.clientes) ? d.clientes.map((c: unknown) => String(c)) : [],
       });
+      this._asignablesRe.set(
+        new Set(Array.isArray(d?.asignables) ? d.asignables.map((h: unknown) => String(h).trim().toUpperCase()) : []),
+      );
     } catch {
       this._ticketsGestionables.set({ global: false, clientes: [] });
+      this._asignablesRe.set(new Set());
     }
   }
 
@@ -294,6 +322,7 @@ export class AuthService {
     localStorage.removeItem(SESSION_KEY);
     this._session.set(null);
     this._ticketsGestionables.set({ global: false, clientes: [] });
+    this._asignablesRe.set(new Set());
     this._rolesPlataforma.set([]);
     this.rolesPromise = null;
     this.pdfSinAnonimizar.set(false); // la excepción de privacidad no sobrevive a la sesión

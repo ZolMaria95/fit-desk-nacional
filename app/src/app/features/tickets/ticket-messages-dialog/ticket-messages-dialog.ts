@@ -434,7 +434,8 @@ export class TicketMessagesDialog implements OnDestroy {
   /** Reasignar el ticket: rol HELPDESK en el alcance del cliente, o ADMIN (el backend lo re-exige). */
   puedeReasignar(): boolean {
     this.header(); // dependencia reactiva: `ticketObj` se completa junto con el header al cargar
-    return this.auth.puedeGestionarTicket(this.ticketObj?.clientId);
+    // HELPDESK/ADMIN, responsable (a su gente) o cualquiera que se toma un ticket sin asignado.
+    return !!this.ticketObj && this.auth.puedeAsignarTicket(this.ticketObj);
   }
 
   /** Abre el modal de asignación (reusa AssignTicketDialog) y refresca el header al asignar. */
