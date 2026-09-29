@@ -6,6 +6,18 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-28] El rol HELPDESK puede finalizar cualquier tarea SIN ticket
+
+**Decisión (pedido de la dueña):** el check "Finalizado" de una tarea **sin ticket** (Board y detalle de la
+tarea) lo puede marcar, además del dueño y de MSC001/Supervisor, **cualquier usuario con el rol de
+plataforma HELPDESK**, sea suya la tarea o no (`Board.puedeFinalizar`, `CardDetailDialog.onFinalize`).
+No incluye mover la tarjeta ni las tareas con ticket (esas las finaliza el estado del ticket). El
+backend no tenía guarda sobre `approved`, así que el cambio es solo del front. En prod hoy el único con
+HELPDESK es DEFM001 (Diana Fiallo, GLOBAL).
+
+**Verificado en local:** con HELPDESK, TA-005 (ajena, sin ticket, Entregado) → puede finalizar, no
+mover; TA-001 (con ticket) → no. Sin desplegar.
+
 ### [2026-09-28] Desplegado a AWS: asignado de la tarea sigue al ticket, recordatorios y sub-pestañas
 
 Lote desplegado ("deploy y commit"). Monorepo `d3f07e0`; GitLab back **`ed0c874`** (Flyway 28 → **V29**,

@@ -801,6 +801,11 @@ export class Board implements OnDestroy {
     const owner = this.effAssignee(card).toUpperCase();
     return !!owner && owner === this.myId;
   }
+  /** Check "Finalizado" (solo tareas SIN ticket): el dueño, MSC001/Supervisor y, además, el rol de
+   *  plataforma HELPDESK — cualquier tarea sin ticket, sea suya o no (pedido de la dueña). */
+  puedeFinalizar(card: Story): boolean {
+    return this.puedeOperar(card) || (!card.ticket && this.auth.esHelpdesk());
+  }
   canDrag(card: Story): boolean {
     return this.puedeOperar(card);
   }
@@ -815,7 +820,7 @@ export class Board implements OnDestroy {
   /** Igual que `avisoSinPermiso`, pero para finalizar: a diferencia de mover, NO incluye al
    *  propio asignado (solo RE/Supervisor) — mensaje propio para no decir algo que no aplica. */
   private avisoSinPermisoFinalizar(): void {
-    this.snack.open('Solo un Responsable de Equipo o el Helpdesk pueden finalizar esta tarea.', 'OK', { duration: 4000 });
+    this.snack.open('Solo el dueño de la tarea, un supervisor o el rol Helpdesk pueden finalizarla.', 'OK', { duration: 4000 });
   }
 
   async drop(event: CdkDragDrop<Story[]>, target: Status): Promise<void> {
@@ -944,9 +949,7 @@ export class Board implements OnDestroy {
    *  Tareas SIN ticket: el usuario lo marca/desmarca (con confirmación al marcar). */
   async onFinalize(card: Story, ev: MatCheckboxChange): Promise<void> {
     if (card.ticket) return; // las que tienen ticket lo definen por el ticket
-    // Mismo criterio que mover/arrastrar: el DUEÑO de la tarea (asignado efectivo) o
-    // RE/Supervisor/admin — decisión confirmada con la dueña (antes solo RE/Supervisor).
-    if (!this.puedeOperar(card)) {
+    if (!this.puedeFinalizar(card)) {
       ev.source.checked = !!card.approved; // revierte al estado real
       this.avisoSinPermisoFinalizar();
       return;

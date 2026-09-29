@@ -126,9 +126,10 @@ export class CardDetailDialog {
    *  confirmada con la dueña (antes solo RE/Supervisor). */
   async onFinalize(ev: MatCheckboxChange): Promise<void> {
     if (!this.story || this.story.ticket) return;
-    if (!this.puedeMover()) {
+    // Además del dueño y MSC001/Supervisor, el rol HELPDESK finaliza cualquier tarea sin ticket.
+    if (!this.puedeMover() && !this.auth.esHelpdesk()) {
       ev.source.checked = !!this.story.approved; // revierte al estado real
-      this.snack.open('Solo el dueño de la tarea, un Responsable de Equipo o el Helpdesk pueden finalizarla.', 'OK', { duration: 3500 });
+      this.snack.open('Solo el dueño de la tarea, un supervisor o el rol Helpdesk pueden finalizarla.', 'OK', { duration: 3500 });
       return;
     }
     if (!ev.checked) {
