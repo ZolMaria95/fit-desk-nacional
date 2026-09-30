@@ -21,7 +21,10 @@ import com.fitdesk.core.Tarea;
 import com.fitdesk.core.Usuario;
 import com.fitdesk.overlay.TicketPendiente;
 
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -167,9 +170,12 @@ public class ReporteResource {
             }
         }
         // Orden: consultor (por nombre; sin asignar al final) → In Progress primero → días desc.
+        // Orden: consultor (por nombre; sin asignar al final) → prioridad de la tarea (alta, media, baja) →
+        // Orden del ticket → días (desc). El front reordena igual tras refrescar el Orden en vivo.
         filas.sort(Comparator
                 .comparing((Map<String, Object> f) -> (Integer) f.get("_pos"))
-                .thenComparing(f -> ordenEstado((String) f.get("estado")))
+                .thenComparing(f -> ordenPrioridad((String) f.get("prioridad")))
+                .thenComparing(f -> ordenNum(f.get("ordenTicket")))
                 .thenComparing(f -> -((Number) f.getOrDefault("dias", -1)).intValue()));
         seguimiento.sort(Comparator
                 .comparing((Map<String, Object> s) -> (Integer) s.get("peso"))
@@ -281,20 +287,40 @@ public class ReporteResource {
         return s;
     }
 
+    /**
+     * Cambia la PRIORIDAD DE LA TAREA (alta | media | baja) desde el reporte — no el Orden del ticket del
+     * HelpDesk. Solo ADMIN o rol HELPDESK vigente (se exige aquí: el PATCH general de /stories no autoriza).
+     * Body: {"prioridad": "alta|media|baja"}.
+     */
+    @PUT
+    @Path("/tareas/{codigo}/prioridad")
+    @Transactional
+    public Response cambiarPrioridad(@PathParam("codigo") String codigo, com.fasterxml.jackson.databind.JsonNode body,
+            @HeaderParam("X-Actor-Hid") String actorHid) {
+        if (!Actor.esAdmin(actorHid) && !Actor.tieneRol(actorHid, "HELPDESK")) {
+            String msg = "Solo el rol Helpdesk o un administrador pueden cambiar la prioridad de la tarea.";
+            return Response.status(403).entity(Map.of("error", msg, "message", msg)).build();
+        }
+        String p = body == null ? "" : body.path("prioridad").asText("").trim().toLowerCase();
+        if (!Set.of("alta", "media", "baja").contains(p)) {
+            String msg = "Prioridad inválida (alta, media o baja).";
+            return Response.status(400).entity(Map.of("error", msg, "message", msg)).build();
+        }
+        Tarea t = codigo == null ? null : Tarea.findByCodigo(codigo.trim());
+        if (t == null) {
+            String msg = "Tarea no encontrada.";
+            return Response.status(404).entity(Map.of("error", msg, "message", msg)).build();
+        }
+        t.prioridad = p;
+        t.actualizadoEn = OffsetDateTime.now();
+        return Response.ok(Map.of("codigo", t.codigo, "prioridad", t.prioridad)).build();
+    }
+
     private static Map<String, Object> persona(Usuario u) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("hid", u.helpdeskUserId);
         m.put("nombre", u.nombre);
         return m;
-    }
-
-    private static int ordenEstado(String codigo) {
-        return switch (codigo == null ? "" : codigo) {
-            case "IN_PROGRESS" -> 0;
-            case "EN_CERTIFICACION" -> 1;
-            case "TODO" -> 2;
-            default -> 3;
-        };
     }
 
     /** Orden del ticket del HelpDesk (1 = más urgente); sin orden → al final. */

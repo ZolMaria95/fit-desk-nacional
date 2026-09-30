@@ -65,6 +65,15 @@ export function ordenNum(v: string | null | undefined): number {
 
 const PESO_PRIORIDAD: Record<string, number> = { alta: 0, media: 1, baja: 2 };
 
+/** Orden dentro de un consultor (como el backend): prioridad de la tarea → Orden del ticket → días (desc). */
+export function compararFila(a: FilaReporte, b: FilaReporte): number {
+  return (
+    (PESO_PRIORIDAD[a.prioridad ?? ''] ?? 3) - (PESO_PRIORIDAD[b.prioridad ?? ''] ?? 3) ||
+    ordenNum(a.ordenTicket) - ordenNum(b.ordenTicket) ||
+    (b.dias ?? -1) - (a.dias ?? -1)
+  );
+}
+
 /** Mismo criterio que el backend: motivo → Orden del ticket → prioridad de la tarea → días (desc). */
 export function compararSeguimiento(a: FilaSeguimiento, b: FilaSeguimiento): number {
   return (

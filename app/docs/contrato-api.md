@@ -70,6 +70,9 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
 - **Reportes** (2026-09-28; acceso = `Actor.equiposGestionables`: ADMIN o RESPONSABLE_EQUIPO en su
   alcance EQUIPO/REGIONAL/GLOBAL; el resto **403**; header `X-Actor-Hid`):
   - `GET /api/reportes/equipos` → `[{codigo, nombre}]` equipos sobre los que puede generar reportes.
+  - `PUT /api/reportes/tareas/{codigo}/prioridad` (2026-09-30) — body `{"prioridad":"alta|media|baja"}` +
+    `X-Actor-Hid`; solo ADMIN o rol HELPDESK vigente (403), 400 valor inválido, 404 tarea inexistente →
+    `{codigo, prioridad}`. Cambia la prioridad de la TAREA (no el Orden del ticket).
   - `GET /api/reportes/estado-equipo?equipo=<codigo>[&consultores=HID,HID]` → 404 si el equipo no
     existe. Sin `consultores` = miembros del equipo (asignación EQUIPO vigente) + tareas sin asignar del
     equipo. Tareas activas (TODO / IN_PROGRESS / EN_CERTIFICACION, sin REUNION ni pendientes de

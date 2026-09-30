@@ -153,6 +153,25 @@
   &.prio-media { background: #f2811d; }
   &.prio-baja { background: rgba(43, 43, 58, .45); }
 }
+.rp-prio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #eef1f4;
+  color: #384654;
+  mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  &.prio-alta { background: #fdecea; color: #a52a1f; }
+  &.prio-media { background: #fff1e0; color: #9a5300; }
+  &.prio-baja { background: #e8f5ea; color: #2e6b35; }
+  &:disabled { opacity: .6; cursor: progress; }
+}
 .rp-aprox { margin-left: 4px; font-size: 11px; font-style: italic; opacity: .7; }
 
 // Tabla (grid): escritorio = columnas; celular = tarjeta por fila.
@@ -204,6 +223,10 @@
     &.m4 { background: #33280f; color: #f0c070; } }
   .rp-chip { background: #26303a; color: #d5dde5; &.amber { background: #33280f; color: #f0c070; } }
   .rp-tk { color: #7cb8ff; }
+  .rp-prio-btn { background: #26303a; color: #d5dde5;
+    &.prio-alta { background: #3a1e20; color: #f09a9a; }
+    &.prio-media { background: #3a2a14; color: #f0b870; }
+    &.prio-baja { background: #1e3a22; color: #8fd98f; } }
   .rp-orden.prio-baja { background: rgba(227, 233, 239, .28); }
   .c-dias.alto { color: #f09a9a; }
 }

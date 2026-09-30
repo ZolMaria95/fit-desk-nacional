@@ -6,6 +6,25 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-09-30] Reportes: HELPDESK/ADMIN cambian la prioridad de la TAREA; la tabla va por prioridad
+
+**Decisión (pedido de la dueña):** en Reportes → "Qué está haciendo cada consultor", el rol **HELPDESK** y
+**ADMIN** cambian la **prioridad de la tarea** (Alta/Media/Baja, `tarea.prioridad`) — no el Orden del ticket
+del HelpDesk. Dentro de cada consultor las tareas van **Alta → Media → Baja** (luego Orden del ticket y días,
+desc); al cambiarla, la fila se reordena al instante. El Excel sigue el mismo orden.
+- Endpoint dedicado `PUT /api/reportes/tareas/{codigo}/prioridad` (`ReporteResource.cambiarPrioridad`):
+  403 sin ADMIN/HELPDESK vigente, 400 valor inválido, 404 tarea inexistente. El `PATCH /stories` general
+  no autoriza y lo usa el Board, por eso la regla va en un endpoint propio.
+- Front: chip con menú Alta/Media/Baja solo con permiso (`puedeEditarPrioridad`); guardado síncrono,
+  snackbar si falla; actualiza también la tarea en `DataService.stories`.
+- Nota: en el Board, las tarjetas CON ticket siguen mostrando el badge por el Orden del ticket.
+- Solo quien ya abre Reportes (responsable de equipo o ADMIN) llega a la tabla; hoy la única HELPDESK
+  (Diana Fiallo) también es responsable.
+
+**Verificado en local:** curl sin rol 403 / inválido 400 / HELPDESK y ADMIN 200 (BD actualizada); en Chrome,
+TA-122 Media→Alta subió al primer lugar de su consultor al instante y persistió al regenerar; solo
+responsable (sin HELPDESK) ve la prioridad como texto; 390 px sin desborde. Sin desplegar.
+
 ### [2026-09-29] Fix: aceptar una transferencia (o aprobar una reasignación) ahora asigna el TICKET
 
 **Bug (reportado por la dueña, TA-682 #33910):** `TransferenciaResource.aceptar` y `SolicitudResource.aprobar`

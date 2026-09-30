@@ -159,7 +159,25 @@
               </span>
               <span class="c-cli" role="cell" data-l="Cliente">{{ f.cliente || '—' }}</span>
               <span class="c-est" role="cell" data-l="Estado">{{ ESTADO_LABEL[f.estado] || f.estado }}</span>
-              <span class="c-prio" role="cell" data-l="Prioridad">{{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}</span>
+              <span class="c-prio" role="cell" data-l="Prioridad">
+                @if (puedeEditarPrioridad()) {
+                  <button type="button" class="rp-prio-btn prio-{{ f.prioridad || 'media' }}" [matMenuTriggerFor]="menuPrio"
+                          [disabled]="guardandoPrioridad() === f.tarea" matTooltip="Cambiar la prioridad de la tarea"
+                          [attr.aria-label]="'Prioridad ' + (PRIORIDAD_LABEL[f.prioridad || ''] || '—') + '. Cambiar'">
+                    {{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}<mat-icon>expand_more</mat-icon>
+                  </button>
+                  <mat-menu #menuPrio="matMenu">
+                    @for (p of PRIORIDADES; track p) {
+                      <button mat-menu-item (click)="cambiarPrioridad(f, p)">
+                        @if (p === f.prioridad) { <mat-icon>check</mat-icon> } @else { <mat-icon></mat-icon> }
+                        <span>{{ PRIORIDAD_LABEL[p] }}</span>
+                      </button>
+                    }
+                  </mat-menu>
+                } @else {
+                  {{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}
+                }
+              </span>
               <span class="c-ord" role="cell" data-l="Orden">
                 @if (f.ordenTicket) { <span class="rp-orden {{ prioBadgeClase(f.ordenTicket) }}">{{ f.ordenTicket }}</span> } @else { — }
               </span>

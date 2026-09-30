@@ -22,6 +22,7 @@ import {
   GrupoConsultor,
   PRIORIDAD_LABEL,
   ReporteEstadoEquipo,
+  compararFila,
   compararSeguimiento,
   fechaCorta,
 } from './reporte-modelo';
@@ -99,12 +100,45 @@ export class Reportes {
     const out: GrupoConsultor[] = rep.consultores.map((p) => ({
       hid: p.hid,
       nombre: nombrePropio(p.nombre),
-      filas: visibles.filter((f) => (f.consultorHid ?? '').toUpperCase() === String(p.hid).toUpperCase()),
+      filas: visibles.filter((f) => (f.consultorHid ?? '').toUpperCase() === String(p.hid).toUpperCase()).sort(compararFila),
     }));
-    const sinAsignar = visibles.filter((f) => !f.consultorHid);
+    const sinAsignar = visibles.filter((f) => !f.consultorHid).sort(compararFila);
     if (sinAsignar.length) out.push({ hid: SIN_ASIGNAR, nombre: 'Sin asignar', filas: sinAsignar });
     return out;
   });
+
+  /** Cambiar la prioridad de la TAREA desde el reporte: rol HELPDESK o ADMIN (el backend lo re-exige). */
+  readonly puedeEditarPrioridad = computed(() => this.auth.esHelpdesk() || this.auth.esAdminPlataforma());
+  /** Código de la tarea cuya prioridad se está guardando (deshabilita su botón). */
+  readonly guardandoPrioridad = signal<string | null>(null);
+  readonly PRIORIDADES = ['alta', 'media', 'baja'] as const;
+
+  /** Guarda la prioridad de la tarea (síncrono: se confirma antes de reflejarla) y la tabla se reordena sola. */
+  async cambiarPrioridad(f: FilaReporte, prioridad: string): Promise<void> {
+    if (!this.puedeEditarPrioridad() || f.prioridad === prioridad || this.guardandoPrioridad()) return;
+    this.guardandoPrioridad.set(f.tarea);
+    try {
+      const r = await fetch(`${this.base}/api/reportes/tareas/${encodeURIComponent(f.tarea)}/prioridad`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Actor-Hid': this.hid },
+        body: JSON.stringify({ prioridad }),
+      });
+      if (!r.ok) {
+        const b = await r.json().catch(() => null);
+        this.snack.open(b?.message || `No se pudo cambiar la prioridad (${r.status}).`, 'OK', { duration: 5000 });
+        return;
+      }
+      const upd = <T extends FilaReporte>(x: T): T => (x.tarea === f.tarea ? { ...x, prioridad } : x);
+      this.reporte.update((rep) => (rep ? { ...rep, filas: rep.filas.map(upd), seguimiento: rep.seguimiento.map(upd) } : rep));
+      // Si el Board ya tiene la tarea en memoria, que la vea igual sin recargar.
+      this.data.stories.update((list) => list.map((s) => (s.id === f.tarea ? { ...s, priority: prioridad } : s)));
+      this.snack.open(`${f.tarea}: prioridad ${PRIORIDAD_LABEL[prioridad]}.`, 'OK', { duration: 2500 });
+    } catch {
+      this.snack.open('No se pudo cambiar la prioridad.', 'OK', { duration: 5000 });
+    } finally {
+      this.guardandoPrioridad.set(null);
+    }
+  }
 
   readonly seguimiento = computed<FilaSeguimiento[]>(() => [...(this.reporte()?.seguimiento ?? [])].sort(compararSeguimiento));
   readonly totalEnCurso = computed(() => this.reporte()?.filas.filter((f) => f.estado === 'IN_PROGRESS').length ?? 0);
