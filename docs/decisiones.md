@@ -29,7 +29,11 @@ desc); al cambiarla, la fila se reordena al instante. El Excel sigue el mismo or
 
 **Verificado en local:** curl sin rol 403 / inválido 400 / HELPDESK y ADMIN 200 (BD actualizada); en Chrome,
 TA-122 Media→Alta subió al primer lugar de su consultor al instante y persistió al regenerar; solo
-responsable (sin HELPDESK) ve la prioridad como texto; 390 px sin desborde. Sin desplegar.
+responsable (sin HELPDESK) ve la prioridad como texto; 390 px sin desborde. **Desplegado a AWS 2026-09-30**
+(junto con "abrir la tarea desde el reporte"): GitLab back `643881a` (sin migración; backup
+`backup-pre-prioridad-20260930.dump`) y front `0af45b3`, bundle `main-A6NMX2ZL.js`; guardia OK, endpoint sin
+permiso → 403, login proxy 401, login real: Reportes con chips de prioridad y códigos de tarea clicables
+(sesión cerrada al terminar). Rollback front: `8898476152ac`.
 
 ### [2026-09-29] Fix: aceptar una transferencia (o aprobar una reasignación) ahora asigna el TICKET
 
