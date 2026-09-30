@@ -140,7 +140,13 @@
   color: #0b62c4; text-decoration: underline;
 }
 .rp-tit { color: var(--mat-sys-on-surface); }
-.c-tarea > strong, .rp-seg-main > strong { margin-right: 4px; }
+// Código de tarea (TA-NNN): abre el detalle de la tarea. Negrita como antes + subrayado al pasar.
+.rp-ta {
+  border: 0; background: none; padding: 0; margin-right: 4px; cursor: pointer;
+  font: inherit; font-weight: 700; color: var(--mat-sys-on-surface);
+  &:hover, &:focus-visible { text-decoration: underline; color: var(--mat-sys-primary); }
+}
+
 .rp-chip {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: 11px;
   background: #e7ecf1; color: #3b4a59;

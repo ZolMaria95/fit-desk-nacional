@@ -21,6 +21,12 @@ desc); al cambiarla, la fila se reordena al instante. El Excel sigue el mismo or
 - Solo quien ya abre Reportes (responsable de equipo o ADMIN) llega a la tabla; hoy la única HELPDESK
   (Diana Fiallo) también es responsable.
 
+- **Abrir la tarea desde el reporte (mismo día, pedido de la dueña):** el código TA-NNN (en las dos
+  sub-pestañas) abre el modal de la tarea del Board (`CardDetailDialog`), tenga o no ticket — antes solo se
+  abría la conversación del ticket. Se busca en `DataService.stories`; si no está entre los tableros del
+  usuario, avisa. Al cerrar el modal el reporte se regenera. Verificado en Chrome: TA-154 (sin ticket) y
+  TA-027 (con ticket) abren su modal; al cerrarlo se vuelve a consultar el reporte.
+
 **Verificado en local:** curl sin rol 403 / inválido 400 / HELPDESK y ADMIN 200 (BD actualizada); en Chrome,
 TA-122 Media→Alta subió al primer lugar de su consultor al instante y persistió al regenerar; solo
 responsable (sin HELPDESK) ve la prioridad como texto; 390 px sin desborde. Sin desplegar.

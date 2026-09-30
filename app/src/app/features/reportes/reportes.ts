@@ -277,6 +277,23 @@ export class Reportes {
     if (ticket) void abrirTicketDialog(this.dialog, { ticketId: ticket });
   }
 
+  /** Abre el detalle de la TAREA (mismo modal que el Board), tenga o no ticket. La busca en las tareas ya
+   *  cargadas (`DataService.stories`); import dinámico porque el modal es pesado. Al cerrarlo se
+   *  regenera el reporte para reflejar lo que se haya cambiado (estado, asignado, prioridad…). */
+  async verTarea(codigo: string): Promise<void> {
+    await this.data.ensureInit();
+    const story = this.data.stories().find((s) => s.id === codigo);
+    if (!story) {
+      this.snack.open(`No se pudo abrir ${codigo}: no está entre tus tableros.`, 'OK', { duration: 4000 });
+      return;
+    }
+    const { CardDetailDialog } = await import('../board/card-detail-dialog/card-detail-dialog');
+    this.dialog
+      .open(CardDetailDialog, { data: { story }, width: '560px', maxWidth: '95vw' })
+      .afterClosed()
+      .subscribe(() => void this.generar());
+  }
+
   private prepVersion = 0;
   private async prepararExcel(rep: ReporteEstadoEquipo | null, grupos: GrupoConsultor[], seg: FilaSeguimiento[]): Promise<void> {
     const v = ++this.prepVersion;

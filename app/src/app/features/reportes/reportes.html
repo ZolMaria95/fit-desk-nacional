@@ -109,7 +109,7 @@
           <li class="rp-seg-item">
             <span class="rp-motivo m{{ s.peso }}">{{ s.motivo }}</span>
             <span class="rp-seg-main">
-              <strong>{{ s.tarea }}</strong>
+              <button type="button" class="rp-ta" (click)="verTarea(s.tarea)" matTooltip="Abrir la tarea">{{ s.tarea }}</button>
               @if (s.ticket) {
                 <button type="button" class="rp-tk" (click)="verTicket(s.ticket)" [matTooltip]="'Abrir la conversación del ticket'">#{{ s.ticket }}</button>
               }
@@ -149,7 +149,7 @@
             <div class="rp-fila" role="row" [class.primera]="first">
               <span class="c-cons" role="cell">{{ first ? g.nombre : '' }}</span>
               <span class="c-tarea" role="cell">
-                <strong>{{ f.tarea }}</strong>
+                <button type="button" class="rp-ta" (click)="verTarea(f.tarea)" matTooltip="Abrir la tarea">{{ f.tarea }}</button>
                 @if (f.ticket) {
                   <button type="button" class="rp-tk" (click)="verTicket(f.ticket)" [matTooltip]="'Abrir la conversación del ticket'">#{{ f.ticket }}</button>
                 }
