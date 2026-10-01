@@ -111,6 +111,9 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
     { "deTurno": true, "rol": "mesaAyuda", "equipo": "CACEL", "equipoNombre": "COAC CACEL" }
     ```
     (`deTurno: false` y el resto de campos ausentes si no está de turno en ningún equipo hoy).
+  - **Crear tarea con `ticket` (2026-10-01):** si el ticket ya tiene tarea, `POST /stories/stories` responde
+    **200** `{id: <existente>, existente: true}` (no crea otra); el upsert del PATCH no crea y una transferencia
+    por `ticket` usa la tarea existente.
   - `POST /stories/desde-ticket-asignado`: crea la tarea automáticamente al asignar un ticket que aún no
     la tenía (lo llama el frontend tras confirmar la asignación al HelpDesk). Body `{ ticket,
     clienteCodigo, clienteNombre, titulo, asignadoHid, asignadoNombre }` + `X-Actor-Hid`. Idempotente

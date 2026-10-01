@@ -453,8 +453,9 @@ export class CardDetailDialog {
       const ticket = this.ticket.trim();
       // Guardado CONFIRMADO: si el backend no acepta, se avisa y el modal queda ABIERTO
       // (no se pierde lo escrito ni se muestra una tarjeta que no se guardó).
+      let creada: { id: string; existente?: unknown };
       try {
-        await this.data.addStory({
+        creada = await this.data.addStory({
           title,
           priority: this.priority,
           description: this.description.trim(),
@@ -466,8 +467,15 @@ export class CardDetailDialog {
           ticket,
           progress: pct,
         });
-      } catch {
-        this.snack.open('No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.', 'OK', { duration: 4000 });
+      } catch (e) {
+        const msg = e instanceof Error && e.message ? e.message : 'No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.';
+        this.snack.open(msg, 'OK', { duration: 5000 });
+        return;
+      }
+      if (creada.existente) {
+        // El ticket ya tenía tarea (quizá en otro tablero): no se creó otra ni se reasigna nada.
+        this.snack.open(`El ticket #${ticket} ya tiene la tarea ${creada.id}; no se creó otra.`, 'OK', { duration: 6000 });
+        this.ref.close(true);
         return;
       }
       // Al CREAR se empuja la asignación al API solo si el asignado elegido DIFIERE del que ya

@@ -73,6 +73,13 @@ public class TransferenciaResource {
             if (origen == null) {
                 return bad("la tarea no tiene equipo de origen (board sin equipo)");
             }
+        } else if (com.fitdesk.legacy.LegacyWriteService.tareaDeTicket(ticket) != null) {
+            // El ticket YA tiene tarea (quizá en otro tablero): se transfiere esa, no se crea otra.
+            tarea = com.fitdesk.legacy.LegacyWriteService.tareaDeTicket(ticket);
+            origen = tarea.board != null ? tarea.board.equipo : null;
+            if (origen == null) {
+                return bad("la tarea del ticket no tiene equipo de origen (board sin equipo)");
+            }
         } else {
             // Camino NUEVO: transferir un TICKET sin tarea previa. Se crea la tarea OCULTA en
             // el board del equipo del actor (el remitente); aparece al aceptarse (ver /aceptar).

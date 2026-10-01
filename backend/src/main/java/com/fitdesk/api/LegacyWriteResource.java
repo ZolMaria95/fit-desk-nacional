@@ -71,8 +71,11 @@ public class LegacyWriteResource {
         RuntimeException last = null;
         for (int intento = 0; intento < 4; intento++) {
             try {
-                String codigo = write.createStory(fields);
-                return Response.status(Response.Status.CREATED).entity(Map.of("id", codigo)).build();
+                var r = write.createStory(fields);
+                // Si el ticket ya tenía tarea, 200 con esa (`existente`): el front no crea otra.
+                return r.existente()
+                        ? Response.ok(Map.of("id", r.codigo(), "existente", true)).build()
+                        : Response.status(Response.Status.CREATED).entity(Map.of("id", r.codigo())).build();
             } catch (RuntimeException ex) {
                 last = ex;
             }

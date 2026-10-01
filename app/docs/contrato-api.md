@@ -117,6 +117,9 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
     `equipo-miembros`), el picker de "Senior de Turno" en el frontend usa el catálogo COMPLETO de
     `users` (`HelpdeskService.hdUsers()`) — cualquier empleado de la empresa es asignable, sin
     restricción de equipo. Ver `docs/decisiones.md` para el contexto completo.
+  - **Crear tarea con `ticket` (2026-10-01):** si el ticket ya tiene tarea, `POST /stories/stories` responde
+    **200** `{id: <existente>, existente: true}` (no crea otra); el upsert del PATCH no crea y una transferencia
+    por `ticket` usa la tarea existente.
   - **Crear tarea:** `POST /stories/stories` (body = la tarjeta, **sin id**) → el **backend asigna el id**
     atómicamente y devuelve `{ "id": "TA-NNN" }` (201). Reemplaza el id client-side (max+1) que podía
     chocar entre vistas desactualizadas. El front hace **fallback** al PATCH si el POST no existe (backend viejo).

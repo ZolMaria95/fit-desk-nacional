@@ -102,6 +102,11 @@ public class LegacyWriteService {
                 // (abajo, en applyFields) solo debe aplicarse al crear, nunca a un PATCH sobre
                 // una tarea que ya vivía en un tablero (aunque ese PATCH reenvíe 'client'/'ticket').
                 boolean esNueva = Tarea.findByCodigo(key) == null;
+                // Crear por este camino (respaldo del front con id local) tampoco duplica: si el ticket ya
+                // tiene tarea, no se crea otra.
+                if (esNueva && tareaDeTicket(text(e.getValue(), "ticket")) != null) {
+                    continue;
+                }
                 Tarea t = upsertTarea(key);
                 applyFields(t, e.getValue(), esNueva);
             }
@@ -155,8 +160,30 @@ public class LegacyWriteService {
      * calculaba el navegador (max+1 de SU vista); una vista DESACTUALIZADA podía chocar y PISAR la tarea de
      * otro (ver docs/decisiones). Ahora el backend lo deriva del máximo REAL de la tabla. Devuelve el codigo.
      */
+    /** Resultado de crear: el codigo y si ya EXISTÍA una tarea para ese ticket (no se creó otra). */
+    public record CreacionTarea(String codigo, boolean existente) {
+    }
+
+    /**
+     * La tarea que ya tiene ese N° de ticket (la de menor id, la original), o null. Un ticket tiene UNA sola
+     * tarea: todos los caminos de creación la consultan antes de crear (antes solo lo hacía
+     * /stories/desde-ticket-asignado y se acumularon duplicadas).
+     */
+    public static Tarea tareaDeTicket(String ticket) {
+        if (ticket == null || ticket.isBlank()) {
+            return null;
+        }
+        TicketEspejo e = TicketEspejo.findByHelpdeskTicketId(ticket.trim());
+        return e == null ? null : Tarea.<Tarea>find("ticketEspejo = ?1 order by id", e).firstResult();
+    }
+
     @Transactional
-    public String createStory(JsonNode fields) {
+    public CreacionTarea createStory(JsonNode fields) {
+        // Idempotente por ticket: si ya hay tarea para ese ticket, se devuelve esa (no se crea otra).
+        Tarea ya = tareaDeTicket(text(fields, "ticket"));
+        if (ya != null) {
+            return new CreacionTarea(ya.codigo, true);
+        }
         Tarea t = new Tarea();
         t.codigo = nextTareaCodigo();
         t.board = board();
@@ -164,7 +191,7 @@ public class LegacyWriteService {
         // Fuerza el INSERT ya: si el codigo choca por creación concurrente, falla AQUÍ y el resource reintenta.
         t.persistAndFlush();
         applyFields(t, fields, true);
-        return t.codigo;
+        return new CreacionTarea(t.codigo, false);
     }
 
     private Tarea upsertTarea(String codigo) {

@@ -362,9 +362,14 @@ export class DataService {
     };
     let task: Story;
     if (this.useQuarkus()) {
-      const serverId = await this.fbPostStory(base); // id atómico del backend (o null si no está el endpoint)
-      if (serverId) {
-        task = { ...base, id: serverId };
+      const res = await this.fbPostStory(base); // id atómico del backend (o 'sin-endpoint' si es un backend viejo)
+      if (res !== 'sin-endpoint' && res.existente) {
+        // El ticket YA tenía tarea: no se creó otra. Se devuelve esa (marcada) sin duplicarla en memoria.
+        const ya = this.stories().find((s) => s.id === res.id);
+        return { ...(ya ?? { ...base, id: res.id }), existente: true };
+      }
+      if (res !== 'sin-endpoint') {
+        task = { ...base, id: res.id };
       } else {
         // Fallback (backend sin POST o error puntual): id local + PATCH ESPERADO (no fire-and-forget).
         task = { ...base, id: nextLocalId() };
@@ -388,22 +393,28 @@ export class DataService {
    * POST de creación: el backend asigna el id de forma atómica y lo devuelve. Retorna el id, o `null`
    * si el endpoint no existe (backend viejo) o falla — el caller hace fallback al PATCH confirmado.
    */
-  private async fbPostStory(task: Story): Promise<string | null> {
+  private async fbPostStory(task: Story): Promise<{ id: string; existente: boolean } | 'sin-endpoint'> {
     this.markStoryWrite('stories/stories');
+    let r: Response;
     try {
-      const r = await fetch(this.apiUrl('stories/stories'), {
+      r = await fetch(this.apiUrl('stories/stories'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...this.actorHeaders() },
         body: JSON.stringify(task),
       });
-      if (!r.ok) return null; // incl. 404/405 (backend sin el POST) → el caller hace fallback
-      const created = await r.json().catch(() => null);
-      return (created && created.id) || null;
     } catch (err) {
+      // Sin respuesta: NO se cae al PATCH de respaldo — el POST pudo haber creado la tarea igual y el
+      // respaldo crearía OTRA (origen de tareas duplicadas con 1–2 s de diferencia).
       console.warn('[create POST] stories:', err);
-      return null;
+      throw new Error('No se pudo confirmar si la tarea se creó. Recarga el tablero antes de intentar de nuevo.');
     }
+    if (r.status === 404 || r.status === 405) return 'sin-endpoint'; // backend viejo sin el POST → respaldo
+    if (!r.ok) throw new Error('No se pudo guardar la tarea. Revisa tu conexión e intenta de nuevo.');
+    const created = await r.json().catch(() => null);
+    if (!created?.id) throw new Error('No se pudo confirmar si la tarea se creó. Recarga el tablero antes de intentar de nuevo.');
+    return { id: String(created.id), existente: !!created.existente };
   }
+
 
   updateStoryStatus(id: string, status: string) { this.patchStoryField(id, { status }); }
   updateStoryProgress(id: string, progress: number) { this.patchStoryField(id, { progress }); }

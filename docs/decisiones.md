@@ -6,6 +6,28 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-01] Tareas duplicadas por ticket: un ticket = una tarea (fase 1: frenar las nuevas)
+
+**Problema (reportado por la dueña en Reportes):** en prod, 25 tickets tienen 2–3 tareas (51), desde julio. El
+Board las ocultaba (muestra la de menor número), Reportes las muestra todas. Causas: (1) `DataService.addStory`
+caía al PATCH de respaldo con id local cuando el POST fallaba o no respondía, y el POST ya había creado la
+tarea → pares con 1–2 s de diferencia; (2) la creación manual (`createStory` y el upsert del PATCH) y la de
+transferencias no verificaban si el ticket ya tenía tarea; (3) la BD no lo impide.
+
+**Fase 1 (código):**
+- Backend: `LegacyWriteService.tareaDeTicket` + creación **idempotente por ticket** en `createStory`
+  (200 `{id, existente:true}` con la tarea existente), en el upsert del PATCH (no crea) y en
+  `TransferenciaResource.crear` (transfiere la tarea existente).
+- Front: `fbPostStory` ya no cae al respaldo ante error/sin respuesta (solo si el POST no existe: 404/405) y
+  avisa; si el backend responde `existente`, no la duplica en memoria y el modal avisa "El ticket #N ya tiene
+  la tarea TA-NNN".
+- **Regla de la dueña para la limpieza:** no se pierde ninguna tarea que no sea duplicada; solo se tocan tareas
+  que comparten ticket, y nada se borra sin su aprobación sobre la lista.
+
+**Verificado en local:** POST/PATCH/transferencia con un ticket que ya tiene tarea → no crean otra (TA-089 intacta);
+tarea sin ticket → se crea normal. Sin desplegar. **Pendiente:** fase 2 (limpieza con aprobación) y fase 3
+(índice único `V30`).
+
 ### [2026-09-30] Reportes: HELPDESK/ADMIN cambian la prioridad de la TAREA; la tabla va por prioridad
 
 **Decisión (pedido de la dueña):** en Reportes → "Qué está haciendo cada consultor", el rol **HELPDESK** y
