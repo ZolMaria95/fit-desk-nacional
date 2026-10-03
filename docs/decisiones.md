@@ -6,6 +6,22 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-02] Aviso de novedades: abrir la conversación da el ticket por revisado
+
+**Bug (reportado por la dueña):** el popup de "ticket nuevo / con actividad" volvía a saltar aunque ya se hubiera
+abierto la conversación. Causa (`NuevosTicketsService`): abrir la conversación no marcaba nada — solo entrar a la
+pestaña Equipo avanza las marcas de agua — y el dedup del popup (`alertados`) vive solo en memoria, así que al
+recargar, abrir otra pestaña o reabrir la PWA el aviso volvía.
+
+**Fix:** `marcarTicketVisto(ticket)` guarda en `localStorage` (por usuario y navegador) cuándo se revisó cada
+ticket; lo llama `TicketMessagesDialog` al abrirse (desde el aviso, Tickets o donde sea). `revisar()` descarta los
+avisos cuya señal (creación / última modificación) es anterior a esa revisión — no cuentan para el popup ni para
+el globo. Actividad posterior de otra persona vuelve a avisar. Poda a 30 días.
+
+**Verificado en local** (simulación de actividad): salta 1 → tras recargar sin abrir sigue 1 → tras abrir y
+recargar 0 (globo 0) → con actividad nueva 1. Abrir "Ver" en Tickets registra el ticket como revisado. Sin
+desplegar.
+
 ### [2026-10-02] Reuniones: el cliente se elige del catálogo COMPLETO de la empresa (otra vez)
 
 **Decisión (pedido de la dueña):** el selector de cliente del modal de reunión (`ReunionDialog`) ofrece SIEMPRE

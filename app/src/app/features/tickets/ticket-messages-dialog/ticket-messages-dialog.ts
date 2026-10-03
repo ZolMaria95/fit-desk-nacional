@@ -16,6 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { AuthService } from '../../../core/services/auth.service';
 import { ColoresService } from '../../../core/services/colores.service';
 import { HelpdeskService } from '../../../core/services/helpdesk.service';
+import { NuevosTicketsService } from '../../../core/services/nuevos-tickets.service';
 import { ComposeDialog } from '../compose-dialog/compose-dialog';
 import { EMPLEADOS } from '../helpdesk.constants';
 import { Ticket, clipboardToHtml, editorToMessageHtml, extFromBytes, extFromMime, htmlToText, insertCodeBlock, mapTicket, safeHtml, stripHtml } from '../ticket-utils';
@@ -69,6 +70,7 @@ export interface TicketMessagesData {
 })
 export class TicketMessagesDialog implements OnDestroy {
   private readonly hd = inject(HelpdeskService);
+  private readonly nuevos = inject(NuevosTicketsService);
   private readonly auth = inject(AuthService);
   private readonly colores = inject(ColoresService);
   private readonly router = inject(Router);
@@ -196,6 +198,9 @@ export class TicketMessagesDialog implements OnDestroy {
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    // Abrir la conversación = ticket revisado: el aviso de novedades no vuelve a saltar por él
+    // (tampoco al recargar), salvo que tenga actividad nueva después.
+    this.nuevos.marcarTicketVisto(this.ticketId);
     this.load();
     // ESC jerárquico: cierra primero el visor de imagen, luego la lectura ampliada, y solo
     // si no hay nada propio en primer plano cierra el modal. Los popups del CDK (menú de

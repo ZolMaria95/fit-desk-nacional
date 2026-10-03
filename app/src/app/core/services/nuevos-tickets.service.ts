@@ -19,7 +19,8 @@ export interface TicketAviso {
  * Expone `conteo` (badge del ítem "Tickets") y `revisar()` devuelve los avisos que faltan popear
  * (el Layout dispara el popup + sonido). Dos marcas de agua persistidas por usuario → la 1ª corrida
  * hace BASELINE (no alerta por el histórico) y no re-alerta entre recargas/sesiones. `marcarVistos()`
- * (al ver la pestaña Equipo) avanza las marcas y limpia el badge.
+ * (al ver la pestaña Equipo) avanza las marcas y limpia el badge. `marcarTicketVisto()` (al abrir la
+ * conversación de un ticket) lo da por revisado, también entre recargas, hasta que tenga actividad nueva.
  */
 @Injectable({ providedIn: 'root' })
 export class NuevosTicketsService {
@@ -45,6 +46,34 @@ export class NuevosTicketsService {
   private setWm(sub: 'entry' | 'mod', ms: number): void {
     try { localStorage.setItem(this.key(sub), String(ms)); } catch { /* localStorage no disponible */ }
   }
+  // ── Tickets ya REVISADOS (se abrió su conversación) ──
+  // Persistido por usuario y navegador: { ticket: ms en que se revisó }. Un aviso cuya señal (creación o
+  // última modificación) es anterior a esa revisión ya no salta — ni en esta sesión ni al recargar. Si
+  // después hay actividad NUEVA de otra persona, su señal es posterior y vuelve a avisar.
+  private keyVistos(): string {
+    const uid = String(this.auth.session()?.id || '').trim().toUpperCase();
+    return `fit-daily_nt_vistos_${uid || 'anon'}`;
+  }
+  private leerVistos(): Record<string, number> {
+    try {
+      const v = JSON.parse(localStorage.getItem(this.keyVistos()) || '{}');
+      return v && typeof v === 'object' ? v : {};
+    } catch {
+      return {};
+    }
+  }
+  /** Se abrió la conversación del ticket → queda revisado (no vuelve a avisar salvo actividad nueva). */
+  marcarTicketVisto(ticket: string): void {
+    const t = String(ticket || '').trim();
+    if (!t) return;
+    const vistos = this.leerVistos();
+    const ahora = Date.now();
+    vistos[t] = ahora;
+    // Poda: lo revisado hace más de 30 días ya está por debajo de las marcas de agua.
+    for (const [k, ms] of Object.entries(vistos)) if (ahora - Number(ms) > 30 * 864e5) delete vistos[k];
+    try { localStorage.setItem(this.keyVistos(), JSON.stringify(vistos)); } catch { /* sin localStorage */ }
+  }
+
   /** fecha → ms; NaN (formato raro/vacío) → 0 (ese ticket NO cuenta como novedad: seguro). */
   private ms(d: string | undefined): number {
     const t = Date.parse(String(d || ''));
@@ -90,7 +119,10 @@ export class NuevosTicketsService {
     }
     // Para las ACTIVIDADES hay que mirar QUIÉN las hizo, y el listado no lo dice: se piden los
     // mensajes SOLO de esos candidatos (normalmente 0–2, así que el coste es marginal).
-    const avisos = miHid ? await this.descartarPropias(candidatos, modWm, miHid) : candidatos;
+    // Ya revisados (se abrió la conversación DESPUÉS de esa señal) → no son novedad.
+    const vistos = this.leerVistos();
+    const sinRevisar = candidatos.filter((c) => !(Number(vistos[c.ticket] || 0) >= c.sig));
+    const avisos = miHid ? await this.descartarPropias(sinRevisar, modWm, miHid) : sinRevisar;
     this.conteo.set(avisos.length);
     // Popup: solo los que no se popearon aún (por ticket+motivo+señal → una nueva actividad re-alerta).
     const paraPopup: TicketAviso[] = [];
