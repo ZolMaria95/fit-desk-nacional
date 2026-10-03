@@ -11,7 +11,6 @@ import { wireDialogEsc } from '../../../core/dialog-esc';
 import { AuthService } from '../../../core/services/auth.service';
 import { DataService, Story } from '../../../core/services/data.service';
 import { HelpdeskService } from '../../../core/services/helpdesk.service';
-import { PerfilService } from '../../../core/services/perfil.service';
 
 interface ReunionData {
   story: Story | null;
@@ -39,7 +38,6 @@ interface ReunionData {
 export class ReunionDialog {
   private readonly data = inject(DataService);
   private readonly hd = inject(HelpdeskService);
-  private readonly perfil = inject(PerfilService);
   readonly auth = inject(AuthService);
   private readonly ref = inject(MatDialogRef<ReunionDialog>);
   private readonly snack = inject(MatSnackBar);
@@ -74,15 +72,10 @@ export class ReunionDialog {
     const list = this.hd.hdUsers();
     return t ? list.filter((u) => u.name.toLowerCase().includes(t)) : list;
   });
-  // Clientes que puede elegir, SCOPEADOS por alcance: GLOBAL → catálogo COMPLETO del HelpDesk;
-  // EQUIPO/REGIONAL → solo los de su alcance (`misClientes`, del backend). Fallback al catálogo si el
-  // alcance no trae clientes (equipo sin registrar, o backend viejo sin `esGlobal`) → nunca queda vacío.
-  private readonly clientesSource = computed(() => {
-    const scoped = this.perfil.misClientes();
-    return this.perfil.esGlobal() || scoped.length === 0
-      ? this.hd.clients().map((c) => ({ codigo: c.id, nombre: c.name }))
-      : scoped;
-  });
+  // Clientes que puede elegir: SIEMPRE el catálogo COMPLETO de la empresa (HelpDesk), sin segmentar por
+  // equipo/alcance — una reunión puede ser con cualquier cliente (pedido de la dueña, ago y oct 2026).
+  // Los no registrados en FitDesk se guardan igual (`cliente_codigo_raw` + `cliente_nombre`, V17).
+  private readonly clientesSource = computed(() => this.hd.clients().map((c) => ({ codigo: c.id, nombre: c.name })));
   readonly clientesF = computed(() => {
     const t = this.buscarCli().trim().toLowerCase();
     const list = this.clientesSource();
@@ -97,15 +90,14 @@ export class ReunionDialog {
   readonly clienteLabel = computed(() => {
     const cod = this.clientId();
     if (!cod) return '';
-    // Nombre desde la fuente scopeada; si el código guardado no está (reunión vieja / otro alcance),
+    // Nombre desde el catálogo; si el código guardado no está (reunión vieja con código interno),
     // el nombre que ya traía la tarea; en último caso, el propio código.
     return this.clientesSource().find((c) => c.codigo === cod)?.nombre || this.story?.clientName || cod;
   });
 
   constructor() {
     wireDialogEsc(this.ref); // ESC cierra primero el datepicker/menú abierto, no el modal
-    this.hd.getClients(); // catálogo del HelpDesk (para el alcance GLOBAL)
-    this.perfil.cargarMiPerfil(); // esGlobal + clientes del alcance (EQUIPO/REGIONAL)
+    this.hd.getClients(); // catálogo COMPLETO del HelpDesk
     const pi = this.parseDT(this.story?.inicio);
     if (pi) { this.inicioFecha.set(pi.fecha); this.inicioHora.set(pi.hora); }
     const pf = this.parseDT(this.story?.fin);

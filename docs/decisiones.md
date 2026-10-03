@@ -6,6 +6,17 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-02] Reuniones: el cliente se elige del catálogo COMPLETO de la empresa (otra vez)
+
+**Decisión (pedido de la dueña):** el selector de cliente del modal de reunión (`ReunionDialog`) ofrece SIEMPRE
+todos los clientes del HelpDesk, sin segmentar por equipo/alcance. Ya se había decidido en ago-2026
+("Reunión: cliente = catálogo completo"), pero el código había vuelto a filtrar por alcance
+(`perfil.misClientes()` salvo alcance GLOBAL). Se quitó el filtro (y la dependencia de `PerfilService`).
+Los clientes no registrados en FitDesk se siguen guardando con `cliente_codigo_raw` + `cliente_nombre` (V17).
+
+**Verificado en local:** responsable de CUENCA (alcance EQUIPO, sin ADMIN) → 45 opciones = catálogo completo.
+Sin desplegar.
+
 ### [2026-10-01] Tareas duplicadas por ticket: un ticket = una tarea (fase 1: frenar las nuevas)
 
 **Problema (reportado por la dueña en Reportes):** en prod, 25 tickets tienen 2–3 tareas (51), desde julio. El
