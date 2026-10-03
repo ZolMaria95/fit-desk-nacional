@@ -201,18 +201,14 @@ export class CardDetailDialog {
     return { id, name: this.story?.clientName || id };
   }
 
-  // Clientes del selector, SCOPEADOS por alcance: GLOBAL → catálogo COMPLETO del HelpDesk;
-  // EQUIPO/REGIONAL → solo los de su alcance (`perfil.misClientes`). Fallback al catálogo si el alcance
-  // no trae clientes (equipo sin registrar, o backend viejo sin `esGlobal`) → nunca queda vacío.
-  // EXCEPCIÓN: crear una tarea NUEVA sin ticket (aún) → catálogo COMPLETO sin importar el alcance.
-  // Una tarea sin ticket no tiene por qué ser de un cliente del propio equipo/regional (p. ej. un
-  // consultor de un equipo cubre puntualmente algo de otro cliente). En cuanto hay un ticket (venía
-  // prefijado al abrir desde Tickets, o se tecleó y se buscó aquí) vuelve a acotarse: el cliente lo
-  // define el ticket real, y no tendría sentido ofrecer uno distinto al de su propio HelpDesk.
+  // Clientes del selector. Tarea SIN ticket (nueva o existente) → catálogo COMPLETO de la empresa, sin
+  // importar el alcance (pedido de la dueña, oct-2026: una tarea sin ticket puede ser de cualquier
+  // cliente). Tarea CON ticket → acotado por alcance (GLOBAL → catálogo completo; EQUIPO/REGIONAL →
+  // `perfil.misClientes`, con fallback al catálogo si viene vacío): el cliente lo define el ticket real.
   // MÉTODOS (no `computed`) a propósito: `ticket` es una property plana (`[(ngModel)]`), no un signal
   // — un `computed` no se recalcularía al escribir en el campo; el CD local del propio input sí.
   clientes(): HdClient[] {
-    if (this.isNew && !this.ticket.trim()) return this.initialClients();
+    if (!this.ticket.trim()) return this.initialClients();
     const scoped = this.perfil.misClientes();
     return this.perfil.esGlobal() || scoped.length === 0
       ? this.initialClients()

@@ -16,6 +16,10 @@ Los clientes no registrados en FitDesk se siguen guardando con `cliente_codigo_r
 
 **Verificado en local:** responsable de CUENCA (alcance EQUIPO, sin ADMIN) → 45 opciones = catálogo completo.
 Sin desplegar.
+- **Ampliado (mismo día, pedido de la dueña): tareas SIN ticket** — el modal de tarea (`CardDetailDialog.clientes`)
+  ofrece el catálogo completo para toda tarea sin ticket, nueva **o existente** (antes solo al crear). Con ticket
+  sigue acotado por alcance (el cliente lo define el ticket). Verificado: TA-005 (sin ticket) 45 opciones;
+  TA-001 (con ticket) 14 del alcance.
 
 ### [2026-10-01] Tareas duplicadas por ticket: un ticket = una tarea (fase 1: frenar las nuevas)
 
