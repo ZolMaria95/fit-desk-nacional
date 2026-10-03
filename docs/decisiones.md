@@ -6,6 +6,14 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-02] Desplegado a AWS (solo front): clientes completos, editar cliente, guardado en un PATCH y aviso de novedades
+
+Incluye `18485f4` (reuniones con todos los clientes), `5d18839` (tareas sin ticket con todos los clientes),
+`b551c94` (editar el cliente de tareas sin ticket + guardado del modal en un solo PATCH) y `25a9f11` (abrir la
+conversación da el ticket por revisado). Commit en el clon del servidor `7476919` (front), bundle
+`main-M7P7J47J.js`; guardia OK, login proxy 401, login real + Board OK (sesión cerrada). Rollback front:
+`fc6b4d9064ef`. **⚠️ Sigue pendiente el push a GitLab** (token caducado): back `12b2897`, front `7476919`.
+
 ### [2026-10-02] Aviso de novedades: abrir la conversación da el ticket por revisado
 
 **Bug (reportado por la dueña):** el popup de "ticket nuevo / con actividad" volvía a saltar aunque ya se hubiera
