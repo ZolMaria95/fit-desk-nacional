@@ -25,8 +25,22 @@ transferencias no verificaban si el ticket ya tenía tarea; (3) la BD no lo impi
   que comparten ticket, y nada se borra sin su aprobación sobre la lista.
 
 **Verificado en local:** POST/PATCH/transferencia con un ticket que ya tiene tarea → no crean otra (TA-089 intacta);
-tarea sin ticket → se crea normal. Sin desplegar. **Pendiente:** fase 2 (limpieza con aprobación) y fase 3
-(índice único `V30`).
+tarea sin ticket → se crea normal.
+
+**Fases 2 y 3 — desplegado a AWS 2026-10-02** (la dueña aprobó la lista y pidió "arregla las tareas duplicadas
+y pon el bloqueo"). Migración **`V30__tarea_unica_por_ticket`**: por ticket conserva la tarea MÁS AVANZADA
+(estado, luego Finalizado) y a igualdad la de número más bajo; la conservada hereda de sus copias descripción,
+título, fecha límite, inicio en proceso y la prioridad más alta; las referencias (mensaje, transferencia,
+solicitud, progreso, consulta) pasan a ella; borra las copias y crea el índice único parcial
+`uq_tarea_ticket_espejo`. Probada antes sobre una COPIA de la BD de prod: 761 → 732 (29 borradas: las 26 de la
+lista + TA-759, TA-762, TA-774 aparecidas el 01–02/10), 0 sin ticket borradas, ningún ticket sin tarea.
+Casos: #31581 → TA-588 hereda la descripción de TA-759; #33954 → se conserva TA-765 (In Progress) sobre
+TA-762 (To Do); #33973 → TA-767 (Alta). En prod: 732 tareas, 0 tickets con >1 tarea, índice creado; POST de
+otra tarea para #33928 → `{id: TA-709, existente: true}`. Backup previo `backup-pre-v30-20261002.dump`.
+Front con el fix de `addStory`, bundle `main-GSRQ7PKQ.js`; guardia OK, login proxy 401, login real (sesión
+cerrada). Rollback front: `6812f4b87059`.
+**⚠️ GitLab:** el token de los clones del servidor ya no autentica (HTTP Basic: Access denied). Los commits
+quedaron SOLO en los clones del servidor (back `12b2897`, front `d204c5b`) → **falta push** con un token nuevo.
 
 ### [2026-09-30] Reportes: HELPDESK/ADMIN cambian la prioridad de la TAREA; la tabla va por prioridad
 
