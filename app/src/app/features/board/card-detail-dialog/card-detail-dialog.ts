@@ -90,10 +90,18 @@ export class CardDetailDialog {
   /** Estado del ticket asociado (existente: del board; nuevo: se llena al buscar). */
   readonly ticketEstatus = signal(this.story?.hdEstatus || this.input.prefill?.estatus || '');
   readonly estadoStyle = estadoStyle;
-  /** El usuario Helpdesk (MSC001) puede editar el cliente de tareas SIN ticket. */
-  readonly esHelpdesk = this.auth.esMSC001;
-  /** Muestra el buscador de cliente: al crear, o al editar una tarea sin ticket siendo Helpdesk. */
-  readonly showClientEditor = computed(() => this.isNew || (this.esHelpdesk() && !this.story?.ticket));
+  /**
+   * ¿Puede cambiar el cliente de una tarea YA CREADA? Solo si NO tiene ticket (con ticket, el cliente lo
+   * define el ticket) y quien edita puede gestionarla: su dueño, MSC001/Supervisor (`puedeMover`), el
+   * responsable de su tablero, el rol HELPDESK o ADMIN (pedido de la dueña, oct-2026; antes solo MSC001).
+   */
+  readonly puedeEditarCliente = computed(
+    () =>
+      !this.story?.ticket &&
+      (this.puedeMover() || this.auth.esHelpdesk() || this.auth.esAdminPlataforma() || this.perfil.gobiernaBoard(this.story?.board)),
+  );
+  /** Muestra el buscador de cliente: al crear, o al editar una tarea sin ticket con permiso. */
+  readonly showClientEditor = computed(() => this.isNew || this.puedeEditarCliente());
 
   // ── Envío entre equipos (solo modo Quarkus, sobre una tarea existente) ──
   /** Enviar a otro equipo: Responsable de Equipo o ADMIN, y **del equipo dueño de esta tarea**
@@ -494,19 +502,23 @@ export class CardDetailDialog {
       const ok = await canStartWork(task, { data: this.data, auth: this.auth, dialog: this.dialog, snack: this.snack });
       if (!ok) return; // el modal queda abierto sin guardar
     }
-    this.data.updateStoryTitle(task.id, title);
-    this.data.updateStoryDescription(task.id, this.description.trim());
-    this.data.updateStoryProgress(task.id, pct);
-    this.data.updateStoryStatus(task.id, this.status);
-    this.data.updateStoryDueDate(task.id, this.dueDateStr());
-    this.data.updateStoryAssignee(task.id, assignee);
-    // El Helpdesk puede cambiar el cliente de tareas SIN ticket (las que tienen
-    // ticket toman el cliente del ticket en el sync del board).
-    if (this.esHelpdesk() && !task.ticket) {
-      this.data.updateStoryClient(task.id, this.clientId || null);
-      this.data.updateStoryClientName(task.id, this.clientNameResolved());
+    // UN SOLO PATCH con todos los campos: antes se lanzaba uno por campo, en paralelo, y como el backend
+    // lee y reescribe la fila en cada uno, algunos se pisaban (p. ej. se perdía el nombre del cliente).
+    const cambios: Partial<Story> = {
+      title,
+      description: this.description.trim(),
+      progress: pct,
+      status: this.status,
+      dueDate: this.dueDateStr(),
+      assignee,
+    };
+    // Cliente de una tarea SIN ticket (las que tienen ticket lo toman del ticket en el sync del board).
+    if (this.puedeEditarCliente()) {
+      cambios.client = this.clientId || null;
+      cambios.clientName = this.clientId ? this.clientNameResolved() : '';
     }
-    if (this.editable) this.data.updateStoryPriority(task.id, this.priority);
+    if (this.editable) cambios.priority = this.priority;
+    this.data.patchStory(task.id, cambios);
     // Si la tarea tiene ticket y cambió el asignado → reflejar en el Helpdesk.
     this.maybeAssignHd(task.ticket, assignee, task.assignee);
     // Si cambió el estado y tiene ticket → sincronizar el estado del ticket en el Helpdesk.

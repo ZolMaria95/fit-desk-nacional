@@ -146,7 +146,8 @@ export class ReunionDialog {
       fin,
       assignee,
       client: clientId || null,
-      clientName: cli?.nombre || this.story?.clientName || '',
+      // Sin cliente → nombre vacío (antes se arrastraba el nombre anterior al quitar el cliente).
+      clientName: clientId ? cli?.nombre || this.story?.clientName || '' : '',
       recordatorioMin: Math.max(0, Math.round(this.recordatorioMin() || 0)), // 0 = sin recordatorio
     };
     if (this.isNew) {

@@ -20,6 +20,14 @@ Sin desplegar.
   ofrece el catálogo completo para toda tarea sin ticket, nueva **o existente** (antes solo al crear). Con ticket
   sigue acotado por alcance (el cliente lo define el ticket). Verificado: TA-005 (sin ticket) 45 opciones;
   TA-001 (con ticket) 14 del alcance.
+- **Editar el cliente después de crear** (mismo día, pedido de la dueña; las reuniones cuentan como tarea sin
+  ticket): en el modal de tarea, el cliente de una tarea SIN ticket lo puede cambiar quien la gestiona — su
+  dueño, MSC001/Supervisor, el responsable de su tablero, HELPDESK o ADMIN (`puedeEditarCliente`; antes solo
+  MSC001). Las reuniones ya lo permitían; se corrigió que al quitar el cliente se arrastraba el nombre anterior.
+- **Bug encontrado al probarlo:** `save()` del modal lanzaba ~8 PATCH en paralelo (uno por campo) a la misma
+  tarea y el backend (read-modify-write) perdía algunos — p. ej. el nombre del cliente. Ahora es **un solo
+  PATCH** con todos los campos (regla ya documentada: un PATCH por tarea). Verificado: TA-005 → AUSTROBANK
+  guarda código y nombre, título intacto.
 
 ### [2026-10-01] Tareas duplicadas por ticket: un ticket = una tarea (fase 1: frenar las nuevas)
 
