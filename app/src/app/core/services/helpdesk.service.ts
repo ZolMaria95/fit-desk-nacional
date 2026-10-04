@@ -1,3 +1,4 @@
+import { esEstadoFinalizado } from '../helpdesk-estados';
 import { HttpClient, HttpContext, HttpParameterCodec, HttpParams } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
@@ -780,12 +781,71 @@ export class HelpdeskService {
    * Best-effort y silencioso ante error: la asignación al HelpDesk ya se confirmó, esto es un
    * plus. Idempotente en el backend, así que el chequeo local es solo una optimización.
    */
-  private async crearTareaSiHaceFalta(ticket: Ticket, asignadoHid: string, asignadoName: string): Promise<void> {
+  /** hids ya revisados en esta sesión por `crearTareasFaltantes` (una vez por persona y sesión). */
+  private readonly faltantesRevisados = new Set<string>();
+
+  /**
+   * Crea la tarea que falta para los tickets ABIERTOS (no finalizados) asignados a cada persona en el
+   * HelpDesk. Lo asignado directo en el HelpDesk nunca recibía tarea y no aparecía en el Board (pedido de
+   * la dueña, oct-2026). Reutiliza `crearTareaSiHaceFalta` (endpoint idempotente; el índice único
+   * `uq_tarea_ticket_espejo` impide duplicar). Una vez por persona y sesión. Devuelve cuántas creó.
+   */
+  async crearTareasFaltantes(hids: string[]): Promise<number> {
+    if (environment.dataBackend !== 'quarkus') return 0;
+    const pendientes = [...new Set(hids.map((h) => String(h || '').trim().toUpperCase()).filter(Boolean))].filter(
+      (h) => !this.faltantesRevisados.has(h),
+    );
+    if (!pendientes.length) return 0;
+    pendientes.forEach((h) => this.faltantesRevisados.add(h));
+    await this.getTicketStatuses();
+    const abiertos = this.statusNames()
+      .filter((n) => !esEstadoFinalizado(n))
+      .map((n) => this.statusIdOf(n))
+      .filter((id): id is string => !!id);
+    if (!abiertos.length) return 0; // sin catálogo de estados no se arriesga a crear tareas de tickets cerrados
+    const conTarea = new Set(this.data.stories().map((s) => String(s.ticket || '')).filter(Boolean));
+    const porCrear: { t: Ticket; hid: string }[] = [];
+    for (const hid of pendientes) {
+      for (let offset = 0; offset < 300; offset += 100) {
+        let items: Ticket[] = [];
+        try {
+          const params = new HttpParams()
+            .set('limit', '100')
+            .set('offset', String(offset))
+            .set('assigned_user_id', hid)
+            .set('ticket_status_id', abiertos.join(','));
+          const data = await firstValueFrom(
+            this.http.get<any>(`${this.base}/tickets/tickets`, { params, context: new HttpContext().set(HD_SAFE, true) }),
+          );
+          items = (data?.items || []).map(mapTicket);
+        } catch {
+          break; // best-effort: se reintenta en la próxima sesión
+        }
+        for (const t of items) {
+          if (t.ticket && !conTarea.has(String(t.ticket)) && !esEstadoFinalizado(t.estatus || '')) {
+            conTarea.add(String(t.ticket));
+            porCrear.push({ t, hid });
+          }
+        }
+        if (items.length < 100) break;
+      }
+    }
+    // De UNA en una: el backend numera TA-NNN con el máximo actual y en paralelo chocaban (el backend
+    // además reintenta, por si otro tablero crea a la vez).
+    let creadas = 0;
+    for (const { t, hid } of porCrear) {
+      const nombre = this.hdUsers().find((u) => String(u.id).toUpperCase() === hid)?.name || t.nombreAsignado || hid;
+      if (await this.crearTareaSiHaceFalta(t, hid, nombre, true)) creadas++;
+    }
+    return creadas;
+  }
+
+  private async crearTareaSiHaceFalta(ticket: Ticket, asignadoHid: string, asignadoName: string, silencioso = false): Promise<boolean> {
     // `quarkusApiUrl` vacío es VÁLIDO en onprem/AWS (mismo-origen, URLs relativas) — no exigir
     // `!!quarkusApiUrl`, que descartaba justo ese caso (ver el mismo fix ya hecho en
     // `PerfilService.usaQuarkus()`). Con el chequeo viejo, esto NUNCA se ejecutaba en producción.
-    if (environment.dataBackend !== 'quarkus') return;
-    if (this.data.stories().some((s) => String(s.ticket) === String(ticket.ticket))) return;
+    if (environment.dataBackend !== 'quarkus') return false;
+    if (this.data.stories().some((s) => String(s.ticket) === String(ticket.ticket))) return false;
     try {
       const hid = String(this.auth.session()?.id || '');
       const r = await fetch(`${environment.quarkusApiUrl}/api/legacy/stories/desde-ticket-asignado`, {
@@ -800,9 +860,9 @@ export class HelpdeskService {
           asignadoNombre: asignadoName,
         }),
       });
-      if (!r.ok) return;
+      if (!r.ok) return false;
       const d: { creada: boolean; tareaCodigo?: string; board?: string } = await r.json();
-      if (!d.creada || !d.tareaCodigo || !d.board) return;
+      if (!d.creada || !d.tareaCodigo || !d.board) return false;
       // Ya se sabe todo lo necesario (lo mandamos nosotros): se inserta en la caché local sin
       // recargar, igual que hace `DataService.addStory()` tras confirmar su propio POST.
       const nueva: Story = {
@@ -812,9 +872,11 @@ export class HelpdeskService {
         waitingClient: false, waitingDate: null, title: ticket.asunto || undefined,
       };
       this.data.stories.update((list) => [...list, nueva]);
-      this.snack.open(`Se creó la tarea ${d.tareaCodigo} para el ticket #${ticket.ticket}.`, 'OK', { duration: 4000 });
+      if (!silencioso) this.snack.open(`Se creó la tarea ${d.tareaCodigo} para el ticket #${ticket.ticket}.`, 'OK', { duration: 4000 });
+      return true;
     } catch {
       // silencioso: la asignación ya quedó confirmada, esto es un plus best-effort
+      return false;
     }
   }
 

@@ -164,7 +164,10 @@ export class Board implements OnDestroy {
     // Roster de mi equipo (para el toggle "Mi equipo"), solo si puedo verlo.
     if (this.data.usesQuarkus() && this.auth.puedeTransferir()) {
       this.transfer.miEquipoMiembros()
-        .then((ms) => this.teamHids.set(new Set(ms.map((m) => String(m.helpdeskUserId || '').trim().toUpperCase()).filter(Boolean))))
+        .then((ms) => {
+          this.teamHids.set(new Set(ms.map((m) => String(m.helpdeskUserId || '').trim().toUpperCase()).filter(Boolean)));
+          void this.completarTareasFaltantes(); // la gente de mi equipo puede llegar después que el tablero
+        })
         .catch(() => {});
     }
     // Publica los filtros de esta vista en el drawer del shell (una vez, tras el primer
@@ -211,6 +214,22 @@ export class Board implements OnDestroy {
     // sin esperar el sync de estados del HelpDesk (lento). Fire-and-forget → el sync sigue.
     this.focusCardFromRoute();
     await this.syncTicketStatuses();
+    void this.completarTareasFaltantes();
+  }
+
+  /**
+   * Crea la tarea que falta para los tickets ABIERTOS asignados en el HelpDesk (lo asignado allí
+   * directamente nunca tenía tarea y no aparecía en el tablero). Para mí y, si dirijo un equipo, para mi
+   * gente; el servicio lo hace una vez por persona y sesión. Si creó algo, re-sincroniza para ubicar cada
+   * tarjeta nueva en la columna de su estado.
+   */
+  private async completarTareasFaltantes(): Promise<void> {
+    if (!this.data.usesQuarkus() || !this.myId) return;
+    const n = await this.helpdesk.crearTareasFaltantes([this.myId, ...this.teamHids()]);
+    if (n > 0) {
+      this.snack.open(`Se agregaron ${n} tarea${n === 1 ? '' : 's'} de tickets asignados en el HelpDesk.`, 'OK', { duration: 5000 });
+      await this.syncTicketStatuses();
+    }
   }
 
   /** Deep-link desde Tickets ("en board"): resalta y abre la tarjeta de la tarea. */

@@ -293,8 +293,24 @@ public class LegacyWriteResource {
      */
     @POST
     @Path("/stories/desde-ticket-asignado")
-    @Transactional
     public Response crearTareaDesdeTicketAsignado(JsonNode body, @HeaderParam("X-Actor-Hid") String actorHid) {
+        // Cada intento en su PROPIA transacción y con reintento: el codigo TA-NNN sale del máximo actual, así
+        // que dos creaciones simultáneas (varios tableros completando tareas a la vez) chocan en
+        // `tarea_codigo_key`; y si chocan por el ticket (`uq_tarea_ticket_espejo`), el reintento ya encuentra la
+        // tarea y responde `creada:false`. Mismo criterio que POST /stories/stories.
+        RuntimeException last = null;
+        for (int intento = 0; intento < 4; intento++) {
+            try {
+                return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew()
+                        .call(() -> crearTareaDesdeTicketAsignadoTx(body, actorHid));
+            } catch (RuntimeException ex) {
+                last = ex;
+            }
+        }
+        throw last;
+    }
+
+    private Response crearTareaDesdeTicketAsignadoTx(JsonNode body, String actorHid) {
         String ticket = text(body, "ticket");
         if (ticket == null) {
             return bad("falta el número de ticket");
@@ -365,7 +381,7 @@ public class LegacyWriteResource {
             t.clienteNombre = text(body, "clienteNombre");
         }
         t.asignadoA = TransferenciaResource.usuarioBy(asignadoHid);
-        t.persist();
+        t.persistAndFlush(); // falla aquí (dentro del intento) si el codigo o el ticket chocan
         return Response.ok(Map.of("creada", true, "tareaCodigo", t.codigo, "board", board.codigo)).build();
     }
 

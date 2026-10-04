@@ -6,6 +6,30 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-03] Board: se crea la tarea que falta para los tickets ABIERTOS asignados en el HelpDesk
+
+**Problema (reportado por la dueña):** el tablero de un consultor (Carlos García) mostraba 1 tarjeta en
+certificación cuando tenía más. El Board muestra TAREAS, y solo se creaba tarea al asignar DESDE FitDesk o con
+"Crear tarea"; lo asignado directo en el HelpDesk nunca la tenía (Carlos: 38 de 43 tickets sin tarea).
+
+**Decisión de la dueña:** crearla automáticamente, solo para tickets abiertos (no finalizados).
+- `HelpdeskService.crearTareasFaltantes(hids)`: pide al HelpDesk los tickets asignados a cada persona con estado
+  NO finalizado (`esEstadoFinalizado`; paginado 100, tope 300) y crea la tarea que falta con
+  `crearTareaSiHaceFalta` (endpoint `/stories/desde-ticket-asignado`, idempotente + índice único V30). Una vez
+  por persona y sesión; de una en una.
+- Board: al cargar, para el usuario y (si dirige un equipo) para su gente; si creó algo, avisa y re-sincroniza
+  (cada tarjeta cae en la columna de su estado por `storyPatchFromEstado`).
+- **Bug encontrado al probar:** `/stories/desde-ticket-asignado` no reintentaba; creaciones simultáneas
+  chocaban en el código TA-NNN (máximo + 1) y fallaban. Ahora cada intento va en su propia transacción
+  (`QuarkusTransaction.requiringNew`) con hasta 4 reintentos, como POST `/stories/stories`.
+- **Confirmado:** toda asignación hecha desde FitDesk (Asignar/reasignar de la tarjeta y de la conversación,
+  "Editar ticket") crea la tarea si falta; el detalle de tarea, transferencias y reasignaciones ya parten de una
+  tarea existente.
+
+**Verificado en local contra el HelpDesk real (CEGG001):** 34 tickets abiertos → 34 con tarea (12 + 22 tras el
+fix de concurrencia), 0 duplicados; #33207/#33244/#33539 → En Certificación, Entregado → Entregado, Abierto →
+To Do. Sin desplegar (requiere backend + front).
+
 ### [2026-10-02] Desplegado a AWS (solo front): clientes completos, editar cliente, guardado en un PATCH y aviso de novedades
 
 Incluye `18485f4` (reuniones con todos los clientes), `5d18839` (tareas sin ticket con todos los clientes),
