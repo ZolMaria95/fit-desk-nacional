@@ -28,7 +28,17 @@ certificación cuando tenía más. El Board muestra TAREAS, y solo se creaba tar
 
 **Verificado en local contra el HelpDesk real (CEGG001):** 34 tickets abiertos → 34 con tarea (12 + 22 tras el
 fix de concurrencia), 0 duplicados; #33207/#33244/#33539 → En Certificación, Entregado → Entregado, Abierto →
-To Do. Sin desplegar (requiere backend + front).
+To Do.
+
+**Desplegado a AWS 2026-10-04:** back `a07825d` (reintento en desde-ticket-asignado; sin migración; backup
+`backup-pre-tareas-faltantes-20261004.dump` con 732 tareas) y front `c128c32` (commits solo en los clones del
+servidor; push a GitLab pendiente por token), bundle `main-WYY5A7A3.js`. El primer build falló al bajar la
+fuente de Google Fonts (red de Docker Desktop colgada; la dueña reinició Docker) — la guardia había dado OK
+sobre la imagen VIEJA: **verificar siempre que el ID de la imagen cambió antes de cargarla**. Login proxy 401,
+login real + Board OK (sesión cerrada). Rollback front: `b4312fe0e6da`.
+**Efecto al abrir el Board MSC001 (ADMIN, recorre su equipo):** se crearon **304 tareas** de tickets abiertos que
+no tenían (732 → 1036; DEFM001 72, APBM001 69, MSAO001 60, MARL001 48, …), 0 duplicados. Las de cada consultor
+fuera de ese equipo (p. ej. CEGG001) se crearán cuando él o su responsable abran el tablero.
 
 ### [2026-10-02] Desplegado a AWS (solo front): clientes completos, editar cliente, guardado en un PATCH y aviso de novedades
 
