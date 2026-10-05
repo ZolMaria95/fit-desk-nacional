@@ -6,6 +6,27 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-05] Las tareas creadas para tickets asignados nacen en la columna de su estado (+ 436 corregidas)
+
+**Problema (dueña):** TA-896 (#28784, ENTREGADO desde abril 2025) salía "To Do" en Reportes. `POST
+/stories/desde-ticket-asignado` (la creación automática de tareas faltantes del 2026-10-03) creaba SIEMPRE en
+To Do; la columna solo se corregía cuando alguien sincronizaba el tablero dueño de la tarea, y en tableros que
+nadie abre (SIERRA NORTE) se quedaba así. De 1329 tareas creadas así, 436 estaban en To Do con el ticket en
+otro estado.
+
+**Decisión:**
+- El front manda `estado` (el del ticket) y el backend elige columna, finalizado y "esperando cliente" con
+  `core/EstadoTicket` (espejo exacto de `statusFromTicketEstado`/`esEstadoFinalizado`; si cambia uno, cambiar el
+  otro). Sin `estado`, usa el último conocido del espejo. La respuesta trae `columna/aprobado/esperandoCliente`
+  y el front inserta la tarjeta en su columna.
+- **Datos (prod, con backup `backup-pre-columnas-20261005.dump`):** solo tareas creadas desde el 2026-10-04, en
+  To Do y con ticket cuyo estado del espejo mapea a otra columna: 338 ENTREGADO → Entregado, 29 EN PROCESO y 14
+  INFO PENDIENTE (esperando cliente) → In Progress, 29 INSTALADO PARA CERTIFICACIÓN → En Certificación, 26 NO
+  APLICA → Entregado finalizada. 436 actualizadas, 0 borradas, 0 restantes; simulado antes con ROLLBACK.
+
+**Desplegado a AWS 2026-10-05:** back `adfe2d0`, front `1b88628` (bundle `main-PFQWLVLS.js`, rollback front
+`d1a022570fc1`). **Estado:** vigente.
+
 ### [2026-10-04] Orden personal de estados en Tickets (Administración → "Orden de estados")
 
 **Pedido de la dueña:** cada responsable define en qué orden ve los tickets según su estado (número) y
