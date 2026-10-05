@@ -289,7 +289,9 @@ public class LegacyWriteResource {
      * Tablero destino: el equipo responsable del CLIENTE del ticket si está registrado
      * ({@link Cliente#equipoResponsable}); si no, el equipo del propio actor (quien asignó).
      * Idempotente: si el ticket ya tiene tarea, no crea otra.
-     * Body: {"ticket","clienteCodigo","clienteNombre","titulo","asignadoHid","asignadoNombre"}.
+     * Body: {"ticket","clienteCodigo","clienteNombre","titulo","asignadoHid","asignadoNombre","estado"}.
+     * La tarea nace en la columna que corresponde al ESTADO del ticket ({@link com.fitdesk.core.EstadoTicket}),
+     * no siempre en To Do: el estado llega en el body (o, si no, el último conocido del espejo).
      */
     @POST
     @Path("/stories/desde-ticket-asignado")
@@ -335,6 +337,12 @@ public class LegacyWriteResource {
         if (asignadoHid != null) {
             esp.asignadoHd = asignadoHid.toUpperCase();
         }
+        String estado = text(body, "estado");
+        if (estado != null) {
+            esp.estadoOrigen = estado;
+        } else {
+            estado = esp.estadoOrigen;
+        }
 
         // El front manda el `client_id` del HelpDesk (el ticket no conoce el "código" interno de
         // FitDesk): probar por codigo (slug) y, como respaldo, por helpdesk_client_id — mismo
@@ -369,7 +377,19 @@ public class LegacyWriteResource {
         Tarea t = new Tarea();
         t.codigo = TransferenciaResource.nuevoCodigoTarea();
         t.board = board;
-        t.workflowEstado = WorkflowEstado.<WorkflowEstado>find("activo = true order by orden").firstResult();
+        String columna = com.fitdesk.core.EstadoTicket.columna(estado);
+        t.workflowEstado = WorkflowEstado.<WorkflowEstado>find("codigo = ?1 and activo = true", columna).firstResult();
+        if (t.workflowEstado == null) {
+            t.workflowEstado = WorkflowEstado.<WorkflowEstado>find("activo = true order by orden").firstResult();
+        }
+        if (com.fitdesk.core.EstadoTicket.finalizado(estado)) {
+            t.aprobado = true;
+            t.fechaAprobacion = java.time.LocalDate.now();
+        }
+        if (com.fitdesk.core.EstadoTicket.esperandoCliente(estado)) {
+            t.esperandoCliente = true;
+            t.fechaEsperando = java.time.LocalDate.now();
+        }
         t.ticketEspejo = esp;
         if (titulo != null) {
             t.titulo = titulo.length() > 500 ? titulo.substring(0, 500) : titulo;
@@ -382,7 +402,9 @@ public class LegacyWriteResource {
         }
         t.asignadoA = TransferenciaResource.usuarioBy(asignadoHid);
         t.persistAndFlush(); // falla aquí (dentro del intento) si el codigo o el ticket chocan
-        return Response.ok(Map.of("creada", true, "tareaCodigo", t.codigo, "board", board.codigo)).build();
+        return Response.ok(Map.of("creada", true, "tareaCodigo", t.codigo, "board", board.codigo,
+                "columna", t.workflowEstado != null ? t.workflowEstado.codigo : "TODO",
+                "aprobado", t.aprobado, "esperandoCliente", t.esperandoCliente)).build();
     }
 
     private static String text(JsonNode n, String f) {

@@ -915,18 +915,29 @@ export class HelpdeskService {
           titulo: ticket.asunto || undefined,
           asignadoHid,
           asignadoNombre: asignadoName,
+          estado: ticket.estatus || undefined, // la tarea nace en la columna de su estado (no siempre To Do)
         }),
       });
       if (!r.ok) return false;
-      const d: { creada: boolean; tareaCodigo?: string; board?: string } = await r.json();
+      const d: {
+        creada: boolean; tareaCodigo?: string; board?: string;
+        columna?: string; aprobado?: boolean; esperandoCliente?: boolean;
+      } = await r.json();
       if (!d.creada || !d.tareaCodigo || !d.board) return false;
       // Ya se sabe todo lo necesario (lo mandamos nosotros): se inserta en la caché local sin
       // recargar, igual que hace `DataService.addStory()` tras confirmar su propio POST.
+      // Columna y flags tal como los dejó el backend según el estado del ticket.
+      const COLUMNA: Record<string, Story['status']> = {
+        TODO: 'todo', IN_PROGRESS: 'in_progress', EN_CERTIFICACION: 'review', ENTREGADO: 'done',
+      };
+      const hoy = new Date().toISOString().split('T')[0];
       const nueva: Story = {
-        id: d.tareaCodigo, board: d.board, status: 'todo', priority: 'media', description: '',
+        id: d.tareaCodigo, board: d.board, status: COLUMNA[d.columna ?? ''] ?? 'todo', priority: 'media', description: '',
         assignee: asignadoHid, client: ticket.clientId || null, clientName: ticket.clienteRaw || undefined,
-        ticket: ticket.ticket, dueDate: '', points: 1, progress: 0, approved: false, approvedDate: null,
-        waitingClient: false, waitingDate: null, title: ticket.asunto || undefined,
+        ticket: ticket.ticket, dueDate: '', points: 1, progress: 0,
+        approved: !!d.aprobado, approvedDate: d.aprobado ? hoy : null,
+        waitingClient: !!d.esperandoCliente, waitingDate: d.esperandoCliente ? hoy : null,
+        title: ticket.asunto || undefined, hdEstatus: ticket.estatus || undefined,
       };
       this.data.stories.update((list) => [...list, nueva]);
       if (!silencioso) this.snack.open(`Se creó la tarea ${d.tareaCodigo} para el ticket #${ticket.ticket}.`, 'OK', { duration: 4000 });
