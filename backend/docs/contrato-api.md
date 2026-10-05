@@ -128,7 +128,7 @@ un `4xx/5xx` que veas es del **HelpDesk**. Rutas que usa el frontend (no exhaust
     no romper tareas locales/reuniones sin cliente registrado). **Un PATCH sobre una tarea YA EXISTENTE
     nunca reasigna el tablero** por esta regla, aunque el body incluya `ticket`/`client` — solo aplica en
     el momento de crear. Ver `docs/decisiones.md` (2026-09-24) y `LegacyWriteService.applyFields()`.
-- **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `GET /tickets-gestionables`, `PUT /foto`.
+- **Perfil** `/api/legacy/perfil`: `GET /me`, `GET /fotos`, `GET /equipos-clientes`, `GET /tickets-gestionables`, `PUT /foto`, `GET/PUT /orden-estados` (orden personal de estados en Tickets: body `{estados:[{estado: ticket_status_id, orden: int≥1|null, oculto: bool}]}`; GET devuelve además `puedeEditar`; PUT solo ADMIN/RESPONSABLE_EQUIPO → 403; lista vacía = sin configuración).
   - `GET /tickets-gestionables` (+ `X-Actor-Hid`) → `{ global: bool, clientes: [..], asignables: [hid] }` (`asignables` = a quién asigna o reasigna como responsable de equipo: él + su gente; 2026-09-28): sobre qué tickets
     puede el actor editar/eliminar/reasignar (rol HELPDESK en su alcance; ADMIN = `global`). `clientes`
     trae el `client_id` del HelpDesk **y** el código (slug) FitDesk de cada cliente cubierto (los tickets

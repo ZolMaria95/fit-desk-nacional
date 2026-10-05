@@ -52,7 +52,7 @@ erDiagram
     EQUIPO ||--o{ TRANSFERENCIA : "origen/destino"
 ```
 
-- **Usuario** — identidad federada (`helpdesk_user_id`).
+- **Usuario** — identidad federada (`helpdesk_user_id`). Guarda además preferencias personales de la UI: tema, color, foto y **orden de estados** (en qué orden ve los tickets por estado y cuáles oculta; hoy solo lo definen responsables y ADMIN, V31).
 - **Rol** — qué puede hacer (catálogo abajo).
 - **Asignacion** — entidad clave: `(usuario, rol, alcance{tipo, ref}, desde, hasta)`. El alcance es polimórfico: Equipo | Cliente | Regional | Global.
 - **Regional** — agrupador geográfico (Cuenca, Quito, Guayaquil…).

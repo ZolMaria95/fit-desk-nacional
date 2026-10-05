@@ -285,3 +285,44 @@ mat-dialog-content { overflow-x: hidden; }
   .acciones-h, .grid thead th { background: #1a222b; }
   .swatch.clear { background: #131a21; }
 }
+
+// ─── Orden de estados ───
+.oe-grid {
+  .oe-col-orden { width: 110px; text-align: center; }
+  .oe-col-oculto { width: 80px; text-align: center; }
+  @media (max-width: 600px) {
+    th, td { padding-left: 10px; padding-right: 10px; }
+    .oe-col-orden { width: 64px; }
+    .oe-col-oculto { width: 56px; }
+    .oe-orden { width: 52px; padding: 0 4px; }
+  }
+}
+.oe-orden {
+  width: 70px; height: 34px; box-sizing: border-box; padding: 0 8px; text-align: center;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--mix-base, #fff);
+  color: var(--mat-sys-on-surface, #16202a); font: inherit; font-size: 0.92rem;
+  &:focus { outline: none; border-color: var(--brand, #048abf); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand, #048abf) 14%, transparent); }
+  &:disabled { opacity: 0.45; }
+}
+.oe-check { width: 18px; height: 18px; accent-color: var(--brand-dark, #0a6e93); cursor: pointer; &:disabled { cursor: default; } }
+.oe-preview {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 14px 20px;
+  border-top: 1px solid var(--line-soft); font-size: 0.86rem; color: var(--mat-sys-on-surface, #384552);
+}
+.oe-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 14px;
+  background: color-mix(in srgb, var(--brand, #048abf) 12%, var(--mix-base, #fff)); color: var(--brand-dark, #0390bc);
+  b { font-weight: 800; }
+  &.oe-chip-resto { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+}
+.oe-ocultos {
+  flex-basis: 100%; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.82rem;
+  mat-icon { font-size: 17px; width: 17px; height: 17px; flex: none; }
+}
+.oe-actions {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 20px;
+  border-top: 1px solid var(--line-soft);
+  .btn-outline { height: 38px; padding: 0 14px; border-radius: 20px; display: inline-flex; align-items: center; gap: 6px;
+    font: inherit; font-weight: 600; font-size: 0.88rem; cursor: pointer; mat-icon { font-size: 18px; width: 18px; height: 18px; } }
+  button:disabled { opacity: 0.5; cursor: default; }
+}

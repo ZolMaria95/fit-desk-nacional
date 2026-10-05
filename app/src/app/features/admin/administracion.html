@@ -327,5 +327,86 @@
         </aside>
       </div>
     </mat-tab>
+
+    <!-- ══ Orden de estados (personal) ══ -->
+    <mat-tab>
+      <ng-template mat-tab-label><mat-icon>low_priority</mat-icon> Orden de estados</ng-template>
+      <div class="admin-layout">
+        <div class="admin-main">
+          <div class="admin-card">
+            <div class="card-head">
+              <div class="card-head-text">
+                <h2 class="card-title">Orden de estados</h2>
+                <p class="card-sub">Define en qué orden ves tus tickets según su estado. Es personal: solo cambia tu vista de Tickets.</p>
+              </div>
+            </div>
+
+            <div class="a-table-wrap">
+              <table class="grid oe-grid">
+                <thead><tr>
+                  <th>Estado</th>
+                  <th class="oe-col-orden">Orden</th>
+                  <th class="oe-col-oculto">Oculto</th>
+                </tr></thead>
+                <tbody>
+                  @for (f of oeFilas(); track f.id) {
+                    <tr [class.fila-inactiva]="f.oculto">
+                      <td>{{ f.nombre }}</td>
+                      <td class="oe-col-orden">
+                        <input #ordenIn class="oe-orden" type="text" inputmode="numeric" maxlength="2" autocomplete="off"
+                               [attr.aria-label]="'Orden de ' + f.nombre"
+                               [value]="f.orden ?? ''" [disabled]="f.oculto || !oePuedeEditar()"
+                               placeholder="—"
+                               (change)="oeSetOrden(f.id, ordenIn)" (keydown.enter)="ordenIn.blur()" />
+                      </td>
+                      <td class="oe-col-oculto">
+                        <input type="checkbox" class="oe-check" [attr.aria-label]="'Ocultar ' + f.nombre"
+                               [checked]="f.oculto" [disabled]="!oePuedeEditar()"
+                               (change)="oeSetOculto(f.id, $any($event.target).checked)" />
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr><td colspan="3" class="empty-row">Cargando el catálogo de estados del HelpDesk…</td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+
+            <div class="oe-preview">
+              <strong>Así verás tus tickets:</strong>
+              @for (f of oeConOrden(); track f.id; let i = $index) {
+                <span class="oe-chip"><b>{{ f.orden }}</b> {{ f.nombre }}</span>
+              }
+              <span class="oe-chip oe-chip-resto">{{ oeConOrden().length ? 'luego el resto' : 'todos' }} por última modificación</span>
+              @if (oeOcultos().length) {
+                <div class="oe-ocultos"><mat-icon>visibility_off</mat-icon> Ocultos: {{ oeOcultos().length }} — @for (f of oeOcultos(); track f.id; let last = $last) {{{ f.nombre }}@if (!last) {, }}</div>
+              }
+            </div>
+
+            @if (oePuedeEditar()) {
+              <div class="oe-actions">
+                <button type="button" class="btn-outline" (click)="oeRestablecer()" [disabled]="oeGuardando()"><mat-icon>restart_alt</mat-icon> Restablecer</button>
+                @if (oeSucio()) {
+                  <button type="button" class="btn-outline" (click)="oeDescartar()" [disabled]="oeGuardando()"><mat-icon>undo</mat-icon> Descartar</button>
+                }
+                <button type="button" class="btn-primary" (click)="oeGuardar()" [disabled]="!oeSucio() || oeGuardando()"><mat-icon>save</mat-icon> {{ oeGuardando() ? 'Guardando…' : 'Guardar' }}</button>
+              </div>
+            } @else {
+              <div class="card-foot">Solo los responsables de equipo pueden definir su orden de estados.</div>
+            }
+          </div>
+        </div>
+
+        <aside class="admin-aside">
+          <div class="help-card">
+            <h3 class="help-h"><span class="help-h-ic i-info"><mat-icon>info</mat-icon></span> ¿Cómo funciona?</h3>
+            <p class="help-lead">En Tickets verás primero los estados con número (1, 2, 3…) y después el resto. Dentro de cada estado, el más reciente arriba.</p>
+            <div class="help-item"><span class="help-ic i-ok"><mat-icon>format_list_numbered</mat-icon></span><div><strong>Orden</strong><span>Los números van seguidos (1, 2, 3…): escribe el que toca. Para reordenar, vacía el número y vuelve a asignarlo.</span></div></div>
+            <div class="help-item"><span class="help-ic i-edit"><mat-icon>visibility_off</mat-icon></span><div><strong>Oculto</strong><span>No aparece en tus listas, salvo que lo elijas en el filtro Estatus.</span></div></div>
+            <div class="help-note"><mat-icon>sort</mat-icon><div><strong>En Tickets</strong><span>Se aplica con "Ordenar por: Por estado (mi orden)", que queda por defecto al guardar.</span></div></div>
+          </div>
+        </aside>
+      </div>
+    </mat-tab>
   </mat-tab-group>
 </div>

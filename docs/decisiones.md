@@ -6,6 +6,52 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-04] Orden personal de estados en Tickets (Administración → "Orden de estados")
+
+**Pedido de la dueña:** cada responsable define en qué orden ve los tickets según su estado (número) y
+qué estados oculta; dentro de cada estado y para los estados sin número manda la última modificación; los
+estados con número van primero. **Decisiones:** personal (no por equipo; luego se abrirá a todos), aplica a
+**todas las pestañas de Tickets**, y un estado oculto no aparece salvo que se elija en el filtro Estatus.
+
+- **Backend:** V31 `usuario.orden_estados` (JSON `[{estado, orden, oculto}]`, estado = `ticket_status_id`);
+  `GET/PUT /api/legacy/perfil/orden-estados`. PUT solo ADMIN o RESPONSABLE_EQUIPO (403 si no; abrirlo a todos =
+  `PerfilResource.puedeOrdenarEstados` → true). Guarda solo los estados con número u ocultos; lista vacía = sin
+  configuración.
+- **Pestaña** "Orden de estados" en Administración: los 20 estados del catálogo en orden alfabético, número u
+  "Oculto", vista previa, Guardar (síncrono) / Descartar / Restablecer. Se permiten números repetidos (empatan).
+- **Tickets:** con configuración aparece "Ordenar por: Por estado (mi orden)" y es el orden por defecto.
+  **Paginación server-side por grupos** (`HelpdeskService.loadPorGrupos`): una consulta por número de orden
+  (1, 2, …) y otra para el resto, todas `modified_date_order=desc`; se pide el `total` de cada grupo (limit=1)
+  y se traen solo los tramos de la página. Se descartó cargar todo y paginar en el cliente (como "Sin
+  asignar"): "Todos los clientes" tiene ~4900 abiertos, más que el tope de 4000, y tardaba ~9 s (ahora 0,6 s).
+  "Sin asignar" sigue cargando todo y ordena en el cliente. Los ocultos salen de los estados implícitos de
+  cada pestaña (`sinOcultos`), no del filtro Estatus explícito. Búsqueda por N° y por palabra: sin cambios.
+- **Bug encontrado al probar:** el re-consultado automático de la pestaña Equipo (`autoRequeryEquipo`) lanzaba
+  una carga antes de la consulta inicial; como `HelpdeskService` descarta cargas concurrentes, la buena se
+  perdía. Ahora espera a la consulta inicial (`listo`).
+
+**Verificado en local contra el HelpDesk real** (responsable de CUENCA): ABIERTO 1 · COTIZACIÓN ENVIADA 2 ·
+CERRADO POR EL CLIENTE y EN STAND BY ocultos → Equipo 1126 (99 ABIERTO, luego 6 COTIZACIÓN ENVIADA, luego el
+resto por modificación), página 7 cruza de ABIERTO a COTIZACIÓN ENVIADA, Todos los clientes 4901 exactos;
+eligiendo EN STAND BY en Estatus aparece al final; sin configuración, igual que antes. 390 px sin desborde.
+
+**Ajuste tras la revisión de la dueña (mismo día):** el Orden es un campo de texto digitable y los números van
+**seguidos y sin repetir** (antes se permitían empates). Solo se acepta el que toca (siguiente al último); un
+número ya usado avisa "El siguiente orden es el 3; el 2 lo usa el estado APROBADO" y uno mayor "El orden que
+toca es el 3" (no se aplica, el campo vuelve a su valor). Al vaciar u ocultar un estado, los siguientes bajan
+uno (sin huecos); para reordenar se vacía y se vuelve a asignar. Lo guardado con empates/huecos se renumera al
+cargar. Solo frontend; el backend sigue aceptando cualquier orden ≥ 1.
+
+**Segundo ajuste (dueña):** para el responsable (o ADMIN) que **ya guardó** su tabla, Equipo / Asignados a mí /
+Todos los clientes muestran **todos los estados menos sus ocultos**: se quita el escondido fijo de los
+finalizados (`esEstadoFinalizado`). Había puesto APROBADO = 2 y no aparecía. Sin tabla guardada, como siempre;
+"Sin asignar" no cambia (sin finalizados ni ENTREGADO, para no superar el tope de 4000 de su carga completa).
+`tickets.ts` → `soloTabla` + `todosStatusIds`. Verificado con la tabla de la dueña: Equipo 6921 tickets (16
+estados, con APROBADO, sin sus 4 ocultos), Todos los clientes 32387 (paginado por grupos, sin tope), Sin asignar
+203 como antes.
+
+**Estado:** vigente. Pendiente de revisión de la dueña en local y deploy (V31).
+
 ### [2026-10-03] Board: se crea la tarea que falta para los tickets ABIERTOS asignados en el HelpDesk
 
 **Problema (reportado por la dueña):** el tablero de un consultor (Carlos García) mostraba 1 tarjeta en

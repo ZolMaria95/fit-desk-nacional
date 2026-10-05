@@ -44,6 +44,10 @@ public class Usuario extends PanacheEntityBase {
     @Column(length = 10)
     public String tema;
 
+    /** Orden personal de estados en Tickets (V31): JSON [{estado, orden, oculto}]. NULL = sin configurar. */
+    @Column(name = "orden_estados", columnDefinition = "text")
+    public String ordenEstados;
+
     public boolean activo = true;
 
     @Column(name = "creado_en")

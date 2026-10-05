@@ -33,6 +33,7 @@ import { TIPO_NOMBRE } from './helpdesk.constants';
 import { Ticket, equipoClientIdsDe } from './ticket-utils';
 import { NuevosTicketsService } from '../../core/services/nuevos-tickets.service';
 import { esEstadoFinalizado } from '../../core/helpdesk-estados';
+import { OrdenEstadosService } from '../../core/services/orden-estados.service';
 
 // Orden de tabs: Equipo (default), Sin asignar, Asignados a mí, Todos los clientes.
 type Tab = 'equipo' | 'sinasignar' | 'asignados' | 'generales';
@@ -64,6 +65,8 @@ export class Tickets implements OnDestroy {
   private readonly snack = inject(MatSnackBar);
   private readonly shell = inject(ShellService);
   private readonly perfil = inject(PerfilService);
+  /** Orden personal de estados (Administración → "Orden de estados"). */
+  private readonly ordenEst = inject(OrdenEstadosService);
   private readonly router = inject(Router);
   private readonly search = inject(SearchService);
   private readonly nuevosTickets = inject(NuevosTicketsService);
@@ -96,6 +99,9 @@ export class Tickets implements OnDestroy {
   readonly equipoSel = signal('');
   /** Firma (tab + clientes del equipo) de la ÚLTIMA consulta → el auto-requery no duplica. */
   private ultimoEquipoKey = '';
+  /** ¿Ya se hizo la consulta inicial (catálogos + orden de estados cargados)? Antes, el auto-requery no
+   *  consulta: su carga paginada ganaba la carrera y bloqueaba la carga completa de "mi orden". */
+  private listo = false;
   readonly filterClientes = signal<string[]>([]); // client_ids (server-side, multi); [] = todos
   readonly filterEstatus = signal<string[]>([]); // nombres de estado (server-side, multi); [] = todos
   readonly filterAsignado = signal(''); // assigned_user_id (server-side); '' = todos
@@ -111,17 +117,25 @@ export class Tickets implements OnDestroy {
   readonly sortField = signal('modified_date');
   readonly sortDir = signal<'asc' | 'desc'>('desc');
   readonly sortValue = computed(() => `${this.sortField()}|${this.sortDir()}`);
-  /** Opciones de orden (el `value` es `campo|dir`, como lo espera `onSortChange`). */
-  readonly sortOptions: { value: string; label: string }[] = [
+  /** Opciones de orden (el `value` es `campo|dir`, como lo espera `onSortChange`). "Por estado (mi orden)"
+   *  solo aparece si el usuario configuró su orden de estados; la aplica FitDesk, no el HelpDesk. */
+  readonly sortOptions = computed<{ value: string; label: string }[]>(() => [
+    ...(this.ordenEst.activo() ? [{ value: 'mi_orden|asc', label: 'Por estado (mi orden)' }] : []),
     { value: 'modified_date|desc', label: 'Modificación (recientes)' },
     { value: 'modified_date|asc', label: 'Modificación (antiguos)' },
     { value: 'entry_date|desc', label: 'Ingreso (recientes)' },
     { value: 'entry_date|asc', label: 'Ingreso (antiguos)' },
     { value: 'priority|asc', label: 'Prioridad (alta primero)' },
     { value: 'priority|desc', label: 'Prioridad (baja primero)' },
-  ];
+  ]);
   /** Etiqueta del orden activo (para mostrarla en el botón del menú). */
-  readonly sortLabel = computed(() => this.sortOptions.find((o) => o.value === this.sortValue())?.label ?? '');
+  /** ¿Ordenado por el orden personal de estados? (todo el conjunto se carga y se ordena/pagina aquí). */
+  readonly porMiOrden = computed(() => this.sortField() === 'mi_orden' && this.ordenEst.activo());
+  /** Orden que se pide al HelpDesk: con "mi orden" se pide por modificación (el sub-orden). */
+  private apiSort(): { field: string; dir: 'asc' | 'desc' } {
+    return this.porMiOrden() ? { field: 'modified_date', dir: 'desc' } : { field: this.sortField(), dir: this.sortDir() };
+  }
+  readonly sortLabel = computed(() => this.sortOptions().find((o) => o.value === this.sortValue())?.label ?? '');
 
   // Paginación server-side: cada página = una consulta con su offset; `total` del API.
   readonly pageIndex = signal(0);
@@ -166,7 +180,18 @@ export class Tickets implements OnDestroy {
     // Espera los catálogos de clientes Y estados (para mapear válidos→client_id y
     // no-finalizados→ticket_status_id) y luego consulta fresca. Así Pendientes filtra
     // TODO server-side desde la primera carga. El botón ↻ vuelve a llamar a refresh().
-    Promise.all([this.hd.getClients(), this.hd.getTicketStatuses(), this.perfil.cargarEquiposRevisar()]).then(() => {
+    Promise.all([
+      this.hd.getClients(),
+      this.hd.getTicketStatuses(),
+      this.perfil.cargarEquiposRevisar(),
+      this.ordenEst.cargar(),
+    ]).then(() => {
+      // Con orden de estados configurado, la vista arranca ordenada por él.
+      if (this.ordenEst.activo()) {
+        this.sortField.set('mi_orden');
+        this.sortDir.set('asc');
+      }
+      this.listo = true;
       this.refresh();
       // Búsqueda global lanzada desde el shell ANTES de montar esta vista (navegación).
       const pend = this.search.takePending();
@@ -193,6 +218,7 @@ export class Tickets implements OnDestroy {
   /** Re-consulta cuando los clientes del equipo llegan tarde (1ª carga con backend frío). No pisa un
    *  filtro explícito del usuario ni duplica una consulta ya hecha con ese mismo set (`ultimoEquipoKey`). */
   private autoRequeryEquipo(ids: string[], tab: Tab): void {
+    if (!this.listo) return;                                       // la consulta inicial aún no salió
     if (tab !== 'equipo' && tab !== 'sinasignar') return;         // solo las tabs que usan el filtro de equipo
     if (this.filterClientes().length || this.filterTicket() || this.filterTexto()) return; // filtro explícito
     if (!ids.length) return;                                       // aún cargando (o equipo sin clientes)
@@ -235,6 +261,18 @@ export class Tickets implements OnDestroy {
   private readonly pendingStatusIds = computed(() =>
     this.statusNames()
       .filter((n) => !esEstadoFinalizado(n))
+      .map((n) => this.hd.statusIdOf(n))
+      .filter((id): id is string => !!id),
+  );
+
+  /** Responsable (o ADMIN) que ya guardó su orden de estados: en Equipo / Asignados a mí / Todos los clientes
+   *  lo que ve depende SOLO de su tabla (todos los estados menos sus ocultos, finalizados incluidos). Sin tabla
+   *  guardada, como siempre (sin finalizados). "Sin asignar" no cambia. */
+  private readonly soloTabla = computed(() => this.ordenEst.puedeEditar() && this.ordenEst.activo());
+
+  /** ticket_status_id de TODOS los estados del catálogo. */
+  private readonly todosStatusIds = computed(() =>
+    this.statusNames()
       .map((n) => this.hd.statusIdOf(n))
       .filter((id): id is string => !!id),
   );
@@ -283,14 +321,14 @@ export class Tickets implements OnDestroy {
     return this.tab() === 'sinasignar' ? page.filter((t) => !t.usuarioAsignado) : page;
   });
 
-  /** ¿"Sin asignar" paginado EN CLIENTE? (todo el equipo cargado; se filtra/pagina aquí). */
-  readonly esSinAsignarLocal = computed(() => this.tab() === 'sinasignar' && !this.filterTicket() && !this.filterTexto());
+  /** ¿Paginado EN CLIENTE? Solo "Sin asignar" (todo el equipo cargado; se filtra aquí). */
+  readonly esPaginaLocal = computed(() => this.tab() === 'sinasignar' && !this.filterTicket() && !this.filterTexto());
 
   /** Total (denominador de "X de Y"). Número → 1/0. Sin asignar (cliente) → nº de sin
    *  asignar. Resto → total server-side del API. */
   readonly tabTotal = computed(() => {
     if (this.filterTicket()) return this.remoteResult() ? 1 : 0;
-    if (this.esSinAsignarLocal()) return this.rows().length;
+    if (this.esPaginaLocal()) return this.rows().length;
     return this.hd.total();
   });
   /** ¿Hay datos cargados? (para el estado vacío). */
@@ -338,7 +376,24 @@ export class Tickets implements OnDestroy {
 
   // El orden lo aplica el API (sortField/sortDir) y la búsqueda por número va
   // server-side vía base(): aquí no se filtra nada en memoria.
-  readonly rows = computed<Ticket[]>(() => this.base());
+  // Excepción: "Por estado (mi orden)" ordena por la posición del estado y, dentro de cada estado (y para los
+  // estados sin posición, que van después), por última modificación (más reciente arriba). La página ya viene
+  // en ese orden (`loadPorGrupos`); aquí se re-aplica para "Sin asignar" (todo cargado) y tras cambios en vivo.
+  readonly rows = computed<Ticket[]>(() => {
+    const base = this.base();
+    if (!this.porMiOrden() || this.filterTicket() || this.filterTexto()) return base;
+    this.statusNames(); // el id de cada estado sale del catálogo: re-ordenar si llega tarde
+    const rango = (t: Ticket) => this.ordenEst.rango(this.hd.statusIdOf(t.estatus));
+    const mod = (t: Ticket) => {
+      const ms = Date.parse(t.fechaMod);
+      return Number.isNaN(ms) ? 0 : ms;
+    };
+    return [...base].sort((a, b) => {
+      const ra = rango(a), rb = rango(b);
+      if (ra !== rb) return ra < rb ? -1 : 1;
+      return mod(b) - mod(a);
+    });
+  });
 
   readonly hasFilters = computed(
     () =>
@@ -396,7 +451,7 @@ export class Tickets implements OnDestroy {
   // refinamiento de operativos.
   readonly pagedRows = computed<Ticket[]>(() => {
     // Sin asignar: la página se recorta EN CLIENTE (todo el equipo ya está cargado).
-    if (this.esSinAsignarLocal()) {
+    if (this.esPaginaLocal()) {
       const start = this.pageIndex() * this.pageSize();
       return this.rows().slice(start, start + this.pageSize());
     }
@@ -427,13 +482,13 @@ export class Tickets implements OnDestroy {
         .filter((id): id is string => !!id);
       if (ids.length) f.statusIds = ids;
     } else if (this.tab() === 'equipo' || this.tab() === 'asignados' || this.tab() === 'generales') {
-      // Mismo criterio en las 4 tabs salvo "Sin asignar" (que tiene su propia exclusión extra):
-      // sin filtro explícito de Estatus, oculta APROBADO/CERRADO/NO APLICA por defecto.
-      const ids = this.pendingStatusIds();
+      // Sin filtro explícito de Estatus: el responsable con orden de estados guardado ve todo menos sus ocultos
+      // (`soloTabla`); el resto, como siempre, sin los finalizados (APROBADO/CERRADO/NO APLICA).
+      const ids = this.sinOcultos(this.soloTabla() ? this.todosStatusIds() : this.pendingStatusIds());
       if (ids.length) f.statusIds = ids;
     } else if (this.tab() === 'sinasignar') {
       // Sin asignar: además de excluir finalizados, excluye ENTREGADO.
-      const ids = this.sinAsignarStatusIds();
+      const ids = this.sinOcultos(this.sinAsignarStatusIds());
       if (ids.length) f.statusIds = ids;
     }
     // Filtro explícito por asignado (server-side) → ese usuario; si no, la tab "Asignados a mí" usa mi id.
@@ -447,6 +502,16 @@ export class Tickets implements OnDestroy {
       f.typeId = this.filterTipo();
     }
     return f;
+  }
+
+  /** Quita los estados que el usuario ocultó en su orden de estados (solo en los filtros IMPLÍCITOS de la
+   *  pestaña: si elige un estado oculto en el filtro Estatus, lo ve). Si los ocultara TODOS, la lista
+   *  vacía equivaldría a "sin filtro" en el API → se manda un id imposible para que no traiga nada. */
+  private sinOcultos(ids: string[]): string[] {
+    const ocultos = this.ordenEst.ocultos();
+    if (!ocultos.size) return ids;
+    const out = ids.filter((id) => !ocultos.has(id));
+    return out.length || !ids.length ? out : ['__ninguno__'];
   }
 
   /** Solo los filtros elegidos a mano (sin los implícitos de la tab) → acotan la búsqueda por palabra. */
@@ -477,7 +542,7 @@ export class Tickets implements OnDestroy {
         this.filterTexto(),
         this.pageIndex(),
         this.pageSize(),
-        { field: this.sortField(), dir: this.sortDir() },
+        this.apiSort(),
         this.buildFiltrosExplicitos(),
       );
       return;
@@ -485,13 +550,19 @@ export class Tickets implements OnDestroy {
     // "Sin asignar": el API no filtra por "sin asignado" → cargamos TODO el equipo (todas
     // las páginas) y la vista filtra/pagina en cliente (12/página con conteo correcto).
     if (this.tab() === 'sinasignar') {
-      await this.hd.loadAllFiltered(this.buildFilters(), { field: this.sortField(), dir: this.sortDir() });
+      await this.hd.loadAllFiltered(this.buildFilters(), this.apiSort());
       return;
     }
-    await this.hd.loadFiltered(this.buildFilters(), this.pageIndex(), this.pageSize(), {
-      field: this.sortField(),
-      dir: this.sortDir(),
-    });
+    // "Por estado (mi orden)": una consulta por grupo de estados (1, 2, …, resto), paginada server-side.
+    const f = this.buildFilters();
+    if (this.porMiOrden() && f.statusIds?.length) {
+      const conOrden = this.ordenEst.grupos();
+      const enGrupo = new Set(conOrden.flat());
+      const resto = f.statusIds.filter((id) => !enGrupo.has(id));
+      await this.hd.loadPorGrupos(f, [...conOrden, resto], this.pageIndex(), this.pageSize());
+      return;
+    }
+    await this.hd.loadFiltered(f, this.pageIndex(), this.pageSize(), this.apiSort());
   }
 
   /** Cambio de orden (campo|dir desde el dropdown) → reconsulta desde la página 0. */
@@ -529,7 +600,7 @@ export class Tickets implements OnDestroy {
     this.shell.scrollTop();
     // Sin asignar: todo el equipo ya está cargado → la página se recorta en cliente
     // (pagedRows), sin re-consultar al API.
-    if (this.esSinAsignarLocal()) return;
+    if (this.esPaginaLocal()) return;
     await this.query();
   }
 

@@ -422,6 +422,63 @@ export class HelpdeskService {
     }
   }
 
+  /**
+   * Una página de tickets ordenada por GRUPOS de estado (orden personal de estados): primero todos los del
+   * grupo 1, luego los del 2… y dentro de cada grupo por modificación desc. Cada grupo es una consulta
+   * server-side (`ticket_status_id` = sus estados ∩ los del filtro), así la paginación es exacta y sin
+   * tope: 1) se pide el `total` de cada grupo (limit=1, en paralelo); 2) se traen solo los tramos de los
+   * grupos que caen en la página. `f.statusIds` = estados permitidos (la pestaña o el filtro Estatus).
+   */
+  async loadPorGrupos(f: TicketFilters, grupos: string[][], pageIndex: number, pageSize: number): Promise<void> {
+    if (this.loading()) return;
+    this.loading.set(true);
+    this.setStatus('Cargando tickets...', 'loading');
+    try {
+      const permitidos = f.statusIds?.length ? new Set(f.statusIds) : null;
+      const gs = grupos
+        .map((g) => (permitidos ? g.filter((id) => permitidos.has(id)) : g))
+        .filter((g) => g.length);
+      const fetchGrupo = (g: string[], limit: number, offset: number) => {
+        const p = new HttpParams()
+          .set('limit', String(limit))
+          .set('offset', String(offset))
+          .set('modified_date_order', 'desc');
+        return firstValueFrom(
+          this.http.get<any>(`${this.base}/tickets/tickets`, { params: this.conFiltros(p, { ...f, statusIds: g, statusId: undefined }) }),
+        );
+      };
+      const totales = (await Promise.all(gs.map((g) => fetchGrupo(g, 1, 0)))).map((d) => Number(d?.total ?? 0));
+      const total = totales.reduce((a, b) => a + b, 0);
+      // Tramos de la página: offset global → (grupo, offset dentro del grupo, cuántos).
+      let saltar = pageIndex * pageSize;
+      let faltan = pageSize;
+      const tramos: { g: string[]; offset: number; limit: number }[] = [];
+      gs.forEach((g, i) => {
+        if (faltan <= 0) return;
+        if (saltar >= totales[i]) { saltar -= totales[i]; return; }
+        const limit = Math.min(faltan, totales[i] - saltar);
+        tramos.push({ g, offset: saltar, limit });
+        faltan -= limit;
+        saltar = 0;
+      });
+      const datos = await Promise.all(tramos.map((t) => fetchGrupo(t.g, t.limit, t.offset)));
+      const items: Ticket[] = datos
+        .flatMap((d) => d?.items || [])
+        .map(mapTicket)
+        .map(evaluarFechas)
+        .map(clasificar);
+      this._tickets.set(items);
+      this.reconciliarAsignados(items.map((t) => ({ ticket: t.ticket, asignado: t.usuarioAsignado })));
+      this._total.set(total);
+      this.hasMore.set((pageIndex + 1) * pageSize < total);
+      this.setStatus(`✓ ${items.length} cargados de ${total} del sistema`, 'ok');
+    } catch (err: any) {
+      this.setStatus(mensajeError(err), 'error');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
   /** Filtros server-side comunes a `/tickets/tickets` y `/tickets/tickets/search` (el search acepta
    *  los mismos parámetros, verificado 2026-09-28). Multi-cliente y multi-estado van como LISTA
    *  separada por comas en un solo parámetro (repetirlo NO sirve: el API se queda con uno). */

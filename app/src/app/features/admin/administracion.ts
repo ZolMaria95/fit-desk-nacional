@@ -8,6 +8,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
+import { OrdenEstado, OrdenEstadosService } from '../../core/services/orden-estados.service';
 import { AdminApiService, Asignacion, Cliente, Equipo, Regional, Rol } from './admin-api.service';
 import { CrearAsignacionDialog } from './crear-asignacion-dialog';
 import { CrearClienteDialog } from './crear-cliente-dialog';
@@ -32,6 +33,7 @@ export class Administracion {
   private readonly auth = inject(AuthService);
   private readonly snack = inject(MatSnackBar);
   private readonly dialog = inject(MatDialog);
+  private readonly ordenEst = inject(OrdenEstadosService);
 
   /** Solo un ADMIN puede tocar asignaciones de rol ADMIN (para gatear chips/acciones). */
   readonly puedeAsignarAdmin = this.auth.puedeAsignarAdmin;
@@ -66,6 +68,140 @@ export class Administracion {
       return api && api !== hid ? { ...e, responsableNombre: api } : e;
     });
   });
+
+  // ── Orden de estados (personal): en qué orden ve el usuario los tickets por estado en Tickets ──
+  /** Borrador editable: ticket_status_id → {orden, oculto}. Se compara con lo guardado (`ordenEst`). */
+  readonly oeBorrador = signal<Record<string, { orden: number | null; oculto: boolean }>>({});
+  readonly oeGuardando = signal(false);
+  readonly oePuedeEditar = this.ordenEst.puedeEditar;
+  /** Todos los estados del catálogo del HelpDesk, en orden alfabético, con su valor del borrador. */
+  readonly oeFilas = computed(() => {
+    const b = this.oeBorrador();
+    return this.hd
+      .statusNames()
+      .map((nombre) => ({ nombre, id: this.hd.statusIdOf(nombre) ?? '' }))
+      .filter((f) => !!f.id)
+      .sort((a, z) => a.nombre.localeCompare(z.nombre, 'es'))
+      .map((f) => ({ ...f, orden: b[f.id]?.orden ?? null, oculto: !!b[f.id]?.oculto }));
+  });
+  /** Lo que se mandaría al guardar (solo estados con orden u ocultos). */
+  private readonly oeEnvio = computed<OrdenEstado[]>(() =>
+    this.oeFilas()
+      .filter((f) => f.oculto || f.orden != null)
+      .map((f) => ({ estado: f.id, orden: f.oculto ? null : f.orden, oculto: f.oculto })),
+  );
+  /** ¿Hay cambios sin guardar? */
+  readonly oeSucio = computed(() => {
+    const clave = (l: OrdenEstado[]) =>
+      l.map((e) => `${e.estado}:${e.oculto ? 'x' : e.orden}`).sort().join('|');
+    return clave(this.oeEnvio()) !== clave(this.ordenEst.estados());
+  });
+  /** Vista previa: los estados con orden (por número, empates alfabéticos) y los ocultos. */
+  readonly oeConOrden = computed(() =>
+    this.oeFilas()
+      .filter((f) => !f.oculto && f.orden != null)
+      .sort((a, z) => a.orden! - z.orden! || a.nombre.localeCompare(z.nombre, 'es')),
+  );
+  readonly oeOcultos = computed(() => this.oeFilas().filter((f) => f.oculto));
+
+  /** Copia lo guardado al borrador (al cargar y al descartar cambios). Los números quedan consecutivos
+   *  (1, 2, 3…): si lo guardado tuviera repetidos o huecos, se renumera respetando el orden (empate → A-Z). */
+  oeDescartar(): void {
+    const b: Record<string, { orden: number | null; oculto: boolean }> = {};
+    for (const e of this.ordenEst.estados()) b[e.estado] = { orden: e.orden, oculto: e.oculto };
+    const nombre = (id: string) => this.hd.statusNames().find((n) => this.hd.statusIdOf(n) === id) ?? id;
+    Object.keys(b)
+      .filter((id) => !b[id].oculto && b[id].orden != null)
+      .sort((x, y) => b[x].orden! - b[y].orden! || nombre(x).localeCompare(nombre(y), 'es'))
+      .forEach((id, i) => (b[id] = { orden: i + 1, oculto: false }));
+    this.oeBorrador.set(b);
+  }
+
+  /** Quita el número de un estado y baja uno a los que iban después (sin huecos). */
+  private oeQuitarOrden(b: Record<string, { orden: number | null; oculto: boolean }>, id: string): void {
+    const previo = b[id]?.orden;
+    if (previo == null) return;
+    for (const [k, v] of Object.entries(b)) {
+      if (k !== id && v.orden != null && v.orden > previo) b[k] = { ...v, orden: v.orden - 1 };
+    }
+  }
+
+  private oeAviso(msg: string): void {
+    this.snack.open(msg, 'OK', { duration: 5000 });
+  }
+
+  /**
+   * Número digitado para un estado (al confirmar: Enter o salir del campo). Los números van seguidos: solo
+   * se acepta el que toca (el siguiente al último); uno ya usado o uno mayor se rechaza con aviso y el campo
+   * vuelve a su valor. Vacío = quitar el número (los siguientes bajan uno).
+   */
+  oeSetOrden(id: string, input: HTMLInputElement): void {
+    const b = { ...this.oeBorrador() };
+    const actual = b[id]?.orden ?? null;
+    const texto = String(input.value ?? '').trim();
+    const restaurar = () => (input.value = actual != null ? String(actual) : '');
+    if (!texto) {
+      this.oeQuitarOrden(b, id);
+      b[id] = { orden: null, oculto: false };
+      this.oeBorrador.set(b);
+      return;
+    }
+    if (!/^\d+$/.test(texto) || Number(texto) < 1) {
+      restaurar();
+      this.oeAviso('Escribe un número desde 1.');
+      return;
+    }
+    const n = Number(texto);
+    if (n === actual) {
+      restaurar(); // p. ej. "02" → "2"
+      return;
+    }
+    const usados = Object.entries(b).filter(([k, v]) => k !== id && !v.oculto && v.orden != null);
+    const siguiente = usados.length + 1;
+    const dueno = usados.find(([, v]) => v.orden === n);
+    if (dueno) {
+      restaurar();
+      const nombre = this.hd.statusNames().find((x) => this.hd.statusIdOf(x) === dueno[0]) ?? dueno[0];
+      this.oeAviso(actual != null
+        ? `El ${n} lo usa el estado ${nombre}. Para reordenar, vacía primero el número.`
+        : `El siguiente orden es el ${siguiente}; el ${n} lo usa el estado ${nombre}.`);
+      return;
+    }
+    if (n !== siguiente) {
+      restaurar();
+      this.oeAviso(`El orden que toca es el ${siguiente}.`);
+      return;
+    }
+    b[id] = { orden: n, oculto: false };
+    this.oeBorrador.set(b);
+  }
+
+  oeSetOculto(id: string, oculto: boolean): void {
+    const b = { ...this.oeBorrador() };
+    if (oculto) this.oeQuitarOrden(b, id);
+    b[id] = { orden: null, oculto };
+    this.oeBorrador.set(b);
+  }
+
+  /** Deja todos los estados sin orden ni ocultos (hay que guardar para aplicarlo). */
+  oeRestablecer(): void {
+    this.oeBorrador.set({});
+  }
+
+  /** Guarda (síncrono: confirma el backend antes de dar por hecho). */
+  async oeGuardar(): Promise<void> {
+    if (this.oeGuardando()) return;
+    this.oeGuardando.set(true);
+    try {
+      await this.ordenEst.guardar(this.oeEnvio());
+      this.oeDescartar();
+      this.snack.open('Orden de estados guardado. Se aplica en Tickets.', '', { duration: 2500 });
+    } catch (e: any) {
+      this.snack.open(e?.message || 'No se pudo guardar el orden de estados.', 'OK', { duration: 5000 });
+    } finally {
+      this.oeGuardando.set(false);
+    }
+  }
 
   // ── Búsqueda + filtro "activo" por tabla (Regionales/Equipos/Clientes) ──
   readonly regBuscar = signal(''); readonly regActivo = signal<'todos' | 'si' | 'no'>('todos');
@@ -184,6 +320,8 @@ export class Administracion {
   constructor() {
     this.recargar();
     this.hd.getHdUsers(); // catálogo del HelpDesk (nombres completos del técnico)
+    this.hd.getTicketStatuses(); // catálogo de estados (pestaña "Orden de estados")
+    void this.ordenEst.cargar(true).then(() => this.oeDescartar());
   }
 
   /** Devuelve un signal derivado con las filas ordenadas según el estado de sort. */

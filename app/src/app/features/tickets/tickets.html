@@ -108,7 +108,7 @@
     <mat-icon class="tool-sort-caret">expand_more</mat-icon>
   </button>
   <mat-menu #sortMenu="matMenu" class="tool-sort-menu">
-    @for (o of sortOptions; track o.value) {
+    @for (o of sortOptions(); track o.value) {
       <button mat-menu-item (click)="onSortChange(o.value)" [class.activo]="sortValue() === o.value">
         <mat-icon>{{ sortValue() === o.value ? 'check' : '' }}</mat-icon>
         <span>{{ o.label }}</span>

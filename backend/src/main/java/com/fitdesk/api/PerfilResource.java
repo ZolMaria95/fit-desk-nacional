@@ -12,6 +12,10 @@ import com.fitdesk.core.Cliente;
 import com.fitdesk.core.Equipo;
 import com.fitdesk.core.Usuario;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
@@ -29,6 +33,9 @@ import jakarta.ws.rs.core.Response;
 @Path("/api/legacy/perfil")
 @Produces(MediaType.APPLICATION_JSON)
 public class PerfilResource {
+
+    @Inject
+    ObjectMapper mapper;
 
     /** Tope defensivo del data URI (base64). ~300 KB de imagen; el front comprime mucho menos. */
     private static final int MAX_FOTO = 400_000;
@@ -262,6 +269,85 @@ public class PerfilResource {
         ok.put("ok", true);
         ok.put("hid", actorHid);
         ok.put("color", u.color);
+        return Response.ok(ok).build();
+    }
+
+    /** Un estado del HelpDesk en el orden personal: orden ≥ 1 (null = sin orden) u oculto. */
+    public record OrdenEstado(String estado, Integer orden, boolean oculto) {
+    }
+
+    /** Quién puede definir su orden de estados. Hoy responsables (y ADMIN); abrirlo a todos = devolver true. */
+    static boolean puedeOrdenarEstados(String hid) {
+        return Actor.esAdmin(hid) || Actor.tieneRol(hid, "RESPONSABLE_EQUIPO");
+    }
+
+    /**
+     * GET /api/legacy/perfil/orden-estados → { estados: [{estado, orden, oculto}], puedeEditar } del actor.
+     * Lista vacía = sin configuración (Tickets se ordena como siempre).
+     */
+    @GET
+    @Path("/orden-estados")
+    public Map<String, Object> ordenEstados(@HeaderParam("X-Actor-Hid") String actorHid) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        List<OrdenEstado> estados = List.of();
+        Usuario u = actorHid == null || actorHid.isBlank() ? null : Usuario.findByHelpdeskUserId(actorHid);
+        if (u != null && u.ordenEstados != null && !u.ordenEstados.isBlank()) {
+            try {
+                estados = mapper.readValue(u.ordenEstados, new TypeReference<List<OrdenEstado>>() { });
+            } catch (Exception e) {
+                estados = List.of(); // JSON corrupto: se trata como sin configurar
+            }
+        }
+        m.put("estados", estados);
+        m.put("puedeEditar", actorHid != null && !actorHid.isBlank() && puedeOrdenarEstados(actorHid));
+        return m;
+    }
+
+    /**
+     * PUT /api/legacy/perfil/orden-estados  body {estados: [{estado, orden, oculto}]} → guarda el orden del
+     * actor. Solo se guardan los estados con orden u ocultos; lista vacía = restablecer (sin configuración).
+     */
+    @PUT
+    @Path("/orden-estados")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Transactional
+    public Response setOrdenEstados(Map<String, List<OrdenEstado>> body, @HeaderParam("X-Actor-Hid") String actorHid) {
+        if (actorHid == null || actorHid.isBlank()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "falta X-Actor-Hid")).build();
+        }
+        if (!puedeOrdenarEstados(actorHid)) {
+            return Response.status(Response.Status.FORBIDDEN)
+                    .entity(Map.of("error", "solo un responsable de equipo puede definir el orden de estados")).build();
+        }
+        Usuario u = Usuario.findByHelpdeskUserId(actorHid);
+        if (u == null) {
+            return Response.status(Response.Status.NOT_FOUND).entity(Map.of("error", "usuario no encontrado: " + actorHid)).build();
+        }
+        List<OrdenEstado> entrada = body != null && body.get("estados") != null ? body.get("estados") : List.of();
+        Map<String, OrdenEstado> limpio = new LinkedHashMap<>();
+        for (OrdenEstado e : entrada) {
+            if (e == null || e.estado() == null || e.estado().isBlank()) {
+                return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "estado vacío")).build();
+            }
+            if (e.orden() != null && e.orden() < 1) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "el orden debe ser un número desde 1")).build();
+            }
+            if (e.oculto()) {
+                limpio.put(e.estado().trim(), new OrdenEstado(e.estado().trim(), null, true));
+            } else if (e.orden() != null) {
+                limpio.put(e.estado().trim(), new OrdenEstado(e.estado().trim(), e.orden(), false));
+            }
+        }
+        try {
+            u.ordenEstados = limpio.isEmpty() ? null : mapper.writeValueAsString(new ArrayList<>(limpio.values()));
+        } catch (Exception e) {
+            return Response.serverError().entity(Map.of("error", "no se pudo guardar el orden")).build();
+        }
+        u.actualizadoEn = OffsetDateTime.now();
+        Map<String, Object> ok = new LinkedHashMap<>();
+        ok.put("ok", true);
+        ok.put("estados", new ArrayList<>(limpio.values()));
         return Response.ok(ok).build();
     }
 }
