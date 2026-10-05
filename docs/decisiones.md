@@ -50,7 +50,8 @@ finalizados (`esEstadoFinalizado`). Había puesto APROBADO = 2 y no aparecía. S
 estados, con APROBADO, sin sus 4 ocultos), Todos los clientes 32387 (paginado por grupos, sin tope), Sin asignar
 203 como antes.
 
-**Estado:** vigente. Pendiente de revisión de la dueña en local y deploy (V31).
+**Estado:** vigente. **Desplegado a AWS 2026-10-04**: back `a6bd033` (V31 aplicada), front `eba8b26`, bundle
+`main-2F4ALBLT.js`; backup `backup-pre-v31-20261004.dump`; rollback front `9a633767d243`.
 
 ### [2026-10-03] Board: se crea la tarea que falta para los tickets ABIERTOS asignados en el HelpDesk
 
