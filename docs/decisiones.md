@@ -42,7 +42,8 @@ pantallas de 1366 px; si la sección es más angosta (container query ≤ 1015 p
 **Verificado en local** contra el HelpDesk real (CUENCA): datos en vivo correctos; editar avance/compromiso/bloqueo/
 nota persiste en la tarea, el modal los muestra y editar la nota desde el modal la guarda con su autor; RE → 200,
 consultor → 403, valores inválidos → 400; filtros, buscador, orden, paginación y Excel; 390 px sin desborde.
-**Estado:** vigente, sin desplegar (va con V32).
+**Estado:** vigente. **Desplegado a AWS 2026-10-05** con V32: back `56ea89b`, front `3765511`, bundle
+`main-55KMZITK.js`; backup `backup-pre-v32-v33-20261005.dump`; rollback front `eab2a7c2b951`.
 
 ### [2026-10-05] Tareas de clientes sin equipo — EN ESPERA de gerencia
 
@@ -76,8 +77,8 @@ tablero**.
 no aparece en el reporte de CUENCA; con base CUENCA aparece con la tarea marcada "tablero …"; RE de otro equipo y
 consultor → 403. 390 px correcto.
 
-**Pendiente tras el deploy:** poner el equipo base a Lina (CUENCA) y a los demás nacionales (Valeria Neira,
-Cleira Ulloa, Bunay Ramos, Domenica Lasso…). **Estado:** vigente, sin desplegar.
+**Desplegado a AWS 2026-10-05** (back `56ea89b`, front `3765511`). **Pendiente:** poner el equipo base a Lina
+(CUENCA) y a los demás nacionales (Valeria Neira, Cleira Ulloa, Bunay Ramos, Domenica Lasso…). **Estado:** vigente.
 
 ### [2026-10-05] Las tareas creadas para tickets asignados nacen en la columna de su estado (+ 436 corregidas)
 
