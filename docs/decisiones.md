@@ -26,7 +26,10 @@ Responde la duda abierta desde 2026-10-02 sobre los estados "de aspecto cerrado"
   RECHAZADO, 1 NO ACEPTADA); el sync del Board las mueve al abrir cada tablero; se propone moverlas en el deploy.
 
 **Verificado en local:** creación automática con cada estado → columna correcta; funciones del front con los 9
-estados relevantes (COTIZACIÓN ACEPTADA/RESPONDIDA siguen en To Do). **Estado:** vigente, sin desplegar.
+estados relevantes (COTIZACIÓN ACEPTADA/RESPONDIDA siguen en To Do). **Estado:** vigente. **Desplegado a AWS
+2026-10-05**: back `0802e70`, front `d8498be` (bundle `main-JGUFOROL.js`, rollback front `a01cb5a58043`); backup
+`backup-pre-columnas-estados-20261005.dump`; las 24 tareas movidas (19 → In Progress esperando cliente, 3 → Entregado,
+2 → Entregado finalizadas), simulado antes con ROLLBACK, 0 borradas.
 
 ### [2026-10-05] Reportes: rediseño "Gestión de trabajo por consultor" (nota y bloqueo de la tarea, V33)
 
