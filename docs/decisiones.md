@@ -6,6 +6,28 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-05] Nuevas columnas del Board para 5 estados del HelpDesk
+
+**Decisión de la dueña:**
+| Estado del ticket | Columna / trato |
+|---|---|
+| RECHAZADO | Finalizado (Entregado ✓) |
+| NO SE PUEDE REPLICAR | Entregado (sin finalizar) |
+| COTIZACIÓN ENVIADA | In Progress + esperando cliente |
+| COTIZACION NO ACEPTADA | Finalizado y "cerrado" (gris) |
+| RESUELTO CON SOLUCIÓN ALTERNATIVA | Entregado (sin finalizar) |
+
+Responde la duda abierta desde 2026-10-02 sobre los estados "de aspecto cerrado" (NO ES UN INCIDENTE sigue en To Do).
+- Front: `esEstadoFinalizado` suma RECHAZADO y NO ACEPTADA; `esEstadoCerrado` suma NO ACEPTADA; `statusFromTicketEstado`
+  (board-utils) mapea los otros tres; comparación sin tildes (`normEstado`). Back: `core/EstadoTicket` igual (espejo).
+- Efecto de "finalizado" en el resto de la app: Tickets los oculta por defecto (salvo la tabla de orden del RE), son
+  solo lectura (responder/asignar) y la creación automática de tareas no los incluye.
+- Datos: en prod hay 24 tareas en To Do con esos estados (19 COTIZACIÓN ENVIADA, 3 NO SE PUEDE REPLICAR, 1
+  RECHAZADO, 1 NO ACEPTADA); el sync del Board las mueve al abrir cada tablero; se propone moverlas en el deploy.
+
+**Verificado en local:** creación automática con cada estado → columna correcta; funciones del front con los 9
+estados relevantes (COTIZACIÓN ACEPTADA/RESPONDIDA siguen en To Do). **Estado:** vigente, sin desplegar.
+
 ### [2026-10-05] Reportes: rediseño "Gestión de trabajo por consultor" (nota y bloqueo de la tarea, V33)
 
 **Pedido de la dueña** (con un diseño de referencia): la tabla "Qué está haciendo cada consultor" pasa a ser

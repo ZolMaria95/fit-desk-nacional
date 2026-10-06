@@ -3,7 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AuthService } from '../../core/services/auth.service';
 import { DataService, Story, TeamMember } from '../../core/services/data.service';
-import { esEstadoFinalizado } from '../../core/helpdesk-estados';
+import { esEstadoFinalizado, normEstado } from '../../core/helpdesk-estados';
 import { ConfirmDialog } from './confirm-dialog/confirm-dialog';
 
 // ── Constantes de estado (port de js/board.js) ──────────────────────────
@@ -23,17 +23,24 @@ export const STATUS_LABELS: Record<Status, string> = {
  *   DEL CLIENTE) → Done con el check "Finalizado" marcado. Ver `esEstadoFinalizado`.
  * - ENTREGADO → Done con el check desmarcado.
  * - INSTALADO PARA CERTIFICACIÓN → En Certificación.
- * - INFO PENDIENTE CLIENTE → In Progress + "esperando cliente".
+ * - NO SE PUEDE REPLICAR y RESUELTO CON SOLUCIÓN ALTERNATIVA → Entregado (sin finalizar).
+ * - INFO PENDIENTE CLIENTE y COTIZACIÓN ENVIADA → In Progress + "esperando cliente".
+ * - RECHAZADO y COTIZACIÓN NO ACEPTADA → finalizados (ver `esEstadoFinalizado`).
  * - EN PROCESO → In Progress.
  * - cualquier otro estado → To Do (sin tocar el estado del ticket).
  * El check lo define SIEMPRE el ticket (approved true/false), no el usuario.
  */
 export function statusFromTicketEstado(estado: string): { status: Status; waiting?: boolean; approved?: boolean } {
-  const e = (estado || '').toUpperCase();
+  // Espejo en el backend: `core/EstadoTicket.java` (si cambia uno, cambiar el otro).
+  const e = normEstado(estado);
   if (esEstadoFinalizado(e)) return { status: 'done', approved: true };
-  if (e.includes('ENTREGADO')) return { status: 'done', approved: false };
+  if (e.includes('ENTREGADO') || e.includes('NO SE PUEDE REPLICAR') || e.includes('SOLUCION ALTERNATIVA')) {
+    return { status: 'done', approved: false };
+  }
   if (e.includes('INSTALADO') || e.includes('CERTIFICAC')) return { status: 'review' };
-  if (e.includes('INFO PENDIENTE')) return { status: 'in_progress', waiting: true };
+  if (e.includes('INFO PENDIENTE') || (e.includes('COTIZACION') && e.includes('ENVIADA'))) {
+    return { status: 'in_progress', waiting: true };
+  }
   if (e.includes('EN PROCESO')) return { status: 'in_progress' };
   return { status: 'todo' };
 }

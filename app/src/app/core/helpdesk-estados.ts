@@ -9,13 +9,22 @@
  *  - CERRADO POR EL CLIENTE
  *  - CERRADO POR FALTA DE RESPUESTA DEL CLIENTE
  *  - NO APLICA (mismo trato que los cerrados: finalizado y solo lectura)
+ *  - RECHAZADO y COTIZACION NO ACEPTADA (decisión de la dueña, 2026-10-05)
+ * Espejo en el backend: `core/EstadoTicket.java` (si cambia uno, cambiar el otro).
  */
 export function esEstadoFinalizado(estado: string | null | undefined): boolean {
-  const e = (estado || '').toUpperCase();
+  const e = normEstado(estado);
   return e.includes('APROBADO')
     || e.includes('CERRADO POR EL CLIENTE')
     || e.includes('CERRADO POR FALTA DE RESPUESTA')
-    || e.includes('NO APLICA');
+    || e.includes('NO APLICA')
+    || e.includes('RECHAZADO')
+    || e.includes('NO ACEPTADA');
+}
+
+/** Mayúsculas y sin tildes (el catálogo mezcla "COTIZACIÓN" y "COTIZACION"). */
+export function normEstado(estado: string | null | undefined): string {
+  return (estado || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
 }
 
 /**
@@ -25,8 +34,9 @@ export function esEstadoFinalizado(estado: string | null | undefined): boolean {
  * Fuente única del criterio "cerrado" para color (`estadoStyle`) y sombreado (card).
  */
 export function esEstadoCerrado(estado: string | null | undefined): boolean {
-  const e = (estado || '').toUpperCase();
-  return e.includes('CERRADO') || e.includes('NO APLICA');
+  const e = normEstado(estado);
+  // COTIZACION NO ACEPTADA "se considera cerrado" (dueña, 2026-10-05).
+  return e.includes('CERRADO') || e.includes('NO APLICA') || e.includes('NO ACEPTADA');
 }
 
 /**
