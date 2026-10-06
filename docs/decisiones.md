@@ -38,8 +38,9 @@ Prioridad·Orden; Fechas = creado/asignado con días desde cada una + inicio; Ú
 "esperando cliente" bajo Bloqueo), fechas dd/mm/aa y texto que se ajusta; la tabla necesita ~984 px y cabe desde
 pantallas de 1366 px; si la sección es más angosta (container query ≤ 1015 px) pasa a tarjetas. Se agregó
 **días desde la creación** del ticket (tabla y Excel). Colores de los días (creación, asignación y sin movimiento): **0–2 verde · 3–5 amarillo · más de
-5 rojo** (dueña). Punto de cambio a tarjetas: contenido de la sección ≤ 984 px (la tabla necesita ~976 px; cabe en
-1366).
+5 rojo** (dueña). Los días son lo más importante (dueña): etiqueta grande junto a cada fecha; se quitó la columna ⋮ (la tarea y
+el ticket se abren desde sus enlaces). Punto de cambio a tarjetas: contenido ≤ 992 px (la tabla necesita ~990 px;
+cabe en 1366).
 
 **Verificado en local** contra el HelpDesk real (CUENCA): datos en vivo correctos; editar avance/compromiso/bloqueo/
 nota persiste en la tarea, el modal los muestra y editar la nota desde el modal la guarda con su autor; RE → 200,

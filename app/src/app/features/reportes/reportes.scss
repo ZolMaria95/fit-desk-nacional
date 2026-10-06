@@ -229,7 +229,6 @@
   .c-tarea { width: 21%; }
   .c-cli { width: 11%; min-width: 78px; overflow-wrap: break-word; hyphens: auto; }
   .c-nota { width: 12%; }
-  .c-menu { width: 28px; padding-left: 0; padding-right: 2px; text-align: center; }
   .nw { white-space: nowrap; }
   tr.vacio td { text-align: center; padding: 28px; color: var(--mat-sys-on-surface-variant); }
 }
@@ -252,12 +251,13 @@
     span { display: block; height: 100%; background: #2f6fd6; border-radius: 4px; } }
   &:disabled { cursor: default; }
 }
-.rp-fechas { display: grid; grid-template-columns: auto auto; gap: 1px 5px; margin: 0; font-size: 11px;
+.rp-fechas { display: grid; grid-template-columns: auto auto auto; align-items: center; gap: 2px 5px; margin: 0; font-size: 11px; white-space: nowrap;
+  .span2 { grid-column: span 2; }
   dt { color: var(--mat-sys-on-surface-variant); } dd { margin: 0; b { font-weight: 700; white-space: nowrap; } i { opacity: .7; } } }
 // Días junto a una fecha: 0–2 verde · 3–5 amarillo · más de 5 rojo.
-.rp-d { display: inline-block; margin-left: 2px; padding: 0 5px; border-radius: 8px; font-size: 10.5px;
+.rp-d { display: inline-block; min-width: 38px; box-sizing: border-box; text-align: center; padding: 1px 6px; border-radius: 9px; font-size: 12.5px; font-weight: 800;
   &.verde { background: #e8f5ea; color: #2e6b35; } &.ambar { background: #fff1d6; color: #8a5a00; } &.rojo { background: #fdecea; color: #a52a1f; } }
-.rp-dias { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #e8f5ea; color: #2e6b35; white-space: nowrap;
+.rp-dias { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12.5px; font-weight: 800; background: #e8f5ea; color: #2e6b35; white-space: nowrap;
   &.verde { background: #e8f5ea; color: #2e6b35; }
   &.ambar { background: #fff1d6; color: #8a5a00; }
   &.rojo { background: #fdecea; color: #a52a1f; } }
@@ -295,8 +295,6 @@
 .rp-nota-lbl { font-size: 12px; font-weight: 700; span { font-weight: 400; opacity: .7; } }
 .rp-nota-meta { font-size: 11px; color: var(--mat-sys-on-surface-variant); }
 .rp-nota-acc { display: flex; justify-content: flex-end; gap: 6px; }
-.rp-mas { border: 0; background: none; cursor: pointer; color: inherit; display: grid; padding: 2px; border-radius: 50%;
-  &:hover { background: var(--mat-sys-surface-container-high, #eef1f4); } }
 .rp-pag { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px; color: var(--mat-sys-on-surface-variant);
   .grow { flex: 1 1 auto; } }
 .rp-pg {
@@ -323,7 +321,7 @@
 }
 
 // Tabla → tarjetas cuando la sección es angosta: una por tarea, celdas con su etiqueta.
-@container (max-width: 984px) {
+@container (max-width: 992px) {
   .rp-scroll { overflow: visible; border: 0; }
   .rp-grid {
     thead { display: none; }
@@ -331,15 +329,13 @@
     tbody tr { position: relative; border: 1px solid var(--mat-sys-outline-variant, #e3e8ee); border-radius: 12px; margin-bottom: 10px; padding: 6px 0; background: var(--mat-sys-surface, #fff); }
     td { border: 0; padding: 4px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow-wrap: anywhere; width: auto !important; }
     td[data-l]::before { content: attr(data-l); flex: 0 0 120px; font-size: 11px; font-weight: 700; color: var(--mat-sys-on-surface-variant); }
-    td.c-menu { position: absolute; top: 6px; right: 6px; padding: 0; }
-    td.c-cons { padding-right: 40px; }
     tr.vacio td { display: block; }
   }
   .rp-tarea { flex: 1 1 0; min-width: 0; }
   .rp-nota { flex: 1 1 0; }
   .rp-est, .rp-bloq { max-width: none; }
 }
-@container (min-width: 640px) and (max-width: 984px) {
+@container (min-width: 640px) and (max-width: 992px) {
   // Tarjetas en dos columnas de datos (consultor y tarea a lo ancho).
   .rp-grid tbody tr { display: grid; grid-template-columns: 1fr 1fr; }
   .rp-grid td.c-cons, .rp-grid td.c-tarea, .rp-grid td.c-nota { grid-column: 1 / -1; }
@@ -358,7 +354,7 @@
     &.ok { background: #1e3a22; color: #8fd98f; } &.amarillo { background: #33280f; color: #f0c070; }
     &.naranja { background: #3a2a14; color: #f0b870; } &.rojo { background: #3a1e20; color: #f09a9a; } }
   .rp-vencido, .rp-fecha.vencida { color: #f09a9a; }
-  @container (max-width: 984px) { .rp-grid tbody tr { background: #131a21; } }
+  @container (max-width: 992px) { .rp-grid tbody tr { background: #131a21; } }
   .rp-sel { background: #131a21; }
   .rp-error { background: #3a1e20; color: #f3b3ae; }
   .rp-motivo { background: #26303a; color: #d5dde5;

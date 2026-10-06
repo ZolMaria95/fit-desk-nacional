@@ -184,7 +184,6 @@
             <th><button type="button" (click)="ordenarPor('compromiso')">Compromiso <mat-icon>{{ flecha('compromiso') }}</mat-icon></button></th>
             <th><button type="button" (click)="ordenarPor('bloqueo')">Bloqueo <mat-icon>{{ flecha('bloqueo') }}</mat-icon></button></th>
             <th class="c-nota">Nota</th>
-            <th class="c-menu"><span class="sr-only">Acciones</span></th>
           </tr>
         </thead>
         <tbody>
@@ -243,9 +242,9 @@
               </td>
               <td data-l="Fechas">
                 <dl class="rp-fechas">
-                  <dt>Creado</dt><dd>@if (f.fechaCreacion) { {{ fechaCortaYY(f.fechaCreacion) }} <b class="rp-d {{ nivelDias(f.diasCreacion) }}">{{ f.diasCreacion }} d</b> } @else { — }</dd>
-                  <dt>Asignado</dt><dd>@if (f.fechaAsignacion) { {{ fechaCortaYY(f.fechaAsignacion) }} <b class="rp-d {{ nivelDias(f.diasAsignacion) }}">{{ f.diasAsignacion }} d</b> } @else { — }</dd>
-                  <dt>Inicio</dt><dd>@if (f.inicio) { {{ fechaCortaYY(f.inicio) }}@if (f.inicioAprox) { <i matTooltip="Aproximada: ya estaba en curso antes de registrar esta fecha (se usa su creación)">*</i> } } @else { — }</dd>
+                  <dt>Creado</dt><dd>{{ f.fechaCreacion ? fechaCortaYY(f.fechaCreacion) : '—' }}</dd><dd>@if (f.fechaCreacion) { <b class="rp-d {{ nivelDias(f.diasCreacion) }}" matTooltip="Días desde la creación del ticket">{{ f.diasCreacion }} d</b> }</dd>
+                  <dt>Asignado</dt><dd>{{ f.fechaAsignacion ? fechaCortaYY(f.fechaAsignacion) : '—' }}</dd><dd>@if (f.fechaAsignacion) { <b class="rp-d {{ nivelDias(f.diasAsignacion) }}" matTooltip="Días desde la asignación">{{ f.diasAsignacion }} d</b> }</dd>
+                  <dt>Inicio</dt><dd class="span2">@if (f.inicio) { {{ fechaCortaYY(f.inicio) }}@if (f.inicioAprox) { <i matTooltip="Aproximada: ya estaba en curso antes de registrar esta fecha (se usa su creación)">*</i> } } @else { — }</dd>
                 </dl>
               </td>
               <td data-l="Última gestión">
@@ -297,16 +296,9 @@
                   </div>
                 </mat-menu>
               </td>
-              <td class="c-menu">
-                <button type="button" class="rp-mas" [matMenuTriggerFor]="menuMas" aria-label="Más acciones"><mat-icon>more_vert</mat-icon></button>
-                <mat-menu #menuMas="matMenu">
-                  <button mat-menu-item (click)="verTarea(f.tarea)"><mat-icon>open_in_new</mat-icon> Abrir tarea</button>
-                  @if (f.ticket) { <button mat-menu-item (click)="verTicket(f.ticket)"><mat-icon>forum</mat-icon> Abrir ticket</button> }
-                </mat-menu>
-              </td>
             </tr>
           } @empty {
-            <tr class="vacio"><td colspan="12">{{ hayFiltros() ? 'Ninguna tarea coincide con los filtros.' : 'Sin tareas en curso.' }}</td></tr>
+            <tr class="vacio"><td colspan="11">{{ hayFiltros() ? 'Ninguna tarea coincide con los filtros.' : 'Sin tareas en curso.' }}</td></tr>
           }
         </tbody>
       </table>
