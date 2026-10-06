@@ -243,15 +243,15 @@
               </td>
               <td data-l="Fechas">
                 <dl class="rp-fechas">
-                  <dt>Creado</dt><dd>@if (f.fechaCreacion) { {{ fechaCortaYY(f.fechaCreacion) }} <b>· {{ f.diasCreacion }} d</b> } @else { — }</dd>
-                  <dt>Asignado</dt><dd>@if (f.fechaAsignacion) { {{ fechaCortaYY(f.fechaAsignacion) }} <b>· {{ f.diasAsignacion }} d</b> } @else { — }</dd>
+                  <dt>Creado</dt><dd>@if (f.fechaCreacion) { {{ fechaCortaYY(f.fechaCreacion) }} <b class="rp-d {{ nivelDias(f.diasCreacion) }}">{{ f.diasCreacion }} d</b> } @else { — }</dd>
+                  <dt>Asignado</dt><dd>@if (f.fechaAsignacion) { {{ fechaCortaYY(f.fechaAsignacion) }} <b class="rp-d {{ nivelDias(f.diasAsignacion) }}">{{ f.diasAsignacion }} d</b> } @else { — }</dd>
                   <dt>Inicio</dt><dd>@if (f.inicio) { {{ fechaCortaYY(f.inicio) }}@if (f.inicioAprox) { <i matTooltip="Aproximada: ya estaba en curso antes de registrar esta fecha (se usa su creación)">*</i> } } @else { — }</dd>
                 </dl>
               </td>
               <td data-l="Última gestión">
                 <div class="rp-pila col">
                   <span class="nw">{{ f.ultimaGestion ? fechaHora(f.ultimaGestion, true) : '—' }}</span>
-                  @if (f.diasSinMov != null) { <span class="rp-dias" [class.rojo]="f.diasSinMov >= 5" [class.ambar]="f.diasSinMov >= 3 && f.diasSinMov < 5" matTooltip="Días sin movimiento">{{ f.diasSinMov }} {{ f.diasSinMov === 1 ? 'día' : 'días' }}</span> }
+                  @if (f.diasSinMov != null) { <span class="rp-dias {{ nivelDias(f.diasSinMov) }}" matTooltip="Días sin movimiento">{{ f.diasSinMov }} {{ f.diasSinMov === 1 ? 'día' : 'días' }}</span> }
                 </div>
               </td>
               <td data-l="Compromiso">

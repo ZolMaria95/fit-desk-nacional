@@ -236,6 +236,12 @@ export class Reportes {
     return (this.reporte()?.consultores ?? []).filter((p) => !con.has(String(p.hid).toUpperCase())).map((p) => nombrePropio(p.nombre));
   });
 
+  /** Color de un conteo de días: 0–2 verde · 3–5 amarillo · más de 5 rojo (criterio de la dueña). */
+  nivelDias(d: number | null | undefined): 'verde' | 'ambar' | 'rojo' {
+    const n = d ?? 0;
+    return n > 5 ? 'rojo' : n >= 3 ? 'ambar' : 'verde';
+  }
+
   vencida(f: FilaReporte): boolean {
     return !!f.fechaLimite && f.fechaLimite < new Date().toLocaleDateString('en-CA');
   }

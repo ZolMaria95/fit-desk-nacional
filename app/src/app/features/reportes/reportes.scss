@@ -254,7 +254,11 @@
 }
 .rp-fechas { display: grid; grid-template-columns: auto auto; gap: 1px 5px; margin: 0; font-size: 11px;
   dt { color: var(--mat-sys-on-surface-variant); } dd { margin: 0; b { font-weight: 700; white-space: nowrap; } i { opacity: .7; } } }
+// Días junto a una fecha: 0–2 verde · 3–5 amarillo · más de 5 rojo.
+.rp-d { display: inline-block; margin-left: 2px; padding: 0 5px; border-radius: 8px; font-size: 10.5px;
+  &.verde { background: #e8f5ea; color: #2e6b35; } &.ambar { background: #fff1d6; color: #8a5a00; } &.rojo { background: #fdecea; color: #a52a1f; } }
 .rp-dias { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #e8f5ea; color: #2e6b35; white-space: nowrap;
+  &.verde { background: #e8f5ea; color: #2e6b35; }
   &.ambar { background: #fff1d6; color: #8a5a00; }
   &.rojo { background: #fdecea; color: #a52a1f; } }
 .rp-fecha {
@@ -319,7 +323,7 @@
 }
 
 // Tabla → tarjetas cuando la sección es angosta: una por tarea, celdas con su etiqueta.
-@container (max-width: 1015px) {
+@container (max-width: 984px) {
   .rp-scroll { overflow: visible; border: 0; }
   .rp-grid {
     thead { display: none; }
@@ -335,7 +339,7 @@
   .rp-nota { flex: 1 1 0; }
   .rp-est, .rp-bloq { max-width: none; }
 }
-@container (min-width: 640px) and (max-width: 1015px) {
+@container (min-width: 640px) and (max-width: 984px) {
   // Tarjetas en dos columnas de datos (consultor y tarea a lo ancho).
   .rp-grid tbody tr { display: grid; grid-template-columns: 1fr 1fr; }
   .rp-grid td.c-cons, .rp-grid td.c-tarea, .rp-grid td.c-nota { grid-column: 1 / -1; }
@@ -349,12 +353,12 @@
   .rp-gestion, .rp-grid tbody td, .rp-buscar, .rp-fil, .rp-pg:not(.on), .rp-fecha, .rp-nota-pop textarea { background: #131a21; }
   .rp-grid thead th { background: #1a222b; }
   .rp-badge.col { background: #1a2c40; color: #9cc4f0; }
-  .rp-dias { background: #1e3a22; color: #8fd98f; &.ambar { background: #33280f; color: #f0c070; } &.rojo { background: #3a1e20; color: #f09a9a; } }
+  .rp-dias, .rp-d { background: #1e3a22; color: #8fd98f; &.ambar { background: #33280f; color: #f0c070; } &.rojo { background: #3a1e20; color: #f09a9a; } }
   .rp-bloq { background: #26303a; color: #d5dde5;
     &.ok { background: #1e3a22; color: #8fd98f; } &.amarillo { background: #33280f; color: #f0c070; }
     &.naranja { background: #3a2a14; color: #f0b870; } &.rojo { background: #3a1e20; color: #f09a9a; } }
   .rp-vencido, .rp-fecha.vencida { color: #f09a9a; }
-  @container (max-width: 1015px) { .rp-grid tbody tr { background: #131a21; } }
+  @container (max-width: 984px) { .rp-grid tbody tr { background: #131a21; } }
   .rp-sel { background: #131a21; }
   .rp-error { background: #3a1e20; color: #f3b3ae; }
   .rp-motivo { background: #26303a; color: #d5dde5;
