@@ -13,21 +13,26 @@ import { AuthService } from '../../core/services/auth.service';
 import { DataService } from '../../core/services/data.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
 import { abrirTicketDialog } from '../../core/ticket-dialog';
+import { ThemeService } from '../../core/services/theme.service';
 import { prioBadgeClase } from '../board/board-utils';
+import { mapTicket } from '../tickets/ticket-utils';
+import { estadoStyle, tipoStyle } from '../tickets/tickets-card-utils';
 import { generarExcelReporte } from './reporte-excel';
 import {
+  BLOQUEOS,
+  bloqueoDe,
+  diasDesde,
+  fechaCortaYY,
+  fechaHora,
   ESTADO_LABEL,
   FilaReporte,
   FilaSeguimiento,
-  GrupoConsultor,
   PRIORIDAD_LABEL,
   ReporteEstadoEquipo,
   compararFila,
   compararSeguimiento,
   fechaCorta,
 } from './reporte-modelo';
-
-const SIN_ASIGNAR = '__SIN_ASIGNAR__';
 
 /**
  * Reportes → "Estado del equipo": qué hace cada consultor, prioridad (de la tarea y Orden del
@@ -48,6 +53,7 @@ export class Reportes {
   private readonly hd = inject(HelpdeskService);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
+  private readonly theme = inject(ThemeService);
   private readonly base = environment.quarkusApiUrl;
 
   readonly equipos = signal<{ codigo: string; nombre: string }[]>([]);
@@ -75,6 +81,217 @@ export class Reportes {
   readonly prioBadgeClase = prioBadgeClase;
   readonly fechaCorta = fechaCorta;
   readonly nombre = nombrePropio;
+  readonly fechaHora = fechaHora;
+  readonly fechaCortaYY = fechaCortaYY;
+  readonly BLOQUEOS = BLOQUEOS;
+  readonly bloqueoDe = bloqueoDe;
+  readonly AVANCES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+  // ── Tabla "Gestión de trabajo por consultor": búsqueda, filtros, orden y paginación (todo en el cliente) ──
+  readonly busqueda = signal('');
+  readonly fConsultor = signal(''); // hid ('' = todos; '__SIN__' = sin asignar)
+  readonly fCliente = signal('');
+  readonly fEstado = signal('');
+  readonly fPrioridad = signal('');
+  readonly fBloqueo = signal(''); // clave ('' = todos; '__NINGUNO__' = sin dato)
+  readonly orden = signal<{ col: string; dir: 1 | -1 } | null>(null);
+  readonly pagina = signal(0);
+  readonly porPagina = signal(10);
+  readonly TAMANOS = [10, 25, 50];
+  /** Código de la tarea que se está guardando (deshabilita su fila). */
+  readonly guardandoFila = signal<string | null>(null);
+  /** Borrador de la nota que se edita (popover). */
+  readonly notaBorrador = signal('');
+
+  /** Quien ve el reporte (responsables y ADMIN) edita avance, compromiso, nota y bloqueo; el backend lo re-exige. */
+  readonly puedeEditarFila = computed(() => this.auth.puedeVerMiPanel());
+
+  estadoColor(estado: string) {
+    return estadoStyle(estado, this.theme.esOscuro());
+  }
+  tipoColor(tipo: string) {
+    return tipoStyle(tipo, this.theme.esOscuro());
+  }
+
+  /** Filas del reporte según las casillas de columna (In Progress siempre; To Do y En Certificación opcionales). */
+  private readonly filasBase = computed<FilaReporte[]>(() => {
+    const rep = this.reporte();
+    if (!rep) return [];
+    const estados = new Set(['IN_PROGRESS']);
+    if (this.incluirTodo()) estados.add('TODO');
+    if (this.incluirCert()) estados.add('EN_CERTIFICACION');
+    return rep.filas.filter((f) => estados.has(f.estado));
+  });
+
+  /** Estado que se muestra: el real del ticket; sin ticket, la columna del board. */
+  estadoDe(f: FilaReporte): string {
+    return f.estadoTicket || ESTADO_LABEL[f.estado] || f.estado;
+  }
+
+  readonly opcionesConsultor = computed(() => {
+    const vistos = new Map<string, string>();
+    for (const f of this.filasBase()) vistos.set(f.consultorHid ? f.consultorHid.toUpperCase() : '__SIN__', this.nombreConsultor(f));
+    return [...vistos].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+  });
+  readonly opcionesCliente = computed(() =>
+    [...new Set(this.filasBase().map((f) => f.cliente || '').filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')));
+  readonly opcionesEstado = computed(() =>
+    [...new Set(this.filasBase().map((f) => this.estadoDe(f)))].sort((a, b) => a.localeCompare(b, 'es')));
+
+  nombreFiltroConsultor(): string {
+    return this.opcionesConsultor().find((o) => o.id === this.fConsultor())?.nombre ?? 'Consultor';
+  }
+
+  readonly hayFiltros = computed(() =>
+    !!(this.busqueda().trim() || this.fConsultor() || this.fCliente() || this.fEstado() || this.fPrioridad() || this.fBloqueo()));
+
+  limpiarFiltros(): void {
+    this.busqueda.set('');
+    this.fConsultor.set('');
+    this.fCliente.set('');
+    this.fEstado.set('');
+    this.fPrioridad.set('');
+    this.fBloqueo.set('');
+    this.pagina.set(0);
+  }
+
+  /** Filtradas y ordenadas (sin paginar): la tabla y el Excel. */
+  readonly filasTabla = computed<FilaReporte[]>(() => {
+    const q = this.busqueda().trim().toLowerCase();
+    const fc = this.fConsultor(), fcl = this.fCliente(), fe = this.fEstado(), fp = this.fPrioridad(), fb = this.fBloqueo();
+    const out = this.filasBase().filter((f) => {
+      if (fc && (f.consultorHid ? f.consultorHid.toUpperCase() : '__SIN__') !== fc) return false;
+      if (fcl && (f.cliente || '') !== fcl) return false;
+      if (fe && this.estadoDe(f) !== fe) return false;
+      if (fp && (f.prioridad || '') !== fp) return false;
+      if (fb && (fb === '__NINGUNO__' ? !!f.bloqueo : f.bloqueo !== fb)) return false;
+      if (q) {
+        const texto = [f.tarea, f.ticket, f.titulo, f.cliente, this.nombreConsultor(f), f.nota].join(' ').toLowerCase();
+        if (!texto.includes(q)) return false;
+      }
+      return true;
+    });
+    const o = this.orden();
+    const consultor = (f: FilaReporte) => (f.consultorHid ? this.nombreConsultor(f) : '\uffff');
+    const base = (a: FilaReporte, b: FilaReporte) => consultor(a).localeCompare(consultor(b), 'es') || compararFila(a, b);
+    if (!o) return out.sort(base);
+    const val = (f: FilaReporte): string | number => {
+      switch (o.col) {
+        case 'consultor': return consultor(f);
+        case 'tarea': return f.tarea;
+        case 'tipo': return f.tipo || '';
+        case 'cliente': return f.cliente || '';
+        case 'estado': return this.estadoDe(f);
+        case 'avance': return f.progreso ?? 0;
+        case 'creacion': return f.diasCreacion ?? -1;
+        case 'asignacion': return f.fechaAsignacion || '';
+        case 'inicio': return f.inicio || '';
+        case 'gestion': return f.ultimaGestion || '';
+        case 'sinmov': return f.diasSinMov ?? -1;
+        case 'espera': return f.diasEsperandoCliente ?? -1;
+        case 'compromiso': return f.fechaLimite || '9999';
+        case 'bloqueo': return bloqueoDe(f.bloqueo)?.label || '~';
+        default: return '';
+      }
+    };
+    return out.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb), 'es');
+      return c * o.dir || base(a, b);
+    });
+  });
+
+  readonly totalPaginas = computed(() => Math.max(1, Math.ceil(this.filasTabla().length / this.porPagina())));
+  readonly filasPagina = computed(() => {
+    const p = Math.min(this.pagina(), this.totalPaginas() - 1);
+    return this.filasTabla().slice(p * this.porPagina(), (p + 1) * this.porPagina());
+  });
+  readonly paginasVisibles = computed(() => {
+    const total = this.totalPaginas(), act = Math.min(this.pagina(), total - 1);
+    const ini = Math.max(0, Math.min(act - 2, total - 5));
+    return Array.from({ length: Math.min(5, total) }, (_, i) => ini + i);
+  });
+  irPagina(p: number): void {
+    this.pagina.set(Math.max(0, Math.min(p, this.totalPaginas() - 1)));
+  }
+
+  ordenarPor(col: string): void {
+    const o = this.orden();
+    this.orden.set(!o || o.col !== col ? { col, dir: 1 } : o.dir === 1 ? { col, dir: -1 } : null);
+    this.pagina.set(0);
+  }
+  flecha(col: string): string {
+    const o = this.orden();
+    return o && o.col === col ? (o.dir === 1 ? 'arrow_upward' : 'arrow_downward') : 'unfold_more';
+  }
+
+  // ── Tarjetas resumen ──
+  readonly kpiSinMov = computed(() => this.filasBase().filter((f) => (f.diasSinMov ?? 0) > 3).length);
+  readonly kpiVencidas = computed(() => this.filasBase().filter((f) => this.vencida(f)).length);
+  readonly kpiActivos = computed(() => new Set(this.filasBase().map((f) => f.consultorHid).filter(Boolean)).size);
+  readonly kpiEnProgreso = computed(() => this.filasBase().filter((f) => f.estado === 'IN_PROGRESS').length);
+  /** Consultores del reporte sin ninguna fila visible. */
+  readonly sinTareaVisible = computed(() => {
+    const con = new Set(this.filasBase().map((f) => (f.consultorHid ?? '').toUpperCase()));
+    return (this.reporte()?.consultores ?? []).filter((p) => !con.has(String(p.hid).toUpperCase())).map((p) => nombrePropio(p.nombre));
+  });
+
+  vencida(f: FilaReporte): boolean {
+    return !!f.fechaLimite && f.fechaLimite < new Date().toLocaleDateString('en-CA');
+  }
+
+  /**
+   * Guarda desde la tabla avance / compromiso / nota / bloqueo (síncrono: se confirma antes de reflejarlo). Lo
+   * guardado ES la tarea: el avance es su progreso y el compromiso su fecha límite, así el Board los ve igual.
+   */
+  async guardarFila(f: FilaReporte, cambios: { progreso?: number; fechaLimite?: string | null; nota?: string | null; bloqueo?: string | null }): Promise<boolean> {
+    if (!this.puedeEditarFila() || this.guardandoFila()) return false;
+    this.guardandoFila.set(f.tarea);
+    try {
+      const r = await fetch(`${this.base}/api/reportes/tareas/${encodeURIComponent(f.tarea)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Actor-Hid': this.hid },
+        body: JSON.stringify(cambios),
+      });
+      const b = await r.json().catch(() => null);
+      if (!r.ok) {
+        this.snack.open(b?.message || `No se pudo guardar (${r.status}).`, 'OK', { duration: 5000 });
+        return false;
+      }
+      const nuevo: Partial<FilaReporte> = {
+        progreso: b.progreso, fechaLimite: b.fechaLimite, bloqueo: b.bloqueo,
+        nota: b.nota, notaPor: b.notaPor, notaFecha: b.notaFecha,
+      };
+      const upd = <T extends FilaReporte>(x: T): T => (x.tarea === f.tarea ? { ...x, ...nuevo } : x);
+      this.reporte.update((rep) => (rep ? { ...rep, filas: rep.filas.map(upd), seguimiento: rep.seguimiento.map(upd) } : rep));
+      // El Board (si ya tiene la tarea en memoria) la ve igual sin recargar.
+      this.data.stories.update((list) => list.map((s) => (s.id === f.tarea
+        ? { ...s, progress: b.progreso, dueDate: b.fechaLimite || '', nota: b.nota, notaPor: b.notaPor, notaFecha: b.notaFecha, bloqueo: b.bloqueo }
+        : s)));
+      this.snack.open(`${f.tarea} guardada.`, '', { duration: 1800 });
+      return true;
+    } catch {
+      this.snack.open('No se pudo guardar.', 'OK', { duration: 5000 });
+      return false;
+    } finally {
+      this.guardandoFila.set(null);
+    }
+  }
+
+  cambiarCompromiso(f: FilaReporte, valor: string): void {
+    const v = (valor || '').trim() || null;
+    if (v === (f.fechaLimite || null)) return;
+    void this.guardarFila(f, { fechaLimite: v });
+  }
+
+  abrirNota(f: FilaReporte): void {
+    this.notaBorrador.set(f.nota || '');
+  }
+  async guardarNota(f: FilaReporte): Promise<void> {
+    const n = this.notaBorrador().trim();
+    if (n === (f.nota || '')) return;
+    await this.guardarFila(f, { nota: n || null });
+  }
 
   readonly equipoNombre = computed(() => this.equipos().find((e) => e.codigo === this.equipoSel())?.nombre ?? '');
   readonly miembrosF = computed(() => {
@@ -87,24 +304,6 @@ export class Reportes {
     if (!sel.size) return 'Todos los del equipo';
     const nombres = this.miembros().filter((m) => sel.has(m.id)).map((m) => nombrePropio(m.name));
     return sel.size <= 2 ? nombres.join(', ') : `${sel.size} consultores`;
-  });
-
-  /** Filas visibles por consultor (en el orden del backend). Sin tarea visible → "Sin tarea en curso". */
-  readonly grupos = computed<GrupoConsultor[]>(() => {
-    const rep = this.reporte();
-    if (!rep) return [];
-    const estados = new Set(['IN_PROGRESS']);
-    if (this.incluirTodo()) estados.add('TODO');
-    if (this.incluirCert()) estados.add('EN_CERTIFICACION');
-    const visibles = rep.filas.filter((f) => estados.has(f.estado));
-    const out: GrupoConsultor[] = rep.consultores.map((p) => ({
-      hid: p.hid,
-      nombre: nombrePropio(p.nombre),
-      filas: visibles.filter((f) => (f.consultorHid ?? '').toUpperCase() === String(p.hid).toUpperCase()).sort(compararFila),
-    }));
-    const sinAsignar = visibles.filter((f) => !f.consultorHid).sort(compararFila);
-    if (sinAsignar.length) out.push({ hid: SIN_ASIGNAR, nombre: 'Sin asignar', filas: sinAsignar });
-    return out;
   });
 
   /** Cambiar la prioridad de la TAREA desde el reporte: rol HELPDESK o ADMIN (el backend lo re-exige). */
@@ -141,8 +340,6 @@ export class Reportes {
   }
 
   readonly seguimiento = computed<FilaSeguimiento[]>(() => [...(this.reporte()?.seguimiento ?? [])].sort(compararSeguimiento));
-  readonly totalEnCurso = computed(() => this.reporte()?.filas.filter((f) => f.estado === 'IN_PROGRESS').length ?? 0);
-  readonly sinTareaEnCurso = computed(() => this.grupos().filter((g) => g.hid !== SIN_ASIGNAR && !g.filas.length).length);
   readonly generadoTxt = computed(() => {
     const r = this.reporte();
     if (!r) return '';
@@ -156,9 +353,9 @@ export class Reportes {
     // Re-prepara el Excel cuando cambia lo que se ve (reporte nuevo o "incluir pendientes").
     effect(() => {
       const rep = this.reporte();
-      const grupos = this.grupos();
+      const filas = this.filasTabla();
       const seg = this.seguimiento();
-      untracked(() => void this.prepararExcel(rep, grupos, seg));
+      untracked(() => void this.prepararExcel(rep, filas, seg));
     });
   }
 
@@ -222,7 +419,7 @@ export class Reportes {
         return;
       }
       const rep: ReporteEstadoEquipo = await r.json();
-      await this.ordenEnVivo(rep);
+      await this.datosEnVivo(rep);
       this.reporte.set(rep);
     } catch {
       this.error.set('No se pudo generar el reporte.');
@@ -234,16 +431,28 @@ export class Reportes {
   /** Orden y ASIGNADO del ticket, en vivo (como el Board): el espejo puede estar desactualizado y una
    *  reasignación hecha en el HelpDesk no toca la tarea. Si la lectura de un ticket falla, queda lo del
    *  backend. Una fila cuyo ticket ahora es de alguien fuera del reporte, sale del reporte. */
-  private async ordenEnVivo(rep: ReporteEstadoEquipo): Promise<void> {
+  private async datosEnVivo(rep: ReporteEstadoEquipo): Promise<void> {
     const tickets = [...new Set(rep.filas.map((f) => f.ticket).filter((t): t is string => !!t))];
-    const vivo = new Map<string, { orden: string | null; asignado: string | null }>();
+    type Vivo = { orden: string | null; asignado: string | null; tipo: string; estado: string; creacion: string; asignacion: string; mod: string };
+    const vivo = new Map<string, Vivo>();
+    // Nombre del estado por su id (por si la lectura individual no trae la descripción).
+    await this.hd.getTicketStatuses();
+    const nombreEstado = new Map(this.hd.statusNames().map((n) => [this.hd.statusIdOf(n), n]));
     await Promise.all(
       tickets.map(async (t) => {
         const raw = await this.hd.fetchTicketRaw(t);
         if (!raw) return;
         const p = raw.priority;
-        const a = String(raw.assigned_user_id ?? '').trim().toUpperCase();
-        vivo.set(t, { orden: p !== undefined && p !== null && String(p).trim() ? String(p).trim() : null, asignado: a || null });
+        const tk = mapTicket(raw);
+        vivo.set(t, {
+          orden: p !== undefined && p !== null && String(p).trim() ? String(p).trim() : null,
+          asignado: tk.usuarioAsignado || null,
+          tipo: tk.tipo,
+          estado: tk.estatus || nombreEstado.get(String(raw.ticket_status_id ?? '')) || '',
+          creacion: tk.fechaIngreso,
+          asignacion: tk.fechaAsignacion,
+          mod: tk.fechaMod,
+        });
       }),
     );
     // El asignado de la tarea es SIEMPRE el del ticket: si en vivo difiere, se corrige la tarea.
@@ -253,6 +462,14 @@ export class Reportes {
       const v = f.ticket ? vivo.get(f.ticket) : undefined;
       if (!v) return true;
       if (v.orden) f.ordenTicket = v.orden;
+      f.tipo = v.tipo || undefined;
+      f.estadoTicket = v.estado ? v.estado.toUpperCase() : undefined;
+      f.fechaCreacion = v.creacion || undefined;
+      f.diasCreacion = diasDesde(v.creacion);
+      f.fechaAsignacion = v.asignacion || undefined;
+      f.diasAsignacion = diasDesde(v.asignacion);
+      f.ultimaGestion = v.mod || undefined;
+      f.diasSinMov = diasDesde(v.mod);
       if (v.asignado !== (f.consultorHid ? f.consultorHid.toUpperCase() : null)) {
         f.consultorHid = v.asignado;
         f.consultorNombre = null;
@@ -295,7 +512,7 @@ export class Reportes {
   }
 
   private prepVersion = 0;
-  private async prepararExcel(rep: ReporteEstadoEquipo | null, grupos: GrupoConsultor[], seg: FilaSeguimiento[]): Promise<void> {
+  private async prepararExcel(rep: ReporteEstadoEquipo | null, filas: FilaReporte[], seg: FilaSeguimiento[]): Promise<void> {
     const v = ++this.prepVersion;
     this.excel.set(null);
     if (!rep) return;
@@ -306,7 +523,8 @@ export class Reportes {
         consultores: this.consultoresLabel(),
         generadoPor: nombrePropio(String(this.auth.session()?.name ?? '')) || '—',
         generadoEn: new Date(rep.generadoEn),
-        grupos,
+        filas: filas.map((f) => ({ ...f, consultorNombre: this.nombreConsultor(f), estadoTicket: this.estadoDe(f) })),
+        sinTarea: this.sinTareaVisible(),
         seguimiento: seg.map((s) => ({ ...s, consultorNombre: s.consultorHid ? this.nombreConsultor(s) : null })),
       });
       if (v !== this.prepVersion) return; // llegó otro cambio mientras se generaba

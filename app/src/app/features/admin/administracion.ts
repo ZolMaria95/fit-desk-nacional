@@ -45,6 +45,43 @@ export class Administracion {
   readonly asignaciones = signal<Asignacion[]>([]);
   readonly cargando = signal(false);
 
+  // ── Equipo base (ubicación de los consultores de alcance nacional; solo informativo para Reportes) ──
+  /** usuarioId → equipo base. */
+  readonly equipoBase = signal<Record<string, { codigo: string; nombre: string }>>({});
+  /** Códigos de equipo que el actor puede poner/quitar como base (ADMIN = todos; RE = los que dirige). */
+  readonly equiposBaseEditables = signal<Set<string>>(new Set());
+  readonly guardandoBase = signal(false);
+  /** Equipos que se ofrecen en el selector (activos y editables por el actor). */
+  readonly opcionesEquipoBase = computed(() =>
+    this.equipos().filter((e) => e.activo && this.equiposBaseEditables().has(e.codigo))
+      .sort((a, b) => (a.nombre || a.codigo).localeCompare(b.nombre || b.codigo, 'es')));
+  baseDe(usuarioId: number): { codigo: string; nombre: string } | null {
+    return this.equipoBase()[String(usuarioId)] ?? null;
+  }
+  /** ¿Puede cambiar el equipo base de esta persona? Debe dirigir el actual (si tiene) y algún equipo. */
+  puedeEditarBase(usuarioId: number): boolean {
+    const actual = this.baseDe(usuarioId);
+    return this.equiposBaseEditables().size > 0 && (!actual || this.equiposBaseEditables().has(actual.codigo));
+  }
+  async cambiarEquipoBase(usuarioId: number, codigo: string | null): Promise<void> {
+    if (this.guardandoBase() || (this.baseDe(usuarioId)?.codigo ?? null) === codigo) return;
+    this.guardandoBase.set(true);
+    try {
+      const r = await this.api.setEquipoBase(usuarioId, codigo);
+      this.equipoBase.update((m) => {
+        const n = { ...m };
+        if (r.equipoBaseCodigo) n[String(usuarioId)] = { codigo: r.equipoBaseCodigo, nombre: r.equipoBaseNombre || r.equipoBaseCodigo };
+        else delete n[String(usuarioId)];
+        return n;
+      });
+      this.snack.open(codigo ? 'Equipo base guardado. Aparecerá en el reporte de ese equipo.' : 'Equipo base quitado.', '', { duration: 2500 });
+    } catch (e: any) {
+      this.snack.open(e?.error?.error || 'No se pudo guardar el equipo base.', 'OK', { duration: 5000 });
+    } finally {
+      this.guardandoBase.set(false);
+    }
+  }
+
   /** Catálogo de empleados del HelpDesk (fuente del nombre COMPLETO del técnico). */
   readonly hdUsers = this.hd.hdUsers;
   /** Asignaciones con el `usuarioNombre` tomado del API (catálogo) por helpdesk_user_id;
@@ -358,10 +395,13 @@ export class Administracion {
   async recargar(): Promise<void> {
     this.cargando.set(true);
     try {
-      const [r, e, c, ro, a] = await Promise.all([
+      const [r, e, c, ro, a, eb] = await Promise.all([
         this.api.regionales(), this.api.equipos(), this.api.clientes(),
         this.api.roles(), this.api.asignaciones(),
+        this.api.equiposBase().catch(() => ({ usuarios: {}, editables: [] as string[] })),
       ]);
+      this.equipoBase.set(eb.usuarios ?? {});
+      this.equiposBaseEditables.set(new Set(eb.editables ?? []));
       this.regionales.set(r);
       this.equipos.set(e);
       this.clientes.set(c);

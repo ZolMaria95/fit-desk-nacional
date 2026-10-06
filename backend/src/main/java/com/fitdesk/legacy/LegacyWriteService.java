@@ -299,6 +299,27 @@ public class LegacyWriteService {
         if (f.has("waitingDate")) {
             t.fechaEsperando = date(text(f, "waitingDate"));
         }
+        // Nota y bloqueo (V33). El PATCH no trae X-Actor-Hid: el autor de la nota viaja en `notaPorHid`.
+        if (f.has("nota")) {
+            String n = text(f, "nota");
+            if (n != null && n.length() > Tarea.MAX_NOTA) {
+                n = n.substring(0, Tarea.MAX_NOTA);
+            }
+            String antes = t.nota;
+            t.nota = n;
+            if (!java.util.Objects.equals(antes, n)) {
+                t.notaActualizadaEn = java.time.OffsetDateTime.now();
+                String por = text(f, "notaPorHid");
+                t.notaPor = por != null ? Usuario.findByHelpdeskUserId(por.trim().toUpperCase()) : null;
+            }
+        }
+        if (f.has("bloqueo")) {
+            String b = text(f, "bloqueo");
+            b = b == null ? null : b.trim().toUpperCase();
+            if (b == null || Tarea.BLOQUEOS.contains(b)) {
+                t.bloqueo = b;
+            }
+        }
         // hdEstatus se guarda en el espejo (si la tarjeta tiene ticket enlazado).
         if (f.has("hdEstatus") && t.ticketEspejo != null) {
             t.ticketEspejo.estadoOrigen = text(f, "hdEstatus");

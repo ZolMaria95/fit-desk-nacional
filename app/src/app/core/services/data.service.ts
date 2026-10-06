@@ -25,6 +25,12 @@ export interface Story {
   waitingDate: string | null;
   title?: string;
   hdEstatus?: string;
+  /** Nota de la tarea (V33), con autor y fecha; visible para todo el que ve la tarea. */
+  nota?: string | null;
+  notaPor?: string | null;
+  notaFecha?: string | null;
+  /** Bloqueo (V33): clave del catálogo de Reportes (`BLOQUEOS`) o null. */
+  bloqueo?: string | null;
   clientName?: string; // nombre del cliente (de tareas con ticket) para no depender del catálogo
   // Tipo de tarea + reunión (V11).
   tipo?: string; // 'DESARROLLO_SOPORTE' (default) | 'REUNION'

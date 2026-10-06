@@ -48,6 +48,12 @@ public class Usuario extends PanacheEntityBase {
     @Column(name = "orden_estados", columnDefinition = "text")
     public String ordenEstados;
 
+    /** Equipo base (V32): dónde está ubicada la persona. Solo informativo para el reporte del equipo
+     *  (consultores de alcance nacional); NO da permisos ni membresía. NULL = sin equipo base. */
+    @jakarta.persistence.ManyToOne
+    @jakarta.persistence.JoinColumn(name = "equipo_base_id")
+    public Equipo equipoBase;
+
     public boolean activo = true;
 
     @Column(name = "creado_en")

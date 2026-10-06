@@ -52,7 +52,7 @@ erDiagram
     EQUIPO ||--o{ TRANSFERENCIA : "origen/destino"
 ```
 
-- **Usuario** — identidad federada (`helpdesk_user_id`). Guarda además preferencias personales de la UI: tema, color, foto y **orden de estados** (en qué orden ve los tickets por estado y cuáles oculta; hoy solo lo definen responsables y ADMIN, V31).
+- **Usuario** — identidad federada (`helpdesk_user_id`). Guarda además preferencias personales de la UI: tema, color, foto y **orden de estados** (en qué orden ve los tickets por estado y cuáles oculta; hoy solo lo definen responsables y ADMIN, V31). **Equipo base** (V32): dónde está ubicada la persona (consultores de alcance nacional); NO es permiso ni membresía, solo la incluye en el reporte de ese equipo. La **Tarea** tiene además **nota** (texto visible para todo el que ve la tarea, con autor y fecha) y **bloqueo** (catálogo: sin bloqueo, esperando cliente/información/otro consultor/ambiente, bloqueo técnico/externo), V33.
 - **Rol** — qué puede hacer (catálogo abajo).
 - **Asignacion** — entidad clave: `(usuario, rol, alcance{tipo, ref}, desde, hasta)`. El alcance es polimórfico: Equipo | Cliente | Regional | Global.
 - **Regional** — agrupador geográfico (Cuenca, Quito, Guayaquil…).

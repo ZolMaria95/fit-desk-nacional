@@ -73,6 +73,25 @@
       <textarea matInput rows="3" [(ngModel)]="description"
                 placeholder="Contexto, pasos para reproducir, acuerdos con el cliente…"></textarea>
     </mat-form-field>
+
+    @if (!isNew) {
+      <div class="cd-nota-fila">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="cd-nota">
+          <mat-label>Nota (la ve todo el equipo)</mat-label>
+          <textarea matInput rows="2" maxlength="1000" [(ngModel)]="nota" placeholder="Próxima acción, acuerdos, pendientes…"></textarea>
+          @if (notaMeta) { <mat-hint>Última edición: {{ notaMeta }}</mat-hint> }
+        </mat-form-field>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="cd-bloqueo">
+          <mat-label>Bloqueo</mat-label>
+          <mat-select [(ngModel)]="bloqueo">
+            <mat-option value="">— Sin dato</mat-option>
+            @for (b of BLOQUEOS; track b.clave) {
+              <mat-option [value]="b.clave"><span class="cd-dot {{ b.nivel }}"></span> {{ b.label }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+    }
   </section>
 
   <!-- ── 2. GESTIÓN: quién la lleva, con qué urgencia, dónde y para cuándo ── -->

@@ -117,6 +117,27 @@ public class Tarea extends PanacheEntityBase {
     @Column(name = "en_proceso_desde")
     public OffsetDateTime enProcesoDesde;
 
+    /** Nota de la tarea (V33): visible para todo el que ve la tarea; con autor y fecha de la última edición. */
+    @Column(columnDefinition = "text")
+    public String nota;
+
+    @Column(name = "nota_actualizada_en")
+    public OffsetDateTime notaActualizadaEn;
+
+    @jakarta.persistence.ManyToOne
+    @jakarta.persistence.JoinColumn(name = "nota_por_id")
+    public Usuario notaPor;
+
+    /** Bloqueo (V33): uno de {@link #BLOQUEOS}; null = sin dato. */
+    @Column(length = 30)
+    public String bloqueo;
+
+    public static final java.util.Set<String> BLOQUEOS = java.util.Set.of("SIN_BLOQUEO", "ESPERANDO_CLIENTE",
+            "ESPERANDO_INFORMACION", "ESPERANDO_CONSULTOR", "ESPERANDO_AMBIENTE", "BLOQUEO_TECNICO", "BLOQUEO_EXTERNO");
+
+    /** Tope de la nota. */
+    public static final int MAX_NOTA = 1000;
+
     @Column(name = "creado_en")
     public OffsetDateTime creadoEn = OffsetDateTime.now();
 

@@ -312,7 +312,26 @@
                 <dt>Objetivo</dt><dd><mat-icon>flag</mat-icon> {{ a.alcanceNombre || '—' }}</dd>
                 <dt>Desde</dt><dd><mat-icon>event</mat-icon> {{ fmtFecha(a.vigenteDesde) }}</dd>
                 <dt>Hasta</dt><dd><mat-icon>event_busy</mat-icon> {{ a.vigenteHasta ? fmtFecha(a.vigenteHasta) : 'Sin fecha de fin' }}</dd>
+                <dt>Equipo base</dt>
+                <dd>
+                  <mat-icon>home_pin</mat-icon>
+                  @if (puedeEditarBase(a.usuarioId)) {
+                    <button type="button" class="base-btn" [matMenuTriggerFor]="baseMenu" [disabled]="guardandoBase()"
+                            title="Dónde está ubicada la persona. Solo la incluye en el reporte de ese equipo; no cambia permisos.">
+                      {{ baseDe(a.usuarioId)?.nombre || 'Sin equipo base' }} <mat-icon class="a-caret">expand_more</mat-icon>
+                    </button>
+                    <mat-menu #baseMenu="matMenu" class="a-menu">
+                      <button mat-menu-item (click)="cambiarEquipoBase(a.usuarioId, null)" [class.on]="!baseDe(a.usuarioId)">Sin equipo base</button>
+                      @for (e of opcionesEquipoBase(); track e.codigo) {
+                        <button mat-menu-item (click)="cambiarEquipoBase(a.usuarioId, e.codigo)" [class.on]="baseDe(a.usuarioId)?.codigo === e.codigo">{{ e.nombre || e.codigo }}</button>
+                      }
+                    </mat-menu>
+                  } @else {
+                    {{ baseDe(a.usuarioId)?.nombre || '—' }}
+                  }
+                </dd>
               </dl>
+              <p class="base-hint">El equipo base indica dónde está ubicada la persona (p. ej. un consultor nacional de Cuenca): el reporte de ese equipo la incluye con todas sus tareas. No cambia permisos.</p>
               <div class="detail-actions">
                 <button type="button" class="btn-outline" (click)="editarAsignacion(a)"><mat-icon>edit</mat-icon> Editar</button>
                 <button type="button" class="btn-danger" (click)="quitarAsignacion(a)"><mat-icon>delete_outline</mat-icon> Quitar</button>

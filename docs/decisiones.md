@@ -6,6 +6,79 @@ Registro de decisiones de arquitectura, alcance y tecnología. Formato ADR-lite.
 
 ---
 
+### [2026-10-05] Reportes: rediseño "Gestión de trabajo por consultor" (nota y bloqueo de la tarea, V33)
+
+**Pedido de la dueña** (con un diseño de referencia): la tabla "Qué está haciendo cada consultor" pasa a ser
+"Gestión de trabajo por consultor", con más datos del ticket en vivo y edición desde la tabla.
+
+**Decisiones:** todo el diseño (tarjetas resumen, buscador y filtros, última gestión y días sin movimiento,
+columna Bloqueo); estado = **estado real del ticket** (sin ticket: columna del board); la **nota** es un campo de
+la **tarea** visible para todo el que la ve; avance, compromiso, nota y bloqueo los editan **responsables y
+ADMIN** (la prioridad sigue: HELPDESK y ADMIN). Bloqueo con 7 opciones de la dueña: Sin bloqueo (verde) ·
+Esperando cliente / información (amarillo) · Esperando otro consultor / ambiente (naranja) · Bloqueo técnico /
+externo (rojo).
+
+**Implementación:**
+- V33: `tarea.nota`, `nota_actualizada_en`, `nota_por_id`, `bloqueo` (catálogo `Tarea.BLOQUEOS`).
+- `/estado-equipo`: filas + `progreso`, `nota/notaPor/notaFecha`, `bloqueo`, `diasEsperandoCliente`, `columna`; bloque
+  `resumen` (en progreso, finalizadas este mes por `fecha_aprobacion`, vencidas, consultores con tareas).
+- `PUT /api/reportes/tareas/{codigo}` `{progreso?, fechaLimite?, nota?, bloqueo?}`: ADMIN o RE que gobierne el
+  equipo del tablero o un equipo del asignado; valida rangos. **Compromiso = fecha límite** y **avance = progreso**
+  de la tarea (el Board ve lo mismo).
+- Stories exponen `nota/notaPor/notaFecha/bloqueo`; el PATCH los acepta (autor de la nota en `notaPorHid`, el PATCH
+  no lleva actor). El modal de la tarea muestra/edita Nota y Bloqueo en el mismo PATCH.
+- Front: `datosEnVivo` (antes `ordenEnVivo`) lee cada ticket con `mapTicket`: orden, asignado, tipo, estado real,
+  fecha de creación, de asignación (+ días) y última gestión (+ días sin movimiento). Tabla plana con columnas
+  fijas Consultor/Tarea, orden por encabezado, filtros en el cliente, paginación 10/25/50; en 390 px, tarjetas.
+  Excel: hoja "Gestión por consultor" con las 19 columnas (las de "completar a mano" se reemplazan por Bloqueo y
+  Nota reales).
+
+**Ajustes tras revisión (mismo día):** sin scroll horizontal — columnas agrupadas (Tipo dentro de Tarea;
+Prioridad·Orden; Fechas = creado/asignado con días desde cada una + inicio; Última gestión + días sin movimiento;
+"esperando cliente" bajo Bloqueo), fechas dd/mm/aa y texto que se ajusta; la tabla necesita ~984 px y cabe desde
+pantallas de 1366 px; si la sección es más angosta (container query ≤ 1015 px) pasa a tarjetas. Se agregó
+**días desde la creación** del ticket (tabla y Excel).
+
+**Verificado en local** contra el HelpDesk real (CUENCA): datos en vivo correctos; editar avance/compromiso/bloqueo/
+nota persiste en la tarea, el modal los muestra y editar la nota desde el modal la guarda con su autor; RE → 200,
+consultor → 403, valores inválidos → 400; filtros, buscador, orden, paginación y Excel; 390 px sin desborde.
+**Estado:** vigente, sin desplegar (va con V32).
+
+### [2026-10-05] Tareas de clientes sin equipo — EN ESPERA de gerencia
+
+Las tareas creadas automáticamente para tickets de clientes no registrados en FitDesk caen en el equipo de quien
+abre el Board (725 en CUENCA, 692 de SOFT WAREHOUSE). Se probaron dos soluciones en local (tablero "Clientes sin
+equipo" y "tablero del equipo del consultor"); **la dueña pidió revertir y esperar a que gerencia defina el
+tratamiento**. Nada se desplegó. Análisis, datos y opciones en
+[knowledge/18-clientes-sin-equipo-plan-pendiente.md](knowledge/18-clientes-sin-equipo-plan-pendiente.md).
+**Estado:** pendiente de decisión.
+
+### [2026-10-05] "Equipo base" para consultores de alcance nacional (carga real en Reportes)
+
+**Pedido de la dueña:** los consultores nacionales atienden a todos los clientes pero están ubicados en un equipo
+(Lina Ochoa → Cuenca). El reporte "Estado del equipo" de CUENCA no la mostraba (solo tiene ESPECIALISTA GLOBAL,
+sin asignación EQUIPO), así que su carga real no se veía: tareas en Quito u otros tableros.
+
+**Decisión de la dueña:** un campo **"Equipo base"** en la persona = ubicación, **no** permiso ni membresía (no
+cambia Board/Tickets ni avisos). En el reporte de su equipo base sale con **todas sus tareas de cualquier
+tablero**.
+- V32 `usuario.equipo_base_id` → `Usuario.equipoBase`.
+- `GET /api/admin/usuarios/equipos-base` (base de cada persona + equipos que el actor puede poner) y `PUT
+  /api/admin/usuarios/{id}/equipo-base` `{equipo: codigo|null}`: ADMIN, o RE que gobierne el equipo nuevo **y**
+  el actual (no puede "llevarse" a la gente de otro equipo); si no, 403.
+- `ReporteResource.estadoEquipo` (sin consultores elegidos): miembros EQUIPO **∪ usuarios con ese equipo base**.
+  Las tareas ya se tomaban de cualquier tablero; las de otro equipo salen como "tablero X".
+- `/equipo-miembros` (selector de consultores del reporte y de la rotación) también ofrece a quien tenga ese
+  equipo base, marcado como nacional.
+- UI: Administración → Asignaciones → detalle → fila "Equipo base" (menú con los equipos que el actor dirige).
+
+**Verificado en local:** persona ESPECIALISTA GLOBAL de prueba con una tarea In Progress en otro tablero: sin base
+no aparece en el reporte de CUENCA; con base CUENCA aparece con la tarea marcada "tablero …"; RE de otro equipo y
+consultor → 403. 390 px correcto.
+
+**Pendiente tras el deploy:** poner el equipo base a Lina (CUENCA) y a los demás nacionales (Valeria Neira,
+Cleira Ulloa, Bunay Ramos, Domenica Lasso…). **Estado:** vigente, sin desplegar.
+
 ### [2026-10-05] Las tareas creadas para tickets asignados nacen en la columna de su estado (+ 436 corregidas)
 
 **Problema (dueña):** TA-896 (#28784, ENTREGADO desde abril 2025) salía "To Do" en Reportes. `POST

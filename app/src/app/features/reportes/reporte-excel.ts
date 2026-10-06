@@ -1,23 +1,26 @@
-import { ESTADO_LABEL, FilaSeguimiento, GrupoConsultor, PRIORIDAD_LABEL, fechaCorta } from './reporte-modelo';
+import { FilaReporte, FilaSeguimiento, PRIORIDAD_LABEL, bloqueoDe, fechaCorta, fechaHora } from './reporte-modelo';
 
 export interface DatosExcel {
   equipo: string;
   consultores: string; // "Todos los del equipo" o la lista de nombres
   generadoPor: string;
   generadoEn: Date;
-  grupos: GrupoConsultor[];
+  /** Filas de la tabla tal como se ven (filtradas y ordenadas), con el nombre del consultor y el estado mostrado. */
+  filas: (FilaReporte & { consultorNombre: string | null; estadoTicket?: string })[];
+  /** Consultores sin tarea visible. */
+  sinTarea: string[];
   seguimiento: FilaSeguimiento[];
 }
 
 const AZUL = 'FF1F3864';
-const PARA_COMPLETAR = 'FFFFF6D5'; // fondo suave de las columnas que se llenan a mano
+const PARA_COMPLETAR = 'FFFFF6D5'; // fondo suave (sin uso en la hoja principal desde 2026-10)
 const BORDE = { style: 'thin' as const, color: { argb: 'FFD9DEE5' } };
 
 /**
  * Genera el .xlsx del reporte "Estado del equipo". `exceljs` se importa AQUÍ, dinámicamente: solo se
  * descarga al pulsar "Descargar Excel", no en la carga inicial de la app.
- * Las columnas Próximo paso / ¿Bloqueado? / Motivo / Quién debe intervenir van VACÍAS a propósito
- * (decisión de la dueña): se completan en el propio Excel.
+ * La hoja principal refleja la tabla "Gestión de trabajo por consultor" (con sus filtros y orden); el
+ * bloqueo y la nota ya se registran en FitDesk, así que reemplazan a las columnas que antes se llenaban a mano.
  */
 export async function generarExcelReporte(d: DatosExcel): Promise<Blob> {
   const ExcelJS = (await import('exceljs')).default;
@@ -26,59 +29,56 @@ export async function generarExcelReporte(d: DatosExcel): Promise<Blob> {
   wb.created = d.generadoEn;
   const generado = `${d.generadoEn.toLocaleDateString('es-EC')} ${d.generadoEn.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' })}`;
 
-  // ── Hoja 1: Estado del equipo ──
-  const ws = wb.addWorksheet('Estado del equipo', { views: [{ state: 'frozen', ySplit: 6 }] });
-  ws.columns = [
-    { key: 'consultor', width: 26 },
-    { key: 'tarea', width: 38 },
-    { key: 'ticket', width: 10 },
-    { key: 'cliente', width: 28 },
-    { key: 'estado', width: 16 },
-    { key: 'prioridad', width: 11 },
-    { key: 'orden', width: 10 },
-    { key: 'inicio', width: 16 },
-    { key: 'dias', width: 10 },
-    { key: 'proximo', width: 34 },
-    { key: 'bloqueado', width: 12 },
-    { key: 'motivo', width: 30 },
-    { key: 'interviene', width: 24 },
+  // ── Hoja 1: Gestión de trabajo por consultor (lo mismo que la tabla, con sus filtros y orden) ──
+  const ws = wb.addWorksheet('Gestión por consultor', { views: [{ state: 'frozen', ySplit: 5, xSplit: 2 }] });
+  const cols: [string, number][] = [
+    ['Consultor', 24], ['Tarea', 36], ['Ticket', 9], ['Tipo', 15], ['Cliente', 26], ['Estado', 22],
+    ['Prioridad (tarea)', 11], ['Orden del ticket', 9], ['% Avance', 9], ['Creación ticket', 12],
+    ['Días desde creación', 11], ['Asignación', 12], ['Días desde asignación', 11], ['Inicio', 13], ['Última gestión', 16],
+    ['Días sin movimiento', 11], ['Días esperando cliente', 11], ['Compromiso', 12], ['Bloqueo', 22], ['Nota', 44],
   ];
-  encabezado(ws, `Estado del equipo — ${d.equipo}`, [
+  ws.columns = cols.map(([, width]) => ({ width }));
+  encabezado(ws, `Gestión de trabajo por consultor — ${d.equipo}`, [
     `Consultores: ${d.consultores}`,
     `Generado: ${generado} por ${d.generadoPor}`,
-    'Las columnas en amarillo (Próximo paso, ¿Bloqueado?, Motivo, Quién debe intervenir) son para completar.',
   ]);
-  const titulos = ['Consultor', 'Tarea', 'Ticket', 'Cliente', 'Estado', 'Prioridad (tarea)', 'Orden del ticket',
-    'Fecha de inicio', 'Días transcurridos', 'Próximo paso', '¿Bloqueado?', 'Motivo', 'Quién debe intervenir'];
-  filaTitulos(ws, 6, titulos);
-
-  let r = 7;
-  for (const g of d.grupos) {
-    const filas = g.filas.length ? g.filas : [null];
-    for (const f of filas) {
-      const row = ws.getRow(r);
-      row.values = f
-        ? [
-            g.nombre,
-            `${f.tarea}${f.titulo ? ' · ' + f.titulo : ''}${f.tablero ? ` (tablero ${f.tablero})` : ''}`,
-            f.ticket ? Number(f.ticket) || f.ticket : '',
-            f.cliente ?? '',
-            (ESTADO_LABEL[f.estado] ?? f.estado) + (f.esperandoCliente ? ' · esperando cliente' : ''),
-            PRIORIDAD_LABEL[f.prioridad ?? ''] ?? '',
-            f.ordenTicket ? Number(f.ordenTicket) || f.ordenTicket : '',
-            f.inicio ? fechaCorta(f.inicio) + (f.inicioAprox ? ' (aprox.)' : '') : '',
-            f.dias ?? '',
-            '', '', '', '',
-          ]
-        : [g.nombre, 'Sin tarea en curso', '', '', '', '', '', '', '', '', '', '', ''];
-      estiloFila(row, 13, 10);
-      r++;
-    }
+  filaTitulos(ws, 5, cols.map(([t]) => t));
+  let r = 6;
+  for (const f of d.filas) {
+    const row = ws.getRow(r);
+    const num = (v: string | null | undefined) => (v ? Number(v) || v : '');
+    row.values = [
+      f.consultorNombre || 'Sin asignar',
+      `${f.tarea}${f.titulo ? ' · ' + f.titulo : ''}${f.tablero ? ` (tablero ${f.tablero})` : ''}`,
+      num(f.ticket),
+      f.tipo || (f.ticket ? '' : 'Tarea'),
+      f.cliente ?? '',
+      f.estadoTicket ?? '',
+      PRIORIDAD_LABEL[f.prioridad ?? ''] ?? '',
+      num(f.ordenTicket),
+      (f.progreso ?? 0) / 100,
+      f.fechaCreacion ? fechaCorta(f.fechaCreacion) : '',
+      f.diasCreacion ?? '',
+      f.fechaAsignacion ? fechaCorta(f.fechaAsignacion) : '',
+      f.diasAsignacion ?? '',
+      f.inicio ? fechaCorta(f.inicio) + (f.inicioAprox ? ' (aprox.)' : '') : '',
+      f.ultimaGestion ? fechaHora(f.ultimaGestion) : '',
+      f.diasSinMov ?? '',
+      f.diasEsperandoCliente ?? '',
+      f.fechaLimite ? fechaCorta(f.fechaLimite) : '',
+      bloqueoDe(f.bloqueo)?.label ?? '',
+      f.nota ?? '',
+    ];
+    row.getCell(9).numFmt = '0%';
+    estiloFila(row, cols.length, 0);
+    r++;
   }
-  ws.autoFilter = { from: { row: 6, column: 1 }, to: { row: Math.max(6, r - 1), column: 13 } };
-  // ¿Bloqueado?: lista desplegable Sí/No en toda la columna de datos (un solo rango).
-  if (r > 7) {
-    (ws as unknown as { dataValidations: { add(r: string, v: object): void } }).dataValidations.add(`K7:K${r - 1}`, { type: 'list', allowBlank: true, formulae: ['"Sí,No"'] });
+  if (!d.filas.length) ws.getCell('A6').value = 'Sin tareas.';
+  ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: Math.max(5, r - 1), column: cols.length } };
+  if (d.sinTarea.length) {
+    const c = ws.getCell(`A${r + 1}`);
+    c.value = `Sin tarea en curso: ${d.sinTarea.join(', ')}`;
+    c.font = { italic: true, size: 10, color: { argb: 'FF555555' } };
   }
 
   // ── Hoja 2: Seguimiento hoy ──
@@ -135,9 +135,8 @@ function filaTitulos(ws: any, fila: number, titulos: string[]): void {
   row.values = titulos;
   row.height = 30;
   row.eachCell((c: any, col: number) => {
-    const manual = titulos.length === 13 && col >= 10;
-    c.font = { bold: true, color: { argb: manual ? 'FF5C4A00' : 'FFFFFFFF' } };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: manual ? 'FFF2D46B' : AZUL } };
+    c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL } };
     c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     c.border = { top: BORDE, left: BORDE, bottom: BORDE, right: BORDE };
   });

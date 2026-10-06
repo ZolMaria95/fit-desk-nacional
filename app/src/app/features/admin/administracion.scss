@@ -326,3 +326,14 @@ mat-dialog-content { overflow-x: hidden; }
     font: inherit; font-weight: 600; font-size: 0.88rem; cursor: pointer; mat-icon { font-size: 18px; width: 18px; height: 18px; } }
   button:disabled { opacity: 0.5; cursor: default; }
 }
+
+// ─── Equipo base (detalle de asignación) ───
+.base-btn {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--mix-base, #fff); color: var(--mat-sys-on-surface, #16202a);
+  font: inherit; font-size: 0.86rem; cursor: pointer;
+  .a-caret { font-size: 18px; width: 18px; height: 18px; color: var(--muted); }
+  &:hover:not(:disabled) { border-color: color-mix(in srgb, var(--brand, #048abf) 45%, var(--line)); }
+  &:disabled { opacity: 0.5; cursor: default; }
+}
+.base-hint { margin: 10px 0 0; font-size: 0.78rem; color: var(--muted); line-height: 1.35; }

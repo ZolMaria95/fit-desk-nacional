@@ -246,3 +246,10 @@
 :host-context(html[data-theme='dark']) {
   .prio-chip { background: #1a222b; }
 }
+
+// ── Nota y bloqueo de la tarea (V33) ──
+.cd-nota-fila { display: flex; flex-wrap: wrap; gap: 10px; width: 100%;
+  .cd-nota { flex: 2 1 260px; min-width: 0; textarea { max-height: 30dvh; } }
+  .cd-bloqueo { flex: 1 1 180px; min-width: 0; } }
+.cd-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; background: #b9c3cd;
+  &.ok { background: #2fb34f; } &.amarillo { background: #f2c21b; } &.naranja { background: #f2811d; } &.rojo { background: #e0352b; } }

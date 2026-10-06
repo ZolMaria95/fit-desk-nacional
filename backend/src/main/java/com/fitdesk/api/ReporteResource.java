@@ -95,6 +95,11 @@ public class ReporteResource {
                     gente.putIfAbsent(a.usuario.id, a.usuario);
                 }
             }
+            // Consultores de alcance nacional UBICADOS en este equipo (equipo base, V32): entran con su carga
+            // real, es decir, sus tareas de cualquier tablero (las de otro equipo salen como "tablero X").
+            for (Usuario u : Usuario.<Usuario>list("equipoBase = ?1 and activo = true", eq)) {
+                gente.putIfAbsent(u.id, u);
+            }
         } else {
             for (Usuario u : Usuario.<Usuario>list("upper(helpdeskUserId) in ?1", pedidos)) {
                 gente.put(u.id, u);
@@ -200,6 +205,25 @@ public class ReporteResource {
         out.put("filas", filas);
         out.put("sinTarea", sinTarea);
         out.put("seguimiento", seguimiento);
+        // Resumen (tarjetas): en progreso · finalizadas este mes · vencidas · consultores con tareas. "Sin
+        // movimiento" lo calcula el front con la última gestión del ticket en vivo.
+        long enProgreso = filas.stream().filter(f -> "IN_PROGRESS".equals(f.get("estado"))).count();
+        long vencidas = filas.stream().filter(f -> f.get("fechaLimite") != null
+                && LocalDate.parse((String) f.get("fechaLimite")).isBefore(hoy)).count();
+        long finalizadasMes = 0;
+        if (!gente.isEmpty()) {
+            // Asignado efectivo (como en las filas): el del ticket si lo tiene; si no, el de la tarea.
+            finalizadasMes = Tarea.<Tarea>list("select t from Tarea t left join t.ticketEspejo e left join t.asignadoA u "
+                    + "where t.tipo <> 'REUNION' and t.aprobado = true and t.fechaAprobacion >= ?1 and t.fechaAprobacion <= ?2 "
+                    + "and (upper(e.asignadoHd) in ?4 or ((e is null or e.asignadoHd is null or e.asignadoHd = '') and u.id in ?3))",
+                    hoy.withDayOfMonth(1), hoy, gente.keySet(), hidsQ).size();
+        }
+        Map<String, Object> resumen = new LinkedHashMap<>();
+        resumen.put("enProgreso", enProgreso);
+        resumen.put("finalizadasMes", finalizadasMes);
+        resumen.put("vencidas", vencidas);
+        resumen.put("consultoresActivos", conTarea.size());
+        out.put("resumen", resumen);
         out.put("umbrales", Map.of("diasEsperandoCliente", DIAS_ESPERANDO_CLIENTE, "diasEnProceso", DIAS_EN_PROCESO));
         return Response.ok(out).build();
     }
@@ -245,6 +269,14 @@ public class ReporteResource {
         f.put("fechaLimite", t.fechaLimite != null ? t.fechaLimite.toString() : null);
         f.put("esperandoCliente", t.esperandoCliente);
         f.put("fechaEsperando", t.fechaEsperando != null ? t.fechaEsperando.toString() : null);
+        f.put("diasEsperandoCliente", t.esperandoCliente && t.fechaEsperando != null
+                ? ChronoUnit.DAYS.between(t.fechaEsperando, hoy) : null);
+        f.put("progreso", t.progreso);
+        f.put("nota", t.nota);
+        f.put("notaPor", t.notaPor != null ? t.notaPor.nombre : null);
+        f.put("notaFecha", t.notaActualizadaEn != null ? t.notaActualizadaEn.atZoneSameInstant(ZONA).toOffsetDateTime().toString() : null);
+        f.put("bloqueo", t.bloqueo);
+        f.put("columna", estado);
         boolean otroTablero = t.board != null && t.board.equipo != null && !t.board.equipo.id.equals(eq.id);
         f.put("tablero", otroTablero ? (t.board.equipo.nombre != null ? t.board.equipo.nombre : t.board.codigo) : null);
         return f;
@@ -314,6 +346,93 @@ public class ReporteResource {
         t.prioridad = p;
         t.actualizadoEn = OffsetDateTime.now();
         return Response.ok(Map.of("codigo", t.codigo, "prioridad", t.prioridad)).build();
+    }
+
+    /**
+     * Edita desde el reporte el avance (progreso de la tarea), la fecha compromiso (fecha límite), la nota y
+     * el bloqueo. Body: {progreso?, fechaLimite?, nota?, bloqueo?} — solo se tocan los campos presentes.
+     * Permiso: ADMIN, o RESPONSABLE_EQUIPO que gobierne el equipo del tablero de la tarea o un equipo del que
+     * sea miembro su asignado (quien ve a esa persona en su reporte).
+     */
+    @PUT
+    @Path("/tareas/{codigo}")
+    @Transactional
+    public Response editarTarea(@PathParam("codigo") String codigo, com.fasterxml.jackson.databind.JsonNode body,
+            @HeaderParam("X-Actor-Hid") String actorHid) {
+        Tarea t = codigo == null ? null : Tarea.findByCodigo(codigo.trim());
+        if (t == null) {
+            return error(404, "Tarea no encontrada.");
+        }
+        if (!puedeEditarDesdeReporte(actorHid, t)) {
+            return error(403, "Solo el responsable del equipo o un administrador pueden editar esta tarea desde el reporte.");
+        }
+        if (body == null || !body.isObject()) {
+            return error(400, "Cuerpo inválido.");
+        }
+        if (body.has("progreso")) {
+            com.fasterxml.jackson.databind.JsonNode p = body.get("progreso");
+            if (!p.isInt() || p.asInt() < 0 || p.asInt() > 100) {
+                return error(400, "El avance debe ser un número de 0 a 100.");
+            }
+            t.progreso = p.asInt();
+        }
+        if (body.has("fechaLimite")) {
+            String fl = body.get("fechaLimite").isNull() ? "" : body.get("fechaLimite").asText("").trim();
+            try {
+                t.fechaLimite = fl.isEmpty() ? null : LocalDate.parse(fl);
+            } catch (java.time.format.DateTimeParseException e) {
+                return error(400, "Fecha compromiso inválida (AAAA-MM-DD).");
+            }
+        }
+        if (body.has("bloqueo")) {
+            String b = body.get("bloqueo").isNull() ? "" : body.get("bloqueo").asText("").trim().toUpperCase();
+            if (!b.isEmpty() && !Tarea.BLOQUEOS.contains(b)) {
+                return error(400, "Bloqueo inválido.");
+            }
+            t.bloqueo = b.isEmpty() ? null : b;
+        }
+        if (body.has("nota")) {
+            String n = body.get("nota").isNull() ? "" : body.get("nota").asText("").trim();
+            if (n.length() > Tarea.MAX_NOTA) {
+                return error(400, "La nota admite hasta " + Tarea.MAX_NOTA + " caracteres.");
+            }
+            t.nota = n.isEmpty() ? null : n;
+            t.notaActualizadaEn = OffsetDateTime.now();
+            t.notaPor = Actor.usuario(actorHid);
+        }
+        t.actualizadoEn = OffsetDateTime.now();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("codigo", t.codigo);
+        out.put("progreso", t.progreso);
+        out.put("fechaLimite", t.fechaLimite != null ? t.fechaLimite.toString() : null);
+        out.put("bloqueo", t.bloqueo);
+        out.put("nota", t.nota);
+        out.put("notaPor", t.notaPor != null ? t.notaPor.nombre : null);
+        out.put("notaFecha", t.notaActualizadaEn != null ? t.notaActualizadaEn.atZoneSameInstant(ZONA).toOffsetDateTime().toString() : null);
+        return Response.ok(out).build();
+    }
+
+    /** ADMIN, o RE que gobierna el equipo del tablero de la tarea o un equipo del que es miembro su asignado. */
+    static boolean puedeEditarDesdeReporte(String actorHid, Tarea t) {
+        if (actorHid == null || actorHid.isBlank()) {
+            return false;
+        }
+        if (Actor.esAdmin(actorHid)) {
+            return true;
+        }
+        Set<Long> gobernados = Actor.equiposGestionables(actorHid);
+        if (gobernados.isEmpty()) {
+            return false;
+        }
+        if (t.board != null && t.board.equipo != null && gobernados.contains(t.board.equipo.id)) {
+            return true;
+        }
+        String ef = asignadoEfectivo(t);
+        return ef != null && Actor.equiposComoMiembro(ef).stream().anyMatch(gobernados::contains);
+    }
+
+    private static Response error(int status, String msg) {
+        return Response.status(status).entity(Map.of("error", msg, "message", msg)).build();
     }
 
     private static Map<String, Object> persona(Usuario u) {

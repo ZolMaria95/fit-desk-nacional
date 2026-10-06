@@ -120,6 +120,11 @@ public class LegacyReadResource {
             s.put("approvedDate", t.fechaAprobacion != null ? t.fechaAprobacion.toString() : null);
             s.put("waitingClient", t.esperandoCliente);
             s.put("waitingDate", t.fechaEsperando != null ? t.fechaEsperando.toString() : null);
+            // Nota y bloqueo de la tarea (V33).
+            s.put("nota", t.nota);
+            s.put("notaPor", t.notaPor != null ? t.notaPor.nombre : null);
+            s.put("notaFecha", t.notaActualizadaEn != null ? t.notaActualizadaEn.toString() : null);
+            s.put("bloqueo", t.bloqueo);
             if (t.titulo != null) {
                 s.put("title", t.titulo);
             }
@@ -395,6 +400,18 @@ public class LegacyReadResource {
             // el selector de TODOS los equipos —pueden cubrir cualquier semana— y sin distinguirlos
             // se confundían con la gente del equipo propio. El frontend los agrupa aparte.
             m.put("global", !"EQUIPO".equals(a.alcanceTipo));
+            out.add(m);
+        }
+        // Personas UBICADAS en este equipo (equipo base, V32) que no salieron arriba (p. ej. un CONSULTOR de
+        // alcance GLOBAL): también se ofrecen, marcadas como nacionales.
+        for (Usuario u : Usuario.<Usuario>list("equipoBase = ?1 and activo = true", eq)) {
+            if (!vistos.add(u.id)) {
+                continue;
+            }
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", u.helpdeskUserId != null ? u.helpdeskUserId : u.codigoLocal);
+            m.put("name", u.nombre);
+            m.put("global", true);
             out.add(m);
         }
         return out;

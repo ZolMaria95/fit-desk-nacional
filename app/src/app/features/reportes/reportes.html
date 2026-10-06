@@ -79,10 +79,11 @@
 
 @if (reporte(); as rep) {
   <div class="rp-kpis">
-    <div class="rp-kpi"><div class="n">{{ rep.consultores.length }}</div><div class="l">Consultores</div></div>
-    <div class="rp-kpi blue"><div class="n">{{ totalEnCurso() }}</div><div class="l">Tareas en curso</div></div>
-    <div class="rp-kpi amber"><div class="n">{{ sinTareaEnCurso() }}</div><div class="l">Sin tarea en curso</div></div>
-    <div class="rp-kpi red"><div class="n">{{ seguimiento().length }}</div><div class="l">Seguimiento hoy</div></div>
+    <div class="rp-kpi blue"><span class="rp-kpi-ic"><mat-icon>format_list_bulleted</mat-icon></span><div><div class="n">{{ kpiEnProgreso() }}</div><div class="l">Tareas en progreso</div></div></div>
+    <div class="rp-kpi green"><span class="rp-kpi-ic"><mat-icon>task_alt</mat-icon></span><div><div class="n">{{ rep.resumen?.finalizadasMes ?? 0 }}</div><div class="l">Finalizadas (este mes)</div></div></div>
+    <div class="rp-kpi amber"><span class="rp-kpi-ic"><mat-icon>schedule</mat-icon></span><div><div class="n">{{ kpiSinMov() }}</div><div class="l">Sin movimiento &gt; 3 días</div></div></div>
+    <div class="rp-kpi red"><span class="rp-kpi-ic"><mat-icon>error_outline</mat-icon></span><div><div class="n">{{ kpiVencidas() }}</div><div class="l">Vencidas</div></div></div>
+    <div class="rp-kpi violet"><span class="rp-kpi-ic"><mat-icon>groups</mat-icon></span><div><div class="n">{{ kpiActivos() }}</div><div class="l">Consultores activos</div></div></div>
   </div>
 
   <!-- Sub-pestañas: 1) Requieren seguimiento hoy · 2) Qué está haciendo cada consultor -->
@@ -129,75 +130,205 @@
     }
   </section>
   } @else {
-  <!-- ¿Qué está haciendo cada recurso? -->
-  <section class="rp-bloque blue">
-    <h3><mat-icon>groups</mat-icon> Qué está haciendo cada consultor</h3>
-    <div class="rp-tabla" role="table" aria-label="Estado del equipo">
-      <div class="rp-fila rp-cab" role="row">
-        <span role="columnheader">Consultor</span>
-        <span role="columnheader">Tarea / ticket</span>
-        <span role="columnheader">Cliente</span>
-        <span role="columnheader">Estado</span>
-        <span role="columnheader">Prioridad</span>
-        <span role="columnheader" matTooltip="Orden del ticket en el HelpDesk: posición en la lista del cliente (1 = primero)">Orden</span>
-        <span role="columnheader">Inicio</span>
-        <span role="columnheader">Días</span>
+  <!-- Gestión de trabajo por consultor -->
+  <section class="rp-bloque blue rp-gestion">
+    <h3><mat-icon>groups</mat-icon> Gestión de trabajo por consultor</h3>
+
+    <div class="rp-barra">
+      <div class="rp-buscar">
+        <mat-icon>search</mat-icon>
+        <input [value]="busqueda()" (input)="busqueda.set($any($event.target).value); pagina.set(0)" placeholder="Buscar por ticket, tarea, cliente o consultor…" aria-label="Buscar" />
+        @if (busqueda()) { <button type="button" class="rp-x" (click)="busqueda.set('')" aria-label="Limpiar búsqueda"><mat-icon>close</mat-icon></button> }
       </div>
-      @for (g of grupos(); track g.hid) {
-        @if (g.filas.length) {
-          @for (f of g.filas; track f.tarea; let first = $first) {
-            <div class="rp-fila" role="row" [class.primera]="first">
-              <span class="c-cons" role="cell">{{ first ? g.nombre : '' }}</span>
-              <span class="c-tarea" role="cell">
-                <button type="button" class="rp-ta" (click)="verTarea(f.tarea)" matTooltip="Abrir la tarea">{{ f.tarea }}</button>
-                @if (f.ticket) {
-                  <button type="button" class="rp-tk" (click)="verTicket(f.ticket)" [matTooltip]="'Abrir la conversación del ticket'">#{{ f.ticket }}</button>
-                }
-                <span class="rp-tit">{{ f.titulo }}</span>
-                @if (f.tablero) { <span class="rp-chip">tablero {{ f.tablero }}</span> }
-                @if (f.esperandoCliente) { <span class="rp-chip amber">esperando cliente</span> }
-              </span>
-              <span class="c-cli" role="cell" data-l="Cliente">{{ f.cliente || '—' }}</span>
-              <span class="c-est" role="cell" data-l="Estado">{{ ESTADO_LABEL[f.estado] || f.estado }}</span>
-              <span class="c-prio" role="cell" data-l="Prioridad">
-                @if (puedeEditarPrioridad()) {
-                  <button type="button" class="rp-prio-btn prio-{{ f.prioridad || 'media' }}" [matMenuTriggerFor]="menuPrio"
-                          [disabled]="guardandoPrioridad() === f.tarea" matTooltip="Cambiar la prioridad de la tarea"
-                          [attr.aria-label]="'Prioridad ' + (PRIORIDAD_LABEL[f.prioridad || ''] || '—') + '. Cambiar'">
-                    {{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}<mat-icon>expand_more</mat-icon>
-                  </button>
-                  <mat-menu #menuPrio="matMenu">
-                    @for (p of PRIORIDADES; track p) {
-                      <button mat-menu-item (click)="cambiarPrioridad(f, p)">
-                        @if (p === f.prioridad) { <mat-icon>check</mat-icon> } @else { <mat-icon></mat-icon> }
-                        <span>{{ PRIORIDAD_LABEL[p] }}</span>
-                      </button>
-                    }
-                  </mat-menu>
-                } @else {
-                  {{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}
-                }
-              </span>
-              <span class="c-ord" role="cell" data-l="Orden">
-                @if (f.ordenTicket) { <span class="rp-orden {{ prioBadgeClase(f.ordenTicket) }}">{{ f.ordenTicket }}</span> } @else { — }
-              </span>
-              <span class="c-ini" role="cell" data-l="Inicio">
-                @if (f.inicio) {
-                  {{ fechaCorta(f.inicio) }}
-                  @if (f.inicioAprox) { <span class="rp-aprox" matTooltip="Tarea que ya estaba en curso antes de registrar esta fecha: se usa su fecha de creación">aprox.</span> }
-                } @else { — }
-              </span>
-              <span class="c-dias" role="cell" data-l="Días" [class.alto]="(f.dias ?? 0) >= rep.umbrales.diasEnProceso">{{ f.dias ?? '—' }}</span>
-            </div>
-          }
-        } @else {
-          <div class="rp-fila primera sin" role="row">
-            <span class="c-cons" role="cell">{{ g.nombre }}</span>
-            <span class="c-tarea muted" role="cell">Sin tarea en curso</span>
-          </div>
-        }
-      }
+      <button type="button" class="rp-fil" [class.on]="fConsultor()" [matMenuTriggerFor]="mfCons">{{ fConsultor() ? nombreFiltroConsultor() : 'Todos los consultores' }} <mat-icon>expand_more</mat-icon></button>
+      <mat-menu #mfCons="matMenu" class="rp-menu-fil">
+        <button mat-menu-item (click)="fConsultor.set(''); pagina.set(0)">Todos los consultores</button>
+        @for (o of opcionesConsultor(); track o.id) { <button mat-menu-item (click)="fConsultor.set(o.id); pagina.set(0)">{{ o.nombre }}</button> }
+      </mat-menu>
+      <button type="button" class="rp-fil" [class.on]="fCliente()" [matMenuTriggerFor]="mfCli">{{ fCliente() || 'Todos los clientes' }} <mat-icon>expand_more</mat-icon></button>
+      <mat-menu #mfCli="matMenu" class="rp-menu-fil">
+        <button mat-menu-item (click)="fCliente.set(''); pagina.set(0)">Todos los clientes</button>
+        @for (c of opcionesCliente(); track c) { <button mat-menu-item (click)="fCliente.set(c); pagina.set(0)">{{ c }}</button> }
+      </mat-menu>
+      <button type="button" class="rp-fil" [class.on]="fEstado()" [matMenuTriggerFor]="mfEst">{{ fEstado() || 'Todos los estados' }} <mat-icon>expand_more</mat-icon></button>
+      <mat-menu #mfEst="matMenu" class="rp-menu-fil">
+        <button mat-menu-item (click)="fEstado.set(''); pagina.set(0)">Todos los estados</button>
+        @for (e of opcionesEstado(); track e) { <button mat-menu-item (click)="fEstado.set(e); pagina.set(0)">{{ e }}</button> }
+      </mat-menu>
+      <button type="button" class="rp-fil" [class.on]="fPrioridad()" [matMenuTriggerFor]="mfPrio">{{ fPrioridad() ? PRIORIDAD_LABEL[fPrioridad()] : 'Todas las prioridades' }} <mat-icon>expand_more</mat-icon></button>
+      <mat-menu #mfPrio="matMenu" class="rp-menu-fil">
+        <button mat-menu-item (click)="fPrioridad.set(''); pagina.set(0)">Todas las prioridades</button>
+        @for (p of PRIORIDADES; track p) { <button mat-menu-item (click)="fPrioridad.set(p); pagina.set(0)">{{ PRIORIDAD_LABEL[p] }}</button> }
+      </mat-menu>
+      <button type="button" class="rp-fil" [class.on]="fBloqueo()" [matMenuTriggerFor]="mfBlq">{{ fBloqueo() ? (fBloqueo() === '__NINGUNO__' ? 'Sin dato de bloqueo' : bloqueoDe(fBloqueo())?.label) : 'Todos los bloqueos' }} <mat-icon>expand_more</mat-icon></button>
+      <mat-menu #mfBlq="matMenu" class="rp-menu-fil">
+        <button mat-menu-item (click)="fBloqueo.set(''); pagina.set(0)">Todos los bloqueos</button>
+        @for (b of BLOQUEOS; track b.clave) { <button mat-menu-item (click)="fBloqueo.set(b.clave); pagina.set(0)"><span class="rp-dot {{ b.nivel }}"></span> {{ b.label }}</button> }
+        <button mat-menu-item (click)="fBloqueo.set('__NINGUNO__'); pagina.set(0)"><span class="rp-dot"></span> Sin dato</button>
+      </mat-menu>
+      @if (hayFiltros()) { <button type="button" class="rp-limpiar" (click)="limpiarFiltros()">Limpiar</button> }
     </div>
+
+    <div class="rp-scroll">
+      <table class="rp-grid" aria-label="Gestión de trabajo por consultor">
+        <thead>
+          <tr>
+            <th class="c-cons"><button type="button" (click)="ordenarPor('consultor')">Consultor <mat-icon>{{ flecha('consultor') }}</mat-icon></button></th>
+            <th class="c-tarea"><button type="button" (click)="ordenarPor('tarea')">Tarea / Ticket <mat-icon>{{ flecha('tarea') }}</mat-icon></button></th>
+            <th><button type="button" (click)="ordenarPor('cliente')">Cliente <mat-icon>{{ flecha('cliente') }}</mat-icon></button></th>
+            <th><button type="button" (click)="ordenarPor('estado')">Estado <mat-icon>{{ flecha('estado') }}</mat-icon></button></th>
+            <th matTooltip="Prioridad de la tarea y Orden del ticket en el HelpDesk (1 = primero)">Prioridad · Orden</th>
+            <th><button type="button" (click)="ordenarPor('avance')">% Avance <mat-icon>{{ flecha('avance') }}</mat-icon></button></th>
+            <th><button type="button" (click)="ordenarPor('asignacion')" matTooltip="Creación y asignación del ticket (con los días desde cada una) e inicio del trabajo">Fechas <mat-icon>{{ flecha('asignacion') }}</mat-icon></button></th>
+            <th><button type="button" (click)="ordenarPor('sinmov')" matTooltip="Última modificación del ticket y días sin movimiento">Última gestión <mat-icon>{{ flecha('sinmov') }}</mat-icon></button></th>
+            <th><button type="button" (click)="ordenarPor('compromiso')">Compromiso <mat-icon>{{ flecha('compromiso') }}</mat-icon></button></th>
+            <th><button type="button" (click)="ordenarPor('bloqueo')">Bloqueo <mat-icon>{{ flecha('bloqueo') }}</mat-icon></button></th>
+            <th class="c-nota">Nota</th>
+            <th class="c-menu"><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (f of filasPagina(); track f.tarea) {
+            <tr [class.guardando]="guardandoFila() === f.tarea">
+              <td class="c-cons" data-l="Consultor"><span class="rp-cons">{{ nombreConsultor(f) }}</span></td>
+              <td class="c-tarea" data-l="Tarea">
+                <div class="rp-tarea">
+                  <span class="rp-tarea-ids">
+                    <button type="button" class="rp-ta" (click)="verTarea(f.tarea)" matTooltip="Abrir la tarea">{{ f.tarea }}</button>
+                    @if (f.ticket) { <button type="button" class="rp-tk" (click)="verTicket(f.ticket)" matTooltip="Abrir la conversación del ticket">#{{ f.ticket }}</button> }
+                    @if (f.tipo) { <span class="rp-badge rp-tipo" [style.background]="tipoColor(f.tipo).badgeBg" [style.color]="tipoColor(f.tipo).badgeText">{{ f.tipo }}</span> }
+                    @else if (!f.ticket) { <span class="rp-badge rp-tipo col">Tarea</span> }
+                  </span>
+                  <span class="rp-tit" [matTooltip]="f.titulo || ''">{{ f.titulo }}</span>
+                  @if (f.tablero) { <span class="rp-chip">tablero {{ f.tablero }}</span> }
+                </div>
+              </td>
+              <td data-l="Cliente" class="c-cli">{{ f.cliente || '—' }}</td>
+              <td data-l="Estado">
+                @if (f.estadoTicket) {
+                  <span class="rp-badge rp-est" [style.background]="estadoColor(f.estadoTicket).badgeBg" [style.color]="estadoColor(f.estadoTicket).badgeText">{{ f.estadoTicket }}</span>
+                } @else { <span class="rp-badge rp-est col">{{ ESTADO_LABEL[f.estado] || f.estado }}</span> }
+              </td>
+              <td data-l="Prioridad · Orden">
+                <div class="rp-pila">
+                  @if (puedeEditarPrioridad()) {
+                    <button type="button" class="rp-prio-btn prio-{{ f.prioridad || 'media' }}" [matMenuTriggerFor]="menuPrio"
+                            [disabled]="guardandoPrioridad() === f.tarea" matTooltip="Cambiar la prioridad de la tarea">
+                      {{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}<mat-icon>expand_more</mat-icon>
+                    </button>
+                    <mat-menu #menuPrio="matMenu">
+                      @for (p of PRIORIDADES; track p) {
+                        <button mat-menu-item (click)="cambiarPrioridad(f, p)">
+                          @if (p === f.prioridad) { <mat-icon>check</mat-icon> } @else { <mat-icon></mat-icon> }
+                          <span>{{ PRIORIDAD_LABEL[p] }}</span>
+                        </button>
+                      }
+                    </mat-menu>
+                  } @else { <span class="rp-prio-btn prio-{{ f.prioridad || 'media' }} ro">{{ PRIORIDAD_LABEL[f.prioridad || ''] || '—' }}</span> }
+                  @if (f.ordenTicket) { <span class="rp-orden {{ prioBadgeClase(f.ordenTicket) }}" matTooltip="Orden del ticket en el HelpDesk">{{ f.ordenTicket }}</span> }
+                </div>
+              </td>
+              <td data-l="% Avance">
+                <button type="button" class="rp-avance" [matMenuTriggerFor]="menuAv" [disabled]="!puedeEditarFila() || guardandoFila() === f.tarea" matTooltip="Avance de la tarea (es su progreso en el Board)">
+                  <span class="pct">{{ f.progreso ?? 0 }}%</span>
+                  <span class="barra"><span [style.width.%]="f.progreso ?? 0"></span></span>
+                </button>
+                <mat-menu #menuAv="matMenu" class="rp-menu-av">
+                  @for (a of AVANCES; track a) {
+                    <button mat-menu-item (click)="guardarFila(f, { progreso: a })">
+                      @if (a === (f.progreso ?? 0)) { <mat-icon>check</mat-icon> } @else { <mat-icon></mat-icon> } {{ a }}%
+                    </button>
+                  }
+                </mat-menu>
+              </td>
+              <td data-l="Fechas">
+                <dl class="rp-fechas">
+                  <dt>Creado</dt><dd>@if (f.fechaCreacion) { {{ fechaCortaYY(f.fechaCreacion) }} <b>· {{ f.diasCreacion }} d</b> } @else { — }</dd>
+                  <dt>Asignado</dt><dd>@if (f.fechaAsignacion) { {{ fechaCortaYY(f.fechaAsignacion) }} <b>· {{ f.diasAsignacion }} d</b> } @else { — }</dd>
+                  <dt>Inicio</dt><dd>@if (f.inicio) { {{ fechaCortaYY(f.inicio) }}@if (f.inicioAprox) { <i matTooltip="Aproximada: ya estaba en curso antes de registrar esta fecha (se usa su creación)">*</i> } } @else { — }</dd>
+                </dl>
+              </td>
+              <td data-l="Última gestión">
+                <div class="rp-pila col">
+                  <span class="nw">{{ f.ultimaGestion ? fechaHora(f.ultimaGestion, true) : '—' }}</span>
+                  @if (f.diasSinMov != null) { <span class="rp-dias" [class.rojo]="f.diasSinMov >= 5" [class.ambar]="f.diasSinMov >= 3 && f.diasSinMov < 5" matTooltip="Días sin movimiento">{{ f.diasSinMov }} {{ f.diasSinMov === 1 ? 'día' : 'días' }}</span> }
+                </div>
+              </td>
+              <td data-l="Compromiso">
+                <div class="rp-pila col">
+                  @if (puedeEditarFila()) {
+                    <input type="date" class="rp-fecha" [class.vencida]="vencida(f)" [value]="f.fechaLimite || ''"
+                           [disabled]="guardandoFila() === f.tarea" (change)="cambiarCompromiso(f, $any($event.target).value)"
+                           [attr.aria-label]="'Fecha compromiso de ' + f.tarea" matTooltip="Es la fecha límite de la tarea" />
+                  } @else { <span class="nw">{{ f.fechaLimite ? fechaCorta(f.fechaLimite) : '—' }}</span> }
+                  @if (vencida(f)) { <span class="rp-vencido">Vencido</span> }
+                </div>
+              </td>
+              <td data-l="Bloqueo">
+                <div class="rp-pila col">
+                  <button type="button" class="rp-bloq {{ bloqueoDe(f.bloqueo)?.nivel || 'nada' }}" [matMenuTriggerFor]="menuBlq" [disabled]="!puedeEditarFila() || guardandoFila() === f.tarea">
+                    <span class="rp-dot {{ bloqueoDe(f.bloqueo)?.nivel }}"></span><span class="lbl">{{ bloqueoDe(f.bloqueo)?.label || '—' }}</span><mat-icon>expand_more</mat-icon>
+                  </button>
+                  @if (f.diasEsperandoCliente != null) { <span class="rp-espera">Esperando cliente hace {{ f.diasEsperandoCliente }} d</span> }
+                </div>
+                <mat-menu #menuBlq="matMenu" class="rp-menu-fil">
+                  @for (b of BLOQUEOS; track b.clave) {
+                    <button mat-menu-item (click)="guardarFila(f, { bloqueo: b.clave })"><span class="rp-dot {{ b.nivel }}"></span> {{ b.label }}</button>
+                  }
+                  <button mat-menu-item (click)="guardarFila(f, { bloqueo: null })"><span class="rp-dot"></span> — Sin dato</button>
+                </mat-menu>
+              </td>
+              <td data-l="Nota" class="c-nota">
+                <button type="button" class="rp-nota" #notaTrig="matMenuTrigger" [matMenuTriggerFor]="menuNota" (menuOpened)="abrirNota(f)" [disabled]="!puedeEditarFila() && !f.nota"
+                        [matTooltip]="f.nota ? (f.nota + (f.notaPor ? ' — ' + nombre(f.notaPor) : '') + (f.notaFecha ? ' · ' + fechaHora(f.notaFecha) : '')) : 'Agregar nota'">
+                  @if (f.nota) { <span class="txt">{{ f.nota }}</span> } @else { <span class="muted"><mat-icon>edit_note</mat-icon> Agregar</span> }
+                </button>
+                <mat-menu #menuNota="matMenu" class="rp-menu-nota" xPosition="before">
+                  <div class="rp-nota-pop" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+                    <label class="rp-nota-lbl">Nota de {{ f.tarea }} <span>(la ve todo el equipo)</span></label>
+                    <textarea rows="4" maxlength="1000" [value]="notaBorrador()" (input)="notaBorrador.set($any($event.target).value)" [disabled]="!puedeEditarFila()"></textarea>
+                    @if (f.notaPor || f.notaFecha) { <div class="rp-nota-meta">Última edición: {{ f.notaPor ? nombre(f.notaPor) : '' }} {{ f.notaFecha ? '· ' + fechaHora(f.notaFecha) : '' }}</div> }
+                    @if (puedeEditarFila()) {
+                      <div class="rp-nota-acc">
+                        <button mat-button type="button" (click)="notaTrig.closeMenu()">Cancelar</button>
+                        <button mat-flat-button type="button" [disabled]="guardandoFila() === f.tarea" (click)="guardarNota(f); notaTrig.closeMenu()">Guardar</button>
+                      </div>
+                    }
+                  </div>
+                </mat-menu>
+              </td>
+              <td class="c-menu">
+                <button type="button" class="rp-mas" [matMenuTriggerFor]="menuMas" aria-label="Más acciones"><mat-icon>more_vert</mat-icon></button>
+                <mat-menu #menuMas="matMenu">
+                  <button mat-menu-item (click)="verTarea(f.tarea)"><mat-icon>open_in_new</mat-icon> Abrir tarea</button>
+                  @if (f.ticket) { <button mat-menu-item (click)="verTicket(f.ticket)"><mat-icon>forum</mat-icon> Abrir ticket</button> }
+                </mat-menu>
+              </td>
+            </tr>
+          } @empty {
+            <tr class="vacio"><td colspan="12">{{ hayFiltros() ? 'Ninguna tarea coincide con los filtros.' : 'Sin tareas en curso.' }}</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rp-pag">
+      <span>Mostrando {{ filasPagina().length }} de {{ filasTabla().length }} tareas</span>
+      <span class="grow"></span>
+      <button type="button" class="rp-fil" [matMenuTriggerFor]="mfTam">{{ porPagina() }} por página <mat-icon>expand_more</mat-icon></button>
+      <mat-menu #mfTam="matMenu">
+        @for (t of TAMANOS; track t) { <button mat-menu-item (click)="porPagina.set(t); pagina.set(0)">{{ t }} por página</button> }
+      </mat-menu>
+      <button type="button" class="rp-pg" (click)="irPagina(pagina() - 1)" [disabled]="pagina() === 0" aria-label="Página anterior"><mat-icon>chevron_left</mat-icon></button>
+      @for (p of paginasVisibles(); track p) {
+        <button type="button" class="rp-pg" [class.on]="p === pagina()" (click)="irPagina(p)">{{ p + 1 }}</button>
+      }
+      <button type="button" class="rp-pg" (click)="irPagina(pagina() + 1)" [disabled]="pagina() >= totalPaginas() - 1" aria-label="Página siguiente"><mat-icon>chevron_right</mat-icon></button>
+    </div>
+
+    @if (sinTareaVisible().length) {
+      <p class="rp-sintarea"><mat-icon>person_off</mat-icon> Sin tarea en curso: {{ sinTareaVisible().join(', ') }}</p>
+    }
   </section>
   }
 

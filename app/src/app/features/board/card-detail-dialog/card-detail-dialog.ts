@@ -12,6 +12,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
+import { nombrePropio } from '../../../core/colores';
+import { BLOQUEOS } from '../../reportes/reporte-modelo';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { wireDialogEsc } from '../../../core/dialog-esc';
@@ -377,6 +379,18 @@ export class CardDetailDialog {
   title = this.story?.title ?? this.input.prefill?.title ?? '';
   priority: Priority = (this.story?.priority as Priority) ?? 'media';
   description = this.story?.description ?? '';
+  /** Nota de la tarea (V33): la ve todo el que ve la tarea (también el reporte). */
+  nota = this.story?.nota ?? '';
+  /** Bloqueo (V33): clave de `BLOQUEOS` o '' (sin dato). */
+  bloqueo = this.story?.bloqueo ?? '';
+  readonly BLOQUEOS = BLOQUEOS;
+  readonly notaMeta = (() => {
+    const s = this.story;
+    if (!s?.notaPor && !s?.notaFecha) return '';
+    const f = s.notaFecha ? new Date(s.notaFecha) : null;
+    const cuando = f && !Number.isNaN(f.getTime()) ? f.toLocaleString('es-EC', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    return [s.notaPor ? nombrePropio(s.notaPor) : '', cuando].filter(Boolean).join(' · ');
+  })();
   // Tarea existente → su estado; tarea nueva desde ticket → el estado del board que le
   // corresponde según el estatus del ticket (mismo mapeo que el sync del board).
   status: Status = (this.story?.status as Status) ?? statusFromTicketEstado(this.input.prefill?.estatus || '').status;
@@ -518,6 +532,17 @@ export class CardDetailDialog {
       cambios.clientName = this.clientId ? this.clientNameResolved() : '';
     }
     if (this.editable) cambios.priority = this.priority;
+    // Nota y bloqueo (V33): solo si cambiaron. El autor de la nota viaja en `notaPorHid` (el PATCH no lleva actor).
+    const nota = this.nota.trim();
+    if (nota !== (task.nota ?? '')) {
+      Object.assign(cambios, {
+        nota: nota || null,
+        notaPorHid: String(this.auth.session()?.id ?? ''),
+        notaPor: String(this.auth.session()?.name ?? '') || null,
+        notaFecha: new Date().toISOString(),
+      });
+    }
+    if ((this.bloqueo || '') !== (task.bloqueo ?? '')) cambios.bloqueo = this.bloqueo || null;
     this.data.patchStory(task.id, cambios);
     // Si la tarea tiene ticket y cambió el asignado → reflejar en el Helpdesk.
     this.maybeAssignHd(task.ticket, assignee, task.assignee);

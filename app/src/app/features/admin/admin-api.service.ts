@@ -73,6 +73,15 @@ export class AdminApiService {
 
   // ── Usuarios, Roles, Asignaciones ──
   usuarios() { return firstValueFrom(this.http.get<UsuarioAdmin[]>(`${this.base}/api/admin/usuarios`)); }
+  /** Equipo base de cada persona (ubicación de los consultores nacionales) y equipos que el actor puede poner. */
+  equiposBase() {
+    return firstValueFrom(this.http.get<{ usuarios: Record<string, { codigo: string; nombre: string }>; editables: string[] }>(
+      `${this.base}/api/admin/usuarios/equipos-base`, this.actorOpts()));
+  }
+  setEquipoBase(usuarioId: number, equipo: string | null) {
+    return firstValueFrom(this.http.put<{ ok: boolean; equipoBaseCodigo: string | null; equipoBaseNombre: string | null }>(
+      `${this.base}/api/admin/usuarios/${usuarioId}/equipo-base`, { equipo }, this.actorOpts()));
+  }
   roles() { return firstValueFrom(this.http.get<Rol[]>(`${this.base}/api/catalogos/roles`)); }
   asignaciones() { return firstValueFrom(this.http.get<Asignacion[]>(`${this.base}/api/admin/asignaciones`)); }
   crearAsignacion(b: NuevaAsignacion) { return firstValueFrom(this.http.post<Asignacion>(`${this.base}/api/admin/asignaciones`, b, this.actorOpts())); }

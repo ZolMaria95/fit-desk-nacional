@@ -19,6 +19,29 @@ export interface FilaReporte {
   fechaEsperando: string | null;
   /** Nombre del equipo dueño del tablero si NO es el del reporte (tarea transferida). */
   tablero: string | null;
+  /** Columna del board (TODO/IN_PROGRESS/EN_CERTIFICACION). */
+  columna?: string;
+  /** Avance de la tarea 0–100 (= progreso del Board). */
+  progreso?: number;
+  /** Días esperando al cliente (si la tarea lo está). */
+  diasEsperandoCliente?: number | null;
+  /** Nota de la tarea (V33), con autor y fecha. */
+  nota?: string | null;
+  notaPor?: string | null;
+  notaFecha?: string | null;
+  /** Bloqueo (V33): clave de BLOQUEOS o null. */
+  bloqueo?: string | null;
+  // ── En vivo del HelpDesk (si la tarea tiene ticket) ──
+  tipo?: string;
+  estadoTicket?: string;
+  fechaCreacion?: string;
+  /** Días desde la creación del ticket. */
+  diasCreacion?: number | null;
+  fechaAsignacion?: string;
+  diasAsignacion?: number | null;
+  /** Última modificación del ticket (ISO) y días desde entonces. */
+  ultimaGestion?: string;
+  diasSinMov?: number | null;
 }
 
 export interface FilaSeguimiento extends FilaReporte {
@@ -40,6 +63,48 @@ export interface ReporteEstadoEquipo {
   sinTarea: Persona[];
   seguimiento: FilaSeguimiento[];
   umbrales: { diasEsperandoCliente: number; diasEnProceso: number };
+  resumen?: { enProgreso: number; finalizadasMes: number; vencidas: number; consultoresActivos: number };
+}
+
+/** Bloqueos de una tarea (catálogo de la dueña). `nivel` da el color: ok verde · amarillo · naranja · rojo. */
+export const BLOQUEOS: { clave: string; label: string; nivel: 'ok' | 'amarillo' | 'naranja' | 'rojo' }[] = [
+  { clave: 'SIN_BLOQUEO', label: 'Sin bloqueo', nivel: 'ok' },
+  { clave: 'ESPERANDO_CLIENTE', label: 'Esperando cliente', nivel: 'amarillo' },
+  { clave: 'ESPERANDO_INFORMACION', label: 'Esperando información', nivel: 'amarillo' },
+  { clave: 'ESPERANDO_CONSULTOR', label: 'Esperando otro consultor', nivel: 'naranja' },
+  { clave: 'ESPERANDO_AMBIENTE', label: 'Esperando ambiente', nivel: 'naranja' },
+  { clave: 'BLOQUEO_TECNICO', label: 'Bloqueo técnico', nivel: 'rojo' },
+  { clave: 'BLOQUEO_EXTERNO', label: 'Bloqueo externo', nivel: 'rojo' },
+];
+
+export function bloqueoDe(clave: string | null | undefined) {
+  return BLOQUEOS.find((b) => b.clave === clave) ?? null;
+}
+
+/** Días enteros entre una fecha (ISO o "AAAA-MM-DD…") y hoy; null si no se puede leer. */
+export function diasDesde(iso: string | null | undefined, hoy = new Date()): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const a = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const b = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.max(0, Math.round((b - a) / 864e5));
+}
+
+/** "2026-10-03T15:42:00" → "03/10/2026 15:42" (`corto` → "03/10/26 15:42", para la tabla). */
+export function fechaHora(iso: string | null | undefined, corto = false): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  const anio = corto ? String(d.getFullYear()).slice(2) : d.getFullYear();
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${anio} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** "2026-10-03" → "03/10/26" (tabla compacta). */
+export function fechaCortaYY(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso ?? ''));
+  return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : '';
 }
 
 /** Grupo de la vista: un consultor (o "Sin asignar") con sus filas visibles. */
