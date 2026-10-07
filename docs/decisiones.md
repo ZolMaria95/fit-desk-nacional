@@ -93,7 +93,10 @@ consultor asignado.
 
 **Verificado en local:** SW 2025 → no se crea; SW 2026 → tablero del consultor; no registrado → tablero del
 consultor (el que dirige quien abre); registrado → su equipo; registrar el cliente → tarea ligada y movida; tarea
-fuera de alcance no sale en /stories ni en el reporte. **Estado:** vigente, sin desplegar.
+fuera de alcance no sale en /stories ni en el reporte. **Estado:** vigente. **Desplegado a AWS 2026-10-06**:
+back `6038567` (V34 aplicada), front `dda53b9` (bundle `main-DMI6LGTH.js`, rollback `adc0ae543c33`); backup
+`backup-pre-v34-20261006.dump`. Verificado en prod: 2200 tareas, 694 fuera de alcance, 0 sin ligar con cliente
+registrado, 1506 visibles en /stories.
 
 ### [2026-10-05] "Equipo base" para consultores de alcance nacional (carga real en Reportes)
 
