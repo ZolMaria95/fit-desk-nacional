@@ -289,7 +289,10 @@ public class LegacyWriteResource {
      * Tablero destino: el equipo responsable del CLIENTE del ticket si está registrado
      * ({@link Cliente#equipoResponsable}); si no, el equipo del propio actor (quien asignó).
      * Idempotente: si el ticket ya tiene tarea, no crea otra.
-     * Body: {"ticket","clienteCodigo","clienteNombre","titulo","asignadoHid","asignadoNombre","estado"}.
+     * Body: {"ticket","clienteCodigo","clienteNombre","titulo","asignadoHid","asignadoNombre","estado","fechaIngreso"}.
+     * Tablero: el del equipo del cliente; si el cliente no está registrado en un equipo, el del equipo del
+     * consultor asignado ({@link #equipoDelConsultor}). SOFT WAREHOUSE (cliente interno): solo tickets creados desde
+     * {@link Tarea#DESDE_CLIENTE_INTERNO}; los anteriores no generan tarea (decisión de gerencia, 2026-10-06).
      * La tarea nace en la columna que corresponde al ESTADO del ticket ({@link com.fitdesk.core.EstadoTicket}),
      * no siempre en To Do: el estado llega en el body (o, si no, el último conocido del espejo).
      */
@@ -355,15 +358,27 @@ public class LegacyWriteResource {
                 cliente = Cliente.find("helpdeskClientId", clienteCodigo).firstResult();
             }
         }
+        // Fecha de creación del ticket (el front la manda; si no, la del espejo).
+        java.time.LocalDate ingreso = fechaIngreso(text(body, "fechaIngreso"));
+        if (ingreso == null && esp.fechaIngreso != null) {
+            ingreso = esp.fechaIngreso.toLocalDate();
+        }
+        // SOFT WAREHOUSE (la propia empresa): sus tickets anteriores al 01-01-2026 no se toman en cuenta.
+        String clienteNombre = text(body, "clienteNombre");
+        boolean interno = cliente != null
+                ? Tarea.esClienteInterno(cliente.helpdeskClientId, cliente.nombre)
+                : Tarea.esClienteInterno(clienteCodigo, clienteNombre);
+        if (interno && ingreso != null && ingreso.isBefore(Tarea.DESDE_CLIENTE_INTERNO)) {
+            return Response.ok(Map.of("creada", false, "motivo", "fuera de alcance")).build();
+        }
         Board board = null;
         if (cliente != null && cliente.equipoResponsable != null) {
             board = Board.<Board>find("equipo.id = ?1 and activo = true order by id", cliente.equipoResponsable.id).firstResult();
         }
         if (board == null) {
-            // Sin cliente registrado (o sin equipo responsable): cae al equipo del actor —
-            // primero como MIEMBRO (el caso normal); si no pertenece a ninguno, como RESPONSABLE.
-            Long equipoId = Actor.equiposComoMiembro(actorHid).stream().min(Long::compareTo)
-                    .orElseGet(() -> Actor.equiposComoResponsable(actorHid).stream().min(Long::compareTo).orElse(null));
+            // Cliente NO registrado (o sin equipo responsable): tablero del equipo del CONSULTOR asignado. Antes
+            // caía al equipo de quien abría el Board y 725 tareas de otros equipos acabaron en CUENCA.
+            Long equipoId = equipoDelConsultor(asignadoHid, actorHid);
             if (equipoId != null) {
                 board = Board.<Board>find("equipo.id = ?1 and activo = true order by id", equipoId).firstResult();
             }
@@ -405,6 +420,43 @@ public class LegacyWriteResource {
         return Response.ok(Map.of("creada", true, "tareaCodigo", t.codigo, "board", board.codigo,
                 "columna", t.workflowEstado != null ? t.workflowEstado.codigo : "TODO",
                 "aprobado", t.aprobado, "esperandoCliente", t.esperandoCliente)).build();
+    }
+
+    /**
+     * Equipo cuyo tablero recibe la tarea de un ticket cuyo cliente NO está registrado en un equipo: el del
+     * consultor asignado. Miembro de un solo equipo → ese; de varios → el que gobierna quien abre el Board (si
+     * alguno) o el de id menor; sin equipos → su equipo base (V32); si tampoco → el equipo de quien abre el Board.
+     */
+    static Long equipoDelConsultor(String asignadoHid, String actorHid) {
+        if (asignadoHid != null) {
+            java.util.Set<Long> suyos = Actor.equiposComoMiembro(asignadoHid);
+            if (suyos.size() == 1) {
+                return suyos.iterator().next();
+            }
+            if (suyos.size() > 1) {
+                java.util.Set<Long> gobernados = Actor.equiposGestionables(actorHid);
+                return suyos.stream().filter(gobernados::contains).min(Long::compareTo)
+                        .orElseGet(() -> suyos.stream().min(Long::compareTo).orElse(null));
+            }
+            Usuario u = Usuario.findByHelpdeskUserId(asignadoHid.trim().toUpperCase());
+            if (u != null && u.equipoBase != null) {
+                return u.equipoBase.id;
+            }
+        }
+        return Actor.equiposComoMiembro(actorHid).stream().min(Long::compareTo)
+                .orElseGet(() -> Actor.equiposComoResponsable(actorHid).stream().min(Long::compareTo).orElse(null));
+    }
+
+    /** "2025-04-16T09:36:40" / "2025-04-16" → fecha; null si no se puede leer. */
+    private static java.time.LocalDate fechaIngreso(String v) {
+        if (v == null || v.length() < 10) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(v.substring(0, 10));
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
     }
 
     private static String text(JsonNode n, String f) {

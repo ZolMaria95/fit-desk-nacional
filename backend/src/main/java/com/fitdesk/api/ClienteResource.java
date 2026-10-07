@@ -8,6 +8,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fitdesk.core.Asignacion;
+import com.fitdesk.core.Board;
 import com.fitdesk.core.Cliente;
 import com.fitdesk.core.Equipo;
 import com.fitdesk.core.Tarea;
@@ -68,7 +69,9 @@ public class ClienteResource {
         c.helpdeskClientId = text(in, "helpdeskClientId");
         c.color = text(in, "color");
         c.persist();
-        return Response.status(Response.Status.CREATED).entity(salida(c)).build();
+        Map<String, Object> out = new LinkedHashMap<>(salida(c));
+        out.put("tareasMovidas", ligarTareasSinCliente(c));
+        return Response.status(Response.Status.CREATED).entity(out).build();
     }
 
     @PUT
@@ -98,7 +101,37 @@ public class ClienteResource {
             }
         }
         c.actualizadoEn = OffsetDateTime.now();
-        return Response.ok(salida(c)).build();
+        Map<String, Object> out = new LinkedHashMap<>(salida(c));
+        out.put("tareasMovidas", ligarTareasSinCliente(c));
+        return Response.ok(out).build();
+    }
+
+    /**
+     * Al registrar un cliente en un equipo (alta o edición), sus tareas que se crearon cuando aún no estaba
+     * registrado (`cliente` nulo y `cliente_codigo_raw` = su `helpdesk_client_id`) se ligan al cliente y pasan
+     * al tablero de su equipo. Las fuera de alcance solo se ligan. Devuelve cuántas tareas se ligaron.
+     */
+    static int ligarTareasSinCliente(Cliente c) {
+        String hd = c.helpdeskClientId != null ? c.helpdeskClientId.trim() : "";
+        if (hd.isEmpty() || c.equipoResponsable == null) {
+            return 0;
+        }
+        Board destino = Board.<Board>find("equipo.id = ?1 and activo = true order by id", c.equipoResponsable.id).firstResult();
+        List<Tarea> tareas = Tarea.<Tarea>list("cliente is null and clienteCodigoRaw = ?1", hd);
+        OffsetDateTime ahora = OffsetDateTime.now();
+        for (Tarea t : tareas) {
+            t.cliente = c;
+            t.clienteCodigoRaw = null;
+            t.clienteNombre = null;
+            if (destino != null && !t.fueraAlcance) {
+                t.board = destino;
+            }
+            if (t.ticketEspejo != null && t.ticketEspejo.cliente == null) {
+                t.ticketEspejo.cliente = c;
+            }
+            t.actualizadoEn = ahora;
+        }
+        return tareas.size();
     }
 
     /**

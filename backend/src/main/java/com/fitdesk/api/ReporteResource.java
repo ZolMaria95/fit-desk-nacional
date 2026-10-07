@@ -122,7 +122,7 @@ public class ReporteResource {
         List<Tarea> tareas = new ArrayList<>();
         for (Tarea t : Tarea.<Tarea>list(
                 "select t from Tarea t left join t.ticketEspejo e left join t.asignadoA u left join t.board b "
-                        + "where t.pendienteTransferencia = false and t.tipo <> 'REUNION' "
+                        + "where t.pendienteTransferencia = false and t.fueraAlcance = false and t.tipo <> 'REUNION' "
                         + "and (u.id in ?1 or upper(e.asignadoHd) in ?2 or b.equipo = ?3)",
                 ids, hidsQ, eq)) {
             if (t.workflowEstado == null || !ACTIVOS.contains(t.workflowEstado.codigo)) {
@@ -214,7 +214,7 @@ public class ReporteResource {
         if (!gente.isEmpty()) {
             // Asignado efectivo (como en las filas): el del ticket si lo tiene; si no, el de la tarea.
             finalizadasMes = Tarea.<Tarea>list("select t from Tarea t left join t.ticketEspejo e left join t.asignadoA u "
-                    + "where t.tipo <> 'REUNION' and t.aprobado = true and t.fechaAprobacion >= ?1 and t.fechaAprobacion <= ?2 "
+                    + "where t.tipo <> 'REUNION' and t.fueraAlcance = false and t.aprobado = true and t.fechaAprobacion >= ?1 and t.fechaAprobacion <= ?2 "
                     + "and (upper(e.asignadoHd) in ?4 or ((e is null or e.asignadoHd is null or e.asignadoHd = '') and u.id in ?3))",
                     hoy.withDayOfMonth(1), hoy, gente.keySet(), hidsQ).size();
         }

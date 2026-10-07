@@ -117,6 +117,20 @@ public class Tarea extends PanacheEntityBase {
     @Column(name = "en_proceso_desde")
     public OffsetDateTime enProcesoDesde;
 
+    /** Fuera de alcance (V34): no se toma en cuenta (no sale en Board, Reportes ni Mi Panel) pero no se borra.
+     *  Hoy: tareas de SOFT WAREHOUSE (la propia empresa) de tickets creados antes del 01-01-2026. */
+    @Column(name = "fuera_alcance", nullable = false)
+    public boolean fueraAlcance = false;
+
+    /** SOFT WAREHOUSE S.A. es la propia empresa: de sus tickets solo cuentan los creados desde esta fecha. */
+    public static final java.time.LocalDate DESDE_CLIENTE_INTERNO = java.time.LocalDate.of(2026, 1, 1);
+
+    /** ¿Es el cliente interno (SOFT WAREHOUSE S.A.)? Por su `client_id` del HelpDesk o por el nombre. */
+    public static boolean esClienteInterno(String hdClientId, String nombre) {
+        return "46".equals(hdClientId == null ? null : hdClientId.trim())
+                || (nombre != null && nombre.trim().toUpperCase().startsWith("SOFT WAREHOUSE"));
+    }
+
     /** Nota de la tarea (V33): visible para todo el que ve la tarea; con autor y fecha de la última edición. */
     @Column(columnDefinition = "text")
     public String nota;

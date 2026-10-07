@@ -73,14 +73,27 @@ consultor → 403, valores inválidos → 400; filtros, buscador, orden, paginac
 **Estado:** vigente. **Desplegado a AWS 2026-10-05** con V32: back `56ea89b`, front `3765511`, bundle
 `main-55KMZITK.js`; backup `backup-pre-v32-v33-20261005.dump`; rollback front `eab2a7c2b951`.
 
-### [2026-10-05] Tareas de clientes sin equipo — EN ESPERA de gerencia
+### [2026-10-06] Tareas de clientes sin equipo — decisión de gerencia (V34)
 
-Las tareas creadas automáticamente para tickets de clientes no registrados en FitDesk caen en el equipo de quien
-abre el Board (725 en CUENCA, 692 de SOFT WAREHOUSE). Se probaron dos soluciones en local (tablero "Clientes sin
-equipo" y "tablero del equipo del consultor"); **la dueña pidió revertir y esperar a que gerencia defina el
-tratamiento**. Nada se desplegó. Análisis, datos y opciones en
-[knowledge/18-clientes-sin-equipo-plan-pendiente.md](knowledge/18-clientes-sin-equipo-plan-pendiente.md).
-**Estado:** pendiente de decisión.
+Cierra lo que estaba EN ESPERA (ver [knowledge/18-clientes-sin-equipo-plan-pendiente.md](knowledge/18-clientes-sin-equipo-plan-pendiente.md)).
+**Decisión:** de **SOFT WAREHOUSE S.A.** (la propia empresa) solo cuentan los tickets creados **desde el 01-01-2026**
+y van al **tablero del consultor asignado**; las tareas anteriores se **ocultan sin borrar**. El 2026-10-06 se
+registró en equipos a la mayoría de los clientes que faltaban; el que siga sin equipo y tenga ticket → tablero del
+consultor asignado.
+- Creación automática (`desde-ticket-asignado`): cliente con equipo → su tablero; sin equipo →
+  `equipoDelConsultor` (miembro; varios → el que gobierna quien abre o el de id menor; ninguno → equipo base; si
+  no, el de quien abre); SOFT WAREHOUSE con ticket < 01-01-2026 → no se crea (`motivo: fuera de alcance`). El front
+  manda `fechaIngreso`.
+- V34 `tarea.fuera_alcance` (excluida de /stories, Reportes y Mi Panel; no se borra). Datos: 694 tareas de SOFT
+  WAREHOUSE anteriores a 2026 (o sin fecha) → fuera de alcance; 62 tareas de clientes ya registrados se ligan a su
+  cliente y pasan al tablero del equipo; 5 de clientes aún sin registrar → tablero del consultor. Simulado en prod
+  con ROLLBACK: 58 cambian de tablero, 0 borradas (2200 tareas).
+- `ClienteResource` (alta/edición): `ligarTareasSinCliente` liga y mueve al tablero del equipo las tareas que se
+  crearon cuando el cliente no estaba registrado (`tareasMovidas`; Administración lo avisa).
+
+**Verificado en local:** SW 2025 → no se crea; SW 2026 → tablero del consultor; no registrado → tablero del
+consultor (el que dirige quien abre); registrado → su equipo; registrar el cliente → tarea ligada y movida; tarea
+fuera de alcance no sale en /stories ni en el reporte. **Estado:** vigente, sin desplegar.
 
 ### [2026-10-05] "Equipo base" para consultores de alcance nacional (carga real en Reportes)
 

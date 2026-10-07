@@ -1,6 +1,10 @@
-# Tareas de clientes sin equipo — PLAN PENDIENTE (en espera de gerencia)
+# Tareas de clientes sin equipo — DECIDIDO (2026-10-06)
 
-> **Estado (2026-10-05): en espera.** La dueña pidió no aplicar nada hasta que gerencia defina cómo tratar a
+> **Decisión de gerencia (2026-10-06):** SOFT WAREHOUSE solo desde tickets del 01-01-2026, al tablero del consultor
+> (las anteriores se ocultan sin borrar, V34); clientes sin equipo → tablero del consultor; la mayoría de los clientes
+> se registró en equipos ese día. Detalle en `docs/decisiones.md` [2026-10-06].
+>
+> **Estado anterior (2026-10-05): en espera.** La dueña pidió no aplicar nada hasta que gerencia defina cómo tratar a
 > los clientes que no pertenecen a ningún equipo. El código se revirtió; producción sigue como estaba.
 
 ## Problema

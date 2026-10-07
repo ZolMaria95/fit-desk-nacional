@@ -483,7 +483,12 @@ export class Administracion {
         maxWidth: '95vw',
       }).afterClosed(),
     );
-    if (creado) await this.recargar();
+    if (creado) {
+      // Sus tareas creadas cuando aún no estaba registrado se ligan y pasan al tablero del equipo (backend).
+      const movidas = Number((creado as { tareasMovidas?: number }).tareasMovidas ?? 0);
+      if (movidas > 0) this.snack.open(`Se ligaron ${movidas} tarea(s) existentes a este cliente y pasaron al tablero de su equipo.`, 'OK', { duration: 5000 });
+      await this.recargar();
+    }
   }
 
   /** Quita un cliente (lo desliga de su región/equipo y lo borra). Pide confirmación. */

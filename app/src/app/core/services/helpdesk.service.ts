@@ -916,6 +916,7 @@ export class HelpdeskService {
           asignadoHid,
           asignadoNombre: asignadoName,
           estado: ticket.estatus || undefined, // la tarea nace en la columna de su estado (no siempre To Do)
+          fechaIngreso: ticket.fechaIngreso || undefined, // SOFT WAREHOUSE: solo tickets desde 01-01-2026
         }),
       });
       if (!r.ok) return false;
