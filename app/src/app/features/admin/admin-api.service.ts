@@ -19,6 +19,8 @@ export interface Asignacion {
   rolId: number; rolCodigo: string; rolNombre: string;
   alcanceTipo: string; alcanceObjetivoId: number | null; alcanceNombre: string | null;
   vigenteDesde: string | null; vigenteHasta: string | null; activo: boolean;
+  /** Creada automáticamente por el Senior de Turno ("Mesa de ayuda" de la semana); sigue al turno. */
+  porTurnoSenior?: boolean;
 }
 export interface UsuarioAdmin {
   id: number; codigoLocal: string; helpdeskUserId: string | null; nombre: string;

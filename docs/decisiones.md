@@ -73,6 +73,28 @@ consultor → 403, valores inválidos → 400; filtros, buscador, orden, paginac
 **Estado:** vigente. **Desplegado a AWS 2026-10-05** con V32: back `56ea89b`, front `3765511`, bundle
 `main-55KMZITK.js`; backup `backup-pre-v32-v33-20261005.dump`; rollback front `eab2a7c2b951`.
 
+### [2026-10-06] El senior de "Mesa de ayuda" es responsable de su equipo durante su semana (V35)
+
+**Pedido de la dueña:** al asignar el Senior de Turno, quien queda en **Mesa de ayuda** recibe automáticamente el
+rol **RESPONSABLE_EQUIPO** del equipo del turno, **de lunes a viernes** de esa semana; al terminar, ya no lo tiene.
+Solo Mesa de ayuda (no Emergentes). El rol **sigue al turno**: si cambia la persona, pasa a la nueva; si se quita o
+se borra la semana, se elimina. Las asignaciones hechas a mano no se tocan.
+- V35 `asignacion.turno_senior_id` (FK `ON DELETE CASCADE`) + alta de los turnos actuales/futuros ya cargados.
+  `LegacyWriteService.putTurnoSenior` → `sincronizarRolTurno` crea/actualiza/borra la asignación de cada semana.
+- **Bug corregido:** la vigencia de una asignación solo miraba la fecha de FIN; una con inicio futuro contaba desde
+  ya. Ahora `Asignacion.enFechas/vigente` (desde ≤ hoy ≤ hasta) en los 14 puntos que la evaluaban (Actor,
+  MisRoles, boards, reportes, transferencias, notificaciones).
+- **Zona horaria:** el servidor corre en UTC; con su fecha, el rol "lunes a viernes" habría empezado el domingo
+  19:00 y terminado el viernes 19:00 (Ecuador). La vigencia se mide ahora con `Asignacion.hoy()` =
+  America/Guayaquil. En Administración, el estado usa la fecha local y distingue **Programada** (empieza más
+  adelante); las automáticas llevan la marca "Senior de turno".
+- En prod no había asignaciones con inicio futuro (el cambio de vigencia no altera nada existente). Al desplegar, la
+  migración da el rol a KDLS001 en CUENCA del 05 al 09/10 (Mesa de ayuda de esta semana).
+
+**Verificado en local:** semana actual → rol vigente; semana próxima → aún no; cambiar la persona → el rol pasa a la
+nueva; borrar la semana o quitar Mesa de ayuda → se elimina; Administración muestra la marca. **Estado:** vigente,
+sin desplegar.
+
 ### [2026-10-06] Tareas de clientes sin equipo — decisión de gerencia (V34)
 
 Cierra lo que estaba EN ESPERA (ver [knowledge/18-clientes-sin-equipo-plan-pendiente.md](knowledge/18-clientes-sin-equipo-plan-pendiente.md)).

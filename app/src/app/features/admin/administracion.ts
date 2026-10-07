@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { HelpdeskService } from '../../core/services/helpdesk.service';
@@ -23,7 +24,7 @@ import { EliminarRegionDialog } from './eliminar-region-dialog';
  */
 @Component({
   selector: 'app-administracion',
-  imports: [MatTabsModule, MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [MatTabsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule],
   templateUrl: './administracion.html',
   styleUrl: './administracion.scss',
 })
@@ -273,9 +274,21 @@ export class Administracion {
   readonly asigSelId = signal<number | null>(null);
 
   /** ¿La asignación está vigente hoy? (activa y sin fecha fin o fin en el futuro). */
+  /** Hoy en fecha LOCAL (toISOString es UTC: de noche en Ecuador ya daba el día siguiente). */
+  private hoyLocal(): string {
+    return new Date().toLocaleDateString('en-CA');
+  }
+  /** Vigente hoy: activa y desde ≤ hoy ≤ hasta (como el backend). */
   esVigente(a: Asignacion): boolean {
-    const hoy = new Date().toISOString().slice(0, 10);
-    return a.activo && (!a.vigenteHasta || a.vigenteHasta >= hoy);
+    const hoy = this.hoyLocal();
+    return a.activo && (!a.vigenteDesde || a.vigenteDesde <= hoy) && (!a.vigenteHasta || a.vigenteHasta >= hoy);
+  }
+  /** Empieza más adelante (p. ej. el rol del Senior de Turno de una semana futura). */
+  esProgramada(a: Asignacion): boolean {
+    return a.activo && !!a.vigenteDesde && a.vigenteDesde > this.hoyLocal();
+  }
+  estadoAsig(a: Asignacion): string {
+    return this.esVigente(a) ? 'Vigente' : this.esProgramada(a) ? 'Programada' : 'Vencida';
   }
 
   readonly asignacionesFiltradas = computed<Asignacion[]>(() => {
@@ -285,7 +298,7 @@ export class Administracion {
       if (rol && a.rolCodigo !== rol) return false;
       if (alc && a.alcanceTipo !== alc) return false;
       if (est === 'vigentes' && !this.esVigente(a)) return false;
-      if (est === 'vencidas' && this.esVigente(a)) return false;
+      if (est === 'vencidas' && (this.esVigente(a) || this.esProgramada(a))) return false;
       if (!t) return true;
       return (
         (a.usuarioNombre ?? '').toLowerCase().includes(t) ||

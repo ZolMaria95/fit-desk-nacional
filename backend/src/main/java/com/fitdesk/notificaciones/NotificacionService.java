@@ -126,7 +126,7 @@ public class NotificacionService {
      *  regional (los dos, no uno como respaldo del otro) — mismo criterio ya usado para el picker
      *  "Asignar a" y para {@code tareaSinFinalizar}. Sin duplicados si alguien califica por ambas. */
     private static List<Usuario> responsablesDe(Equipo eq) {
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         List<Asignacion> candidatos = new ArrayList<>();
         candidatos.addAll(Asignacion.<Asignacion>list(
                 "rol.codigo = 'RESPONSABLE_EQUIPO' and alcanceTipo = 'EQUIPO' and alcanceEquipo = ?1 and activo = true", eq));
@@ -138,7 +138,7 @@ public class NotificacionService {
         Set<Long> vistos = new HashSet<>();
         List<Usuario> out = new ArrayList<>();
         for (Asignacion a : candidatos) {
-            if (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy)) {
+            if (!a.enFechas(hoy)) {
                 continue;
             }
             Usuario re = a.usuario;

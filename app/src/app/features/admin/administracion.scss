@@ -337,3 +337,10 @@ mat-dialog-content { overflow-x: hidden; }
   &:disabled { opacity: 0.5; cursor: default; }
 }
 .base-hint { margin: 10px 0 0; font-size: 0.78rem; color: var(--muted); line-height: 1.35; }
+
+.auto-chip { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 8px; font-size: 10.5px; font-weight: 700;
+  background: #e8f1fb; color: #1f4f86; white-space: nowrap; }
+:host-context(html[data-theme='dark']) .auto-chip { background: #1a2c40; color: #9cc4f0; }
+
+.badge.badge-prog { background: #e8f1fb; color: #1f4f86; }
+:host-context(html[data-theme='dark']) .badge.badge-prog { background: #1a2c40; color: #9cc4f0; }

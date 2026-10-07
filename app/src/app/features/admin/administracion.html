@@ -279,11 +279,12 @@
                         <span class="avatar">{{ iniciales(a.usuarioNombre) }}</span>
                         <span class="c-user-name">{{ a.usuarioNombre }}</span>
                       </td>
-                      <td><span class="rol-badge" [attr.data-rol]="a.rolCodigo">{{ a.rolNombre }}</span></td>
+                      <td><span class="rol-badge" [attr.data-rol]="a.rolCodigo">{{ a.rolNombre }}</span>
+                        @if (a.porTurnoSenior) { <span class="auto-chip" matTooltip="Automática: senior de Mesa de ayuda de la semana (Senior de Turno). Cambia si cambia el turno.">Senior de turno</span> }</td>
                       <td><span class="alc-badge"><mat-icon>{{ a.alcanceTipo==='GLOBAL' ? 'public' : a.alcanceTipo==='REGIONAL' ? 'place' : a.alcanceTipo==='EQUIPO' ? 'groups' : 'apartment' }}</mat-icon> {{ a.alcanceTipo }}</span></td>
                       <td>{{ a.alcanceNombre || '—' }}</td>
                       <td class="c-vig"><span>{{ fmtFecha(a.vigenteDesde) }}</span><span class="c-vig-hasta">{{ a.vigenteHasta ? fmtFecha(a.vigenteHasta) : '—' }}</span></td>
-                      <td><span class="badge" [class.badge-si]="esVigente(a)" [class.badge-no]="!esVigente(a)"><mat-icon>{{ esVigente(a) ? 'check_circle' : 'cancel' }}</mat-icon> {{ esVigente(a) ? 'Vigente' : 'Vencida' }}</span></td>
+                      <td><span class="badge" [class.badge-si]="esVigente(a)" [class.badge-prog]="esProgramada(a)" [class.badge-no]="!esVigente(a) && !esProgramada(a)"><mat-icon>{{ esVigente(a) ? 'check_circle' : esProgramada(a) ? 'schedule' : 'cancel' }}</mat-icon> {{ estadoAsig(a) }}</span></td>
                     </tr>
                   } @empty {
                     <tr><td colspan="6" class="empty-row">Sin asignaciones que coincidan.</td></tr>
@@ -303,11 +304,12 @@
                 <span class="avatar avatar-lg">{{ iniciales(a.usuarioNombre) }}</span>
                 <div class="detail-id-text">
                   <span class="detail-name">{{ a.usuarioNombre }}</span>
-                  <span class="badge" [class.badge-si]="esVigente(a)" [class.badge-no]="!esVigente(a)">{{ esVigente(a) ? 'Vigente' : 'Vencida' }}</span>
+                  <span class="badge" [class.badge-si]="esVigente(a)" [class.badge-prog]="esProgramada(a)" [class.badge-no]="!esVigente(a) && !esProgramada(a)">{{ estadoAsig(a) }}</span>
                 </div>
               </div>
               <dl class="detail-dl">
                 <dt>Rol</dt><dd><mat-icon>person</mat-icon> {{ a.rolNombre }}</dd>
+                @if (a.porTurnoSenior) { <dt>Origen</dt><dd><mat-icon>support_agent</mat-icon> Senior de turno (automática)</dd> }
                 <dt>Alcance</dt><dd><mat-icon>public</mat-icon> {{ a.alcanceTipo }}</dd>
                 <dt>Objetivo</dt><dd><mat-icon>flag</mat-icon> {{ a.alcanceNombre || '—' }}</dd>
                 <dt>Desde</dt><dd><mat-icon>event</mat-icon> {{ fmtFecha(a.vigenteDesde) }}</dd>

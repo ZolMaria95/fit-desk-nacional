@@ -39,10 +39,10 @@ public class MisRolesResource {
         if (u == null) {
             return List.of();
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         return Asignacion.<Asignacion>list("usuario = ?1", u).stream()
                 .filter(a -> a.activo)
-                .filter(a -> a.vigenteHasta == null || !a.vigenteHasta.isBefore(hoy))
+                .filter(a -> a.enFechas(hoy))
                 .map(a -> a.rol != null ? a.rol.codigo : null)
                 .filter(Objects::nonNull)
                 .distinct()

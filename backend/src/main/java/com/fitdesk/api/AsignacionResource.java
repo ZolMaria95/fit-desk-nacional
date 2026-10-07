@@ -236,6 +236,8 @@ public class AsignacionResource {
         m.put("usuarioNombre", a.usuario != null ? a.usuario.nombre : null);
         m.put("helpdeskUserId", a.usuario != null ? a.usuario.helpdeskUserId : null);
         m.put("rolId", a.rol != null ? a.rol.id : null);
+        // Creada por el Senior de Turno (rol de responsable de la semana de "Mesa de ayuda", V35).
+        m.put("porTurnoSenior", a.turnoSenior != null);
         m.put("rolCodigo", a.rol != null ? a.rol.codigo : null);
         m.put("rolNombre", a.rol != null ? a.rol.nombre : null);
         m.put("alcanceTipo", a.alcanceTipo);

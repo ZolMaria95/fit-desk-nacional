@@ -88,10 +88,10 @@ public class ReporteResource {
                         .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<Long, Usuario> gente = new LinkedHashMap<>();
         if (pedidos.isEmpty()) {
-            LocalDate hoyServidor = LocalDate.now();
+            LocalDate hoyServidor = com.fitdesk.core.Asignacion.hoy();
             for (Asignacion a : Asignacion.<Asignacion>list(
                     "alcanceTipo = 'EQUIPO' and alcanceEquipo = ?1 and activo = true", eq)) {
-                if (a.usuario != null && (a.vigenteHasta == null || !a.vigenteHasta.isBefore(hoyServidor))) {
+                if (a.usuario != null && a.enFechas(hoyServidor)) {
                     gente.putIfAbsent(a.usuario.id, a.usuario);
                 }
             }

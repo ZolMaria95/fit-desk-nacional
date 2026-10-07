@@ -57,7 +57,7 @@ public class Asignacion extends PanacheEntityBase {
     public Regional alcanceRegional;
 
     @Column(name = "vigente_desde", nullable = false)
-    public LocalDate vigenteDesde = LocalDate.now();
+    public LocalDate vigenteDesde = hoy();
 
     @Column(name = "vigente_hasta")
     public LocalDate vigenteHasta;
@@ -69,4 +69,30 @@ public class Asignacion extends PanacheEntityBase {
 
     @Column(name = "actualizado_en")
     public OffsetDateTime actualizadoEn = OffsetDateTime.now();
+
+    /** Senior de Turno que generó esta asignación (V35): el rol de responsable automático de la semana de
+     *  "Mesa de ayuda". NULL = asignación hecha a mano en Administración. */
+    @jakarta.persistence.ManyToOne
+    @JoinColumn(name = "turno_senior_id")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    public com.fitdesk.overlay.TurnoSenior turnoSenior;
+
+    /** Zona del negocio: la vigencia de los roles se mide en hora de Ecuador (el servidor corre en UTC; con su
+     *  fecha, un rol "de lunes a viernes" empezaba el domingo 19:00 y terminaba el viernes 19:00). */
+    public static final java.time.ZoneId ZONA = java.time.ZoneId.of("America/Guayaquil");
+
+    public static LocalDate hoy() {
+        return LocalDate.now(ZONA);
+    }
+
+    /** ¿Las fechas cubren el día dado? (desde ≤ día ≤ hasta; sin fin = abierta). Antes solo se miraba el fin, así
+     *  que una asignación con inicio futuro contaba desde ya. */
+    public boolean enFechas(LocalDate dia) {
+        return (vigenteDesde == null || !vigenteDesde.isAfter(dia)) && (vigenteHasta == null || !vigenteHasta.isBefore(dia));
+    }
+
+    /** Activa y en fechas el día dado. */
+    public boolean vigente(LocalDate dia) {
+        return activo && enFechas(dia);
+    }
 }

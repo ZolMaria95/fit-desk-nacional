@@ -334,7 +334,7 @@ public class TransferenciaResource {
         if (eq == null) {
             return out;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         List<Asignacion> candidatos = new ArrayList<>();
         if (eq.regional != null) {
             Set<Long> equiposDeLaRegional = new java.util.HashSet<>();
@@ -354,7 +354,7 @@ public class TransferenciaResource {
 
         Set<Long> vistos = new java.util.HashSet<>();
         for (Asignacion a : candidatos) {
-            if (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy)) {
+            if (!a.enFechas(hoy)) {
                 continue;
             }
             Usuario u = a.usuario;

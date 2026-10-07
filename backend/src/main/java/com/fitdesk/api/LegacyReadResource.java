@@ -206,11 +206,11 @@ public class LegacyReadResource {
         if (u == null) {
             return List.of();
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         Set<Long> equipoIds = new HashSet<>();
         boolean global = false;
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             switch (a.alcanceTipo == null ? "" : a.alcanceTipo) {

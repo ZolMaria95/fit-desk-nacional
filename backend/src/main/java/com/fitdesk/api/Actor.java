@@ -55,9 +55,9 @@ public final class Actor {
             return new TicketsGestionables(false, Set.of());
         }
         Set<String> clientes = new HashSet<>();
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if (a.rol == null || !"HELPDESK".equals(a.rol.codigo)) {
@@ -117,11 +117,11 @@ public final class Actor {
             return destinos;
         }
         destinos.add(hid.trim().toUpperCase());
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list(
                 "alcanceTipo = 'EQUIPO' and alcanceEquipo.id in ?1 and activo = true", equipos)) {
             if (a.usuario != null && a.usuario.helpdeskUserId != null
-                    && (a.vigenteHasta == null || !a.vigenteHasta.isBefore(hoy))) {
+                    && a.enFechas(hoy)) {
                 destinos.add(a.usuario.helpdeskUserId.trim().toUpperCase());
             }
         }
@@ -162,9 +162,9 @@ public final class Actor {
         if (u == null) {
             return false;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if ("GLOBAL".equals(a.alcanceTipo)) {
@@ -192,9 +192,9 @@ public final class Actor {
         if (u == null) {
             return ids;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             switch (a.alcanceTipo == null ? "" : a.alcanceTipo) {
@@ -241,9 +241,9 @@ public final class Actor {
         if (u == null) {
             return ids;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if (a.rol == null || !"RESPONSABLE_EQUIPO".equals(a.rol.codigo)) {
@@ -287,9 +287,9 @@ public final class Actor {
         if (u == null) {
             return ids;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if (a.rol == null || !"RESPONSABLE_EQUIPO".equals(a.rol.codigo)) {
@@ -316,9 +316,9 @@ public final class Actor {
         if (u == null) {
             return ids;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1 and alcanceTipo = 'EQUIPO'", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if (a.alcanceEquipo != null) ids.add(a.alcanceEquipo.id);
@@ -329,9 +329,9 @@ public final class Actor {
     /** Ids de usuarios con una asignación vigente del rol dado (p. ej. todos los RESPONSABLE_EQUIPO). */
     public static Set<Long> usuariosConRol(String rolCodigo) {
         Set<Long> ids = new HashSet<>();
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("rol.codigo = ?1", rolCodigo)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if (a.usuario != null) ids.add(a.usuario.id);
@@ -367,9 +367,9 @@ public final class Actor {
         if (u == null) {
             return false;
         }
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = com.fitdesk.core.Asignacion.hoy();
         for (Asignacion a : Asignacion.<Asignacion>list("usuario = ?1", u)) {
-            if (!a.activo || (a.vigenteHasta != null && a.vigenteHasta.isBefore(hoy))) {
+            if (!a.vigente(hoy)) {
                 continue;
             }
             if (a.rol == null || !"RESPONSABLE_EQUIPO".equals(a.rol.codigo)) {

@@ -699,12 +699,46 @@ public class LegacyWriteService {
                 t.emergentes = emerg;
                 t.notas = text(w, "notes");
                 t.actualizadoEn = OffsetDateTime.now();
+                sincronizarRolTurno(t);
             }
         }
+        // Las semanas que se borran se llevan su rol automático (ON DELETE CASCADE en asignacion.turno_senior_id).
         if (keep.isEmpty()) {
             TurnoSenior.delete("equipo = ?1", eq);
         } else {
             TurnoSenior.delete("equipo = ?1 and semanaInicio not in ?2", eq, keep);
+        }
+    }
+
+    /**
+     * El senior de "Mesa de ayuda" es RESPONSABLE_EQUIPO de su equipo durante su semana (lunes a viernes), V35. El
+     * rol sigue al turno: se crea, se actualiza a la persona nueva o se borra si ya no hay "Mesa de ayuda". Solo se
+     * tocan las asignaciones marcadas con este turno; las hechas a mano no.
+     */
+    private void sincronizarRolTurno(TurnoSenior t) {
+        Asignacion a = Asignacion.<Asignacion>find("turnoSenior = ?1", t).firstResult();
+        Usuario u = t.mesaAyuda == null ? null : Usuario.findByHelpdeskUserId(t.mesaAyuda.trim().toUpperCase());
+        com.fitdesk.core.Rol rol = com.fitdesk.core.Rol.find("codigo", "RESPONSABLE_EQUIPO").firstResult();
+        if (u == null || rol == null || t.equipo == null) {
+            if (a != null) {
+                a.delete();
+            }
+            return;
+        }
+        if (a == null) {
+            a = new Asignacion();
+            a.turnoSenior = t;
+            a.rol = rol;
+            a.alcanceTipo = "EQUIPO";
+        }
+        a.usuario = u;
+        a.alcanceEquipo = t.equipo;
+        a.vigenteDesde = t.semanaInicio;
+        a.vigenteHasta = t.semanaInicio.plusDays(4); // lunes → viernes
+        a.activo = true;
+        a.actualizadoEn = OffsetDateTime.now();
+        if (!a.isPersistent()) {
+            a.persist();
         }
     }
 
