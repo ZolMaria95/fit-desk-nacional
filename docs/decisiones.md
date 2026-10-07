@@ -92,8 +92,10 @@ se borra la semana, se elimina. Las asignaciones hechas a mano no se tocan.
   migración da el rol a KDLS001 en CUENCA del 05 al 09/10 (Mesa de ayuda de esta semana).
 
 **Verificado en local:** semana actual → rol vigente; semana próxima → aún no; cambiar la persona → el rol pasa a la
-nueva; borrar la semana o quitar Mesa de ayuda → se elimina; Administración muestra la marca. **Estado:** vigente,
-sin desplegar.
+nueva; borrar la semana o quitar Mesa de ayuda → se elimina; Administración muestra la marca. **Estado:** vigente.
+**Desplegado a AWS 2026-10-06**: back `f17231e` (V35), front `4b5508f` (bundle `main-GOPCJS27.js`, rollback
+`c193ccb2fe4a`); backup `backup-pre-v35-20261006.dump`. En prod: KDLS001 RESPONSABLE_EQUIPO de CUENCA 05–09/10
+(automática); `mis-roles` lo confirma.
 
 ### [2026-10-06] Tareas de clientes sin equipo — decisión de gerencia (V34)
 
