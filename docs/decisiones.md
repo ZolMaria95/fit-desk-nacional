@@ -85,7 +85,9 @@ sección **"Configuración"** (antes "Administración") donde quien no administr
   guardada ve solo lo que define su tabla (antes solo RE/ADMIN).
 
 **Verificado en local:** usuario sin roles → menú "Configuración", solo la pestaña Orden de estados, guarda su orden y
-Tickets arranca en "Por estado (mi orden)"; responsable → las 5 pestañas. **Estado:** vigente, sin desplegar.
+Tickets arranca en "Por estado (mi orden)"; responsable → las 5 pestañas. **Estado:** vigente. **Desplegado a
+AWS 2026-10-11**: back `f2647c2`, front `ba3370c` (bundle `main-5B2AGG5M.js`, rollback `5e20130edf19`); verificado en
+prod con una cuenta sin roles: menú Configuración con solo la pestaña Orden de estados.
 
 ### [2026-10-06] El senior de "Mesa de ayuda" es responsable de su equipo durante su semana (V35)
 
