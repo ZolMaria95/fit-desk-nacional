@@ -2,15 +2,18 @@
   <header class="admin-head">
     <span class="admin-head-icon"><mat-icon>settings</mat-icon></span>
     <div class="admin-head-text">
-      <h1 class="admin-title">Administración</h1>
-      <p class="admin-sub">Gestiona los recursos y configuraciones de la plataforma.</p>
+      <h1 class="admin-title">Configuración</h1>
+      <p class="admin-sub">{{ puedeAdministrar() ? 'Gestiona los recursos de la plataforma y tus preferencias.' : 'Tus preferencias personales.' }}</p>
     </div>
-    <button type="button" class="admin-refresh" (click)="recargar()" [disabled]="cargando()">
-      <mat-icon>refresh</mat-icon> Recargar
-    </button>
+    @if (puedeAdministrar()) {
+      <button type="button" class="admin-refresh" (click)="recargar()" [disabled]="cargando()">
+        <mat-icon>refresh</mat-icon> Recargar
+      </button>
+    }
   </header>
 
   <mat-tab-group class="admin-tabs">
+    @if (puedeAdministrar()) {
     <!-- ══ Regionales ══ -->
     <mat-tab>
       <ng-template mat-tab-label><mat-icon>place</mat-icon> Regionales</ng-template>
@@ -349,6 +352,8 @@
       </div>
     </mat-tab>
 
+    }
+
     <!-- ══ Orden de estados (personal) ══ -->
     <mat-tab>
       <ng-template mat-tab-label><mat-icon>low_priority</mat-icon> Orden de estados</ng-template>
@@ -412,8 +417,6 @@
                 }
                 <button type="button" class="btn-primary" (click)="oeGuardar()" [disabled]="!oeSucio() || oeGuardando()"><mat-icon>save</mat-icon> {{ oeGuardando() ? 'Guardando…' : 'Guardar' }}</button>
               </div>
-            } @else {
-              <div class="card-foot">Solo los responsables de equipo pueden definir su orden de estados.</div>
             }
           </div>
         </div>

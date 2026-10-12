@@ -13,5 +13,7 @@ export const adminGuard: CanActivateFn = async () => {
   const router = inject(Router);
   if (environment.dataBackend !== 'quarkus') return router.createUrlTree(['/board']);
   await auth.ensureRolesPlataforma();
-  return auth.puedeAdministrar() ? true : router.createUrlTree(['/board']);
+  // Configuración es para todos (su "Orden de estados"); las pestañas de administración se muestran solo a
+  // ADMIN y RESPONSABLE_EQUIPO dentro de la página, y el backend vuelve a autorizar cada operación.
+  return auth.isAuthenticated() ? true : router.createUrlTree(['/login']);
 };

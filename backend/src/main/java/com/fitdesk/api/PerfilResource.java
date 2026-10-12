@@ -276,9 +276,10 @@ public class PerfilResource {
     public record OrdenEstado(String estado, Integer orden, boolean oculto) {
     }
 
-    /** Quién puede definir su orden de estados. Hoy responsables (y ADMIN); abrirlo a todos = devolver true. */
+    /** Quién puede definir su orden de estados: TODOS los usuarios (abierto a todos el 2026-10-08; antes solo
+     *  responsables y ADMIN). */
     static boolean puedeOrdenarEstados(String hid) {
-        return Actor.esAdmin(hid) || Actor.tieneRol(hid, "RESPONSABLE_EQUIPO");
+        return hid != null && !hid.isBlank();
     }
 
     /**

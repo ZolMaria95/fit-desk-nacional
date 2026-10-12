@@ -89,8 +89,9 @@ export class Layout {
 
   readonly session = this.auth.session;
   readonly puedeVerMiPanel = this.auth.puedeVerMiPanel;
-  /** Administración: solo ADMIN y solo en modo Quarkus (Firebase no tiene ese modelo). */
-  readonly mostrarAdmin = computed(() => this.auth.puedeAdministrar() && this.data.usesQuarkus());
+  /** Configuración (antes "Administración"): para TODOS en modo Quarkus. Responsables y ADMIN ven además las
+   *  pestañas de administración; el resto, solo su "Orden de estados" (2026-10-08). */
+  readonly mostrarAdmin = computed(() => this.data.usesQuarkus());
   /** Bandeja de envíos entre equipos: RE/ADMIN y solo en modo Quarkus. */
   readonly mostrarBandeja = computed(() => this.auth.puedeTransferir() && this.data.usesQuarkus());
   /** Campanita: solo en modo Quarkus (el buzón es una entidad propia, no existe en Firebase). */

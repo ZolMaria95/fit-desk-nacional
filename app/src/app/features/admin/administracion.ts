@@ -367,9 +367,14 @@ export class Administracion {
   readonly clientesOrd = this.ordenar(this.clientesFiltrados, this.sortCli);
   readonly asignacionesOrd = this.ordenar(this.asignacionesFiltradas, this.sortAsig);
 
+  /** ADMIN o RESPONSABLE_EQUIPO: ven las pestañas de administración. El resto, solo "Orden de estados". */
+  readonly puedeAdministrar = this.auth.puedeAdministrar;
+
   constructor() {
-    this.recargar();
-    this.hd.getHdUsers(); // catálogo del HelpDesk (nombres completos del técnico)
+    if (this.auth.puedeAdministrar()) {
+      this.recargar();
+      this.hd.getHdUsers(); // catálogo del HelpDesk (nombres completos del técnico)
+    }
     this.hd.getTicketStatuses(); // catálogo de estados (pestaña "Orden de estados")
     void this.ordenEst.cargar(true).then(() => this.oeDescartar());
   }

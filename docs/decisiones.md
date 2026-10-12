@@ -73,6 +73,20 @@ consultor → 403, valores inválidos → 400; filtros, buscador, orden, paginac
 **Estado:** vigente. **Desplegado a AWS 2026-10-05** con V32: back `56ea89b`, front `3765511`, bundle
 `main-55KMZITK.js`; backup `backup-pre-v32-v33-20261005.dump`; rollback front `eab2a7c2b951`.
 
+### [2026-10-08] "Orden de estados" para todos; Administración pasa a llamarse "Configuración"
+
+**Pedido de la dueña:** abrir la administración del orden de tickets (Orden de estados) a todos los usuarios, en una
+sección **"Configuración"** (antes "Administración") donde quien no administra solo ve ese ordenamiento.
+- Menú "Configuración" visible para todos (modo Quarkus); `adminGuard` deja entrar a cualquier usuario autenticado.
+- En la página, las pestañas Regionales / Equipos / Clientes / Asignaciones solo para ADMIN y RESPONSABLE_EQUIPO
+  (`puedeAdministrar`); el resto ve solo "Orden de estados". La carga de datos de administración solo se hace para
+  quien administra. El backend sigue autorizando cada operación de administración.
+- `PerfilResource.puedeOrdenarEstados` → cualquier usuario (antes RE/ADMIN). En Tickets, quien tenga su tabla
+  guardada ve solo lo que define su tabla (antes solo RE/ADMIN).
+
+**Verificado en local:** usuario sin roles → menú "Configuración", solo la pestaña Orden de estados, guarda su orden y
+Tickets arranca en "Por estado (mi orden)"; responsable → las 5 pestañas. **Estado:** vigente, sin desplegar.
+
 ### [2026-10-06] El senior de "Mesa de ayuda" es responsable de su equipo durante su semana (V35)
 
 **Pedido de la dueña:** al asignar el Senior de Turno, quien queda en **Mesa de ayuda** recibe automáticamente el
